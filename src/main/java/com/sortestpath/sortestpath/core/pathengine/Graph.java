@@ -3,7 +3,7 @@ package com.sortestpath.sortestpath.core.pathengine;
 import java.util.Collection;
 import java.util.HashMap;
 
-import com.sortestpath.sortestpath.util.DistanceUtil;
+import com.sortestpath.sortestpath.util.PathUtil;
 
 
 public class Graph {
@@ -24,7 +24,7 @@ public class Graph {
 	 * @param endNode
 	 */
 	public void addEdge(Node startNode, Node endNode) {
-		double distance = DistanceUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
+		double distance = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
 		graph.get(startNode.getCoordinate()).getEdge().put(endNode.getId(), new Edge(endNode, distance));
 		graph.get(endNode.getCoordinate()).getEdge().put(startNode.getId(), new Edge(startNode, distance));
 	}

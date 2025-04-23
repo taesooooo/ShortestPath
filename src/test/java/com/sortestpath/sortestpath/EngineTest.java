@@ -16,7 +16,7 @@ import com.sortestpath.sortestpath.core.pathengine.Engine;
 import com.sortestpath.sortestpath.core.pathengine.Graph;
 import com.sortestpath.sortestpath.core.pathengine.Loader;
 import com.sortestpath.sortestpath.core.pathengine.Node;
-import com.sortestpath.sortestpath.util.DistanceUtil;
+import com.sortestpath.sortestpath.util.PathUtil;
 
 class EngineTest {
 	private static final Logger log = LoggerFactory.getLogger(EngineTest.class);
@@ -36,9 +36,9 @@ class EngineTest {
 	@DisplayName("경로탐색 - 노드")
 	void findPathByNodeTest() {	
 		Graph g = engine.getGraph();
-		
-		Node startNode = g.getNode(new Coordinate(33.2417782, 126.5647375));
-		Node endNode = g.getNode(new Coordinate(33.2387792, 126.6015835));
+
+		Node startNode = g.getNode(new Coordinate(33.4824388, 126.4898217));
+		Node endNode = g.getNode(new Coordinate(33.4845859, 126.4963428));
 		
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
 		
@@ -67,8 +67,8 @@ class EngineTest {
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startCoordinate, endCoordinate);
 		
 		assertThat(path).isNotEmpty();
-		assertTrue(DistanceUtil.haversine(path.get(0).getCoordinate(), startCoordinate) < 5);
-		assertTrue(DistanceUtil.haversine(path.get(path.size() - 1).getCoordinate(), endCoordinate) < 5);
+		assertTrue(PathUtil.haversine(path.get(0).getCoordinate(), startCoordinate) < 5);
+		assertTrue(PathUtil.haversine(path.get(path.size() - 1).getCoordinate(), endCoordinate) < 5);
 	}
 
 }

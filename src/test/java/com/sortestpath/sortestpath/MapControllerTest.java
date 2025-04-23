@@ -47,8 +47,8 @@ class MapControllerTest {
 	@DisplayName("경로 탐색 요청 - 정상")
 	void findMapTest() throws Exception {
 		RequestFindPathDto testDto = RequestFindPathDto.builder()
-				.startCoordinate(new Coordinate(33.2417782, 126.5647375))
-				.endCoordinate(new Coordinate(33.2387792, 126.6015835))
+				.startCoordinate(new Coordinate(33.4824388, 126.4898217))
+				.endCoordinate(new Coordinate(33.4845859, 126.4963428))
 				.build();
 				
 		mockMvc.perform(get("/map/find-path")

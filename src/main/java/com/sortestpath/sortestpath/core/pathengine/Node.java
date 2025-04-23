@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import com.sortestpath.sortestpath.util.DistanceUtil;
+import com.sortestpath.sortestpath.util.PathUtil;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,7 +38,7 @@ public class Node implements Comparable<Node> {
         Coordinate startPoint = this.getCoordinate();
         Coordinate endPoint = endNode.getCoordinate();
 
-        double newDistance = DistanceUtil.haversine(startPoint, endPoint);
+        double newDistance = PathUtil.haversine(startPoint, endPoint);
         
 		this.hCost = newDistance;
 		

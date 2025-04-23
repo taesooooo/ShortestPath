@@ -1,8 +1,18 @@
 package com.sortestpath.sortestpath.util;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import com.sortestpath.sortestpath.core.pathengine.Coordinate;
 
-public class DistanceUtil {
+public class PathUtil {
+	public static Coordinate roundCoordinate(Coordinate coordinate) {
+		double lat = new BigDecimal(coordinate.getLatitude()).setScale(6, RoundingMode.HALF_UP).doubleValue();
+		double lon = new BigDecimal(coordinate.getLongitude()).setScale(6, RoundingMode.HALF_UP).doubleValue();
+		
+		return new Coordinate(lat, lon);
+	}
+	
 	public static Double haversine(Coordinate a, Coordinate b) {
 		// 하버사인 거리 공식
         Coordinate startPoint = a;
@@ -19,7 +29,7 @@ public class DistanceUtil {
         return newDistance;
 	}
 	
-	public static Double cal2(Coordinate a, Coordinate b) {
+	public static Double Euclidean(Coordinate a, Coordinate b) {
 		// 맨하튼 거리 공식
 		Coordinate currentNode = a;
 		
