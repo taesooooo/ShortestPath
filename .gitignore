@@ -5,8 +5,8 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-.properties
-src/test/shp/
+*.properties
+src/test/resources/shp/
 
 ### STS ###
 .apt_generated

@@ -1,0 +1,28 @@
+package com.sortestpath.sortestpath.handler;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+public class ExceptionHandlerAdvice {	
+	private static final Logger log = LoggerFactory.getLogger(ExceptionHandler.class);
+	
+	@ExceptionHandler(exception = Exception.class)
+	public ResponseEntity<Object> exception(Exception e) {
+		log.error(e.getMessage());
+		return ResponseEntity.status(HttpStatus.CONFLICT).body("문제가 발생했습니다. 문제가 계속 된다면 개발자에게 문의 해주세요");
+	}
+	
+	@ExceptionHandler(exception = MethodArgumentNotValidException.class)
+	public ResponseEntity<Object> inValidException(Exception e, BindingResult result) {
+		log.info(e.getMessage());
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result.getFieldError().getDefaultMessage());
+	}
+
+}
