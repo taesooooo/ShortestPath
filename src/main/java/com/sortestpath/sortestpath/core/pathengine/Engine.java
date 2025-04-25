@@ -16,6 +16,8 @@ import org.locationtech.jts.index.strtree.STRtree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.sortestpath.sortestpath.repository.MapRepository;
+
 import lombok.Getter;
 
 public class Engine {
@@ -25,23 +27,31 @@ public class Engine {
 	private Graph graph;
 	private Loader loader;
 	private STRtree stRtree;
+	private final DataProvider dataProvider;
 //	private PriorityQueue<Node> openList;
 //	private HashSet<Node> closeList;
 //	private HashMap<Node, Node> location;
-	
-	public Engine(Loader loader) throws IOException {
+		
+	public Engine(Loader loader, DataProvider dataProvider) throws IOException {
 		if(loader == null) {
-			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. 로더가 없습니다.");
+			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. 로더가 null입니다..");
+		}
+		
+		if(dataProvider == null) {
+			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataProvider가 null입니다.");
 		}
 		
 		this.loader = loader;
+		this.dataProvider = dataProvider;
 		try {
+			log.info("지도 링크 데이터 로드 시작");
 	        this.graph = this.loader.loadData();
-	        this.stRtree = this.loader.loadRtree();
+	        this.loader.dispose();
 	    } catch (IOException e) {
 	        log.error("로드 중 오류 발생: {}", e.getMessage(), e);
 	        throw e; // 예외를 다시 던져서 상위에서 처리하도록 함
 	    }
+		log.info("엔진 초기화 완료");
 	}
 	
 	/**
@@ -191,18 +201,17 @@ public class Engine {
 		org.locationtech.jts.geom.Coordinate convertCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
 		Point point = new GeometryFactory().createPoint(convertCoordinate);
 
-		// 경계 상자
-		Envelope envelope = point.getEnvelopeInternal();
-		// 경계 상자 확장
-		envelope.expandBy(0.001);
+		List<Geometry> geoList = dataProvider.findNearestLine(point.getX(), point.getY(), 0.001);
 		
-		List<Geometry> candidates = stRtree.query(envelope);
+		if(geoList.isEmpty()) {
+			throw new EmptyGeometryListException("지오메트리 리스트가 비어있습니다. 데이터베이스 또는 DataProvider를 확인해주세요.");
+		}
 		
 		// 후보 라인 중 거리가 제일 가까운 라인 검색
 		Geometry nearestGeoLine = null;
 		double minDistance = Double.MAX_VALUE;
 		
-		for(Geometry geo : candidates) {
+		for(Geometry geo : geoList) {
 			double distance = geo.distance(point);
 			if(distance < minDistance) {
 				minDistance = distance;

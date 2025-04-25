@@ -22,26 +22,24 @@ import org.slf4j.LoggerFactory;
 public class Loader {
 	private Logger logger = LoggerFactory.getLogger(getClass());
 	
+	private File file;
 	private DataStore store;
-	private String typeName;
-	private FeatureSource<SimpleFeatureType, SimpleFeature> source;
 	
 	public Loader(String filePath) throws IOException {
-		File file = new File(filePath);
+		file = new File(filePath);
 		if(!file.exists()) {
 			throw new FileNotFoundException(filePath + " 위치에 shp파일이 존재 하지 않습니다.");
 		}
 		
 		Map<String, Object> map = new HashMap<String, Object>();
 		map.put("url", file.toURI().toURL());
-
-		this.store = DataStoreFinder.getDataStore(map);
-		this.typeName = store.getTypeNames()[0];
 		
-		this.source = store.getFeatureSource(typeName);
+		store = DataStoreFinder.getDataStore(map);
 	}
 
 	public Graph loadData() throws IOException {
+		FeatureSource<SimpleFeatureType, SimpleFeature> source = getSource();
+		
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
 		FeatureIterator<SimpleFeature> iterator = collection.features();
 
@@ -90,11 +88,15 @@ public class Loader {
 
 		logger.info("FileLoad Excution Time - " + rt + "s");
 		
+		iterator.close();
+		
 		return graph;
 	}
 	
 	public STRtree loadRtree() throws IOException {
 		STRtree rtree = new STRtree();
+		
+		FeatureSource<SimpleFeatureType, SimpleFeature> source = getSource();
 		
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
 		FeatureIterator<SimpleFeature> iterator = collection.features();
@@ -109,6 +111,21 @@ public class Loader {
 			}
 		}
 		
+		rtree.build();
+		
 		return rtree;
+	}
+	
+	private FeatureSource<SimpleFeatureType, SimpleFeature> getSource() throws IOException {
+		String typeName = store.getTypeNames()[0];
+		FeatureSource<SimpleFeatureType, SimpleFeature> source = store.getFeatureSource(typeName);
+		
+		return source;
+	}
+	
+	public void dispose() {
+		if(store != null) {
+			store.dispose();
+		}
 	}
 }

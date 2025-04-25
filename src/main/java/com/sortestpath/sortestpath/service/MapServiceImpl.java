@@ -22,10 +22,9 @@ public class MapServiceImpl implements MapService {
 	private final Engine engine;
 
 	@Override
-	public ResponseFindPathDto findPath(RequestFindPathDto findPathDto) {
+	public ResponseFindPathDto findPath(RequestFindPathDto findPathDto) {			
 		ArrayList<Node> resultPath = engine.shortestPathFind(findPathDto.getStartCoordinate(), findPathDto.getEndCoordinate());
-		log.info(resultPath == null ? "탐색 실패" : "탐색 성공");
-		
+
 		return ResponseFindPathDto.builder()
 				.startCoordinate(findPathDto.getStartCoordinate())
 				.endCoordinate(findPathDto.getEndCoordinate())

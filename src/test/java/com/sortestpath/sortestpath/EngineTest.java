@@ -10,26 +10,40 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.sortestpath.sortestpath.core.pathengine.Coordinate;
+import com.sortestpath.sortestpath.core.pathengine.DataProvider;
 import com.sortestpath.sortestpath.core.pathengine.Engine;
 import com.sortestpath.sortestpath.core.pathengine.Graph;
 import com.sortestpath.sortestpath.core.pathengine.Loader;
 import com.sortestpath.sortestpath.core.pathengine.Node;
+import com.sortestpath.sortestpath.core.pathengine.Provider.MapDataProvider;
 import com.sortestpath.sortestpath.util.PathUtil;
 
+@ActiveProfiles("test")
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(MapDataProvider.class)
 class EngineTest {
 	private static final Logger log = LoggerFactory.getLogger(EngineTest.class);
 
-	String filePath = getClass().getClassLoader().getResource("shp/test.shp").getFile();
+	private String filePath = getClass().getClassLoader().getResource("shp/test.shp").getFile();
 	
-	Loader loader;
-	Engine engine;
+	private Loader loader;
+	private Engine engine;
+	
+	@Autowired
+	private DataProvider dataProvider;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		loader = new Loader(filePath);
-		engine = new Engine(loader);
+		engine = new Engine(loader, dataProvider);
 	}
 
 	@Test
@@ -48,8 +62,8 @@ class EngineTest {
 	@Test
 	@DisplayName("경로탐색 - 좌표")
 	void findPathByCoordinateTest() {	
-		Coordinate startCoordinate = new Coordinate(33.2417782, 126.5647375);
-		Coordinate endCoordinate = new Coordinate(33.2387792, 126.6015835);
+		Coordinate startCoordinate = new Coordinate(33.4824388, 126.4898217);
+		Coordinate endCoordinate = new Coordinate(33.4845859, 126.4963428);
 		
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startCoordinate, endCoordinate);
 		
