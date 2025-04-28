@@ -25,6 +25,10 @@ public class Coordinate {
 		
 		return Math.sqrt(dx + dy);
 	}
+	
+	public String toWKT() {
+		return "POINT(" + longitude + " " + latitude + ")";
+	}
 
 	@Override
 	public int hashCode() {

@@ -3,6 +3,7 @@ package com.sortestpath.sortestpath.core.pathengine;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,8 +16,10 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.index.strtree.STRtree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.comparator.Comparators;
 
 import com.sortestpath.sortestpath.repository.MapRepository;
+import com.sortestpath.sortestpath.util.PathUtil;
 
 import lombok.Getter;
 
@@ -137,41 +140,53 @@ public class Engine {
 	}
 	
 	private ArrayList<Node> findPath(Node startNode, Node endNode) {
-		PriorityQueue<Node> openList = new PriorityQueue<Node>();
-		HashSet<Node> closeList = new HashSet<Node>();
+		PriorityQueue<Cost> openList = new PriorityQueue<Cost>(Comparator.comparingDouble(c -> c.getFCost()));
+		HashSet<Cost> closeList = new HashSet<Cost>();
 		HashMap<Node, Node> location = new HashMap<Node, Node>();
+		HashMap<Node, Cost> costList = new HashMap<Node, Cost>();
 		
 		//		for(Node node : graph.getAllNodes()) {  
 		//		node.calculateHeuristic(endNode);  // 목적지로 휴리스틱 선계산
 		//	}
 
 		// AStar
-		startNode.setGCost(0);
-		startNode.calculateHeuristic(endNode);
-		openList.add(startNode);
+		double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
+		Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
+		openList.add(startCost);
+		costList.put(startNode, startCost);
 
 		while(!openList.isEmpty()) {
-			Node minNode = openList.poll();
+			Cost minNode = openList.poll();
+			Cost minNodeCost = costList.get(minNode.getNode());
 
-			if(minNode.equals(endNode)) {
+			if(minNode.getNode().equals(endNode)) {
 				log.info("경로 탐색 종료");
 				break;
 			}
 
 			closeList.add(minNode);
 
-			for(Edge edge : minNode.getEdge().values()) {
-				if(closeList.contains(edge.getTo())) {
+			for(Edge edge : minNode.getNode().getEdge().values()) {
+				Cost toCost = costList.get(edge.getTo());
+				if(toCost == null) {
+					toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
+					costList.put(edge.getTo(), toCost);
+				}
+				
+				if(closeList.contains(toCost)) {
 					continue;
 				}
-
-				double newDist = minNode.getGCost() + edge.getDistance(); 
-				if(!openList.contains(edge.getTo()) && newDist < edge.getTo().getGCost()) {
-					edge.getTo().setGCost(newDist);
-					edge.getTo().calculateHeuristic(endNode);
-					//				openList.remove(edge.getTo());  // 꼭 빼줘야 함!
-					openList.add(edge.getTo());
-					location.put(edge.getTo(), minNode);
+				
+				
+				double newDist = minNodeCost.getGCost() + edge.getDistance();
+				if(!openList.contains(toCost) && newDist < toCost.getGCost()) {
+					double hCost = PathUtil.haversine(edge.getTo().getCoordinate(), endNode.getCoordinate());
+					double fCost = newDist + hCost;
+					Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
+					costList.put(edge.getTo(), c);
+					
+					openList.add(c);
+					location.put(edge.getTo(), minNode.getNode());
 				}
 			}
 		}

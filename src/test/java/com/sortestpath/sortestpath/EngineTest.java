@@ -57,6 +57,8 @@ class EngineTest {
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
 		
 		assertThat(path).isNotEmpty();
+		
+		path.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
 	}
 	
 	@Test
@@ -83,6 +85,8 @@ class EngineTest {
 		assertThat(path).isNotEmpty();
 		assertTrue(PathUtil.haversine(path.get(0).getCoordinate(), startCoordinate) < 5);
 		assertTrue(PathUtil.haversine(path.get(path.size() - 1).getCoordinate(), endCoordinate) < 5);
+		
+		path.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
 	}
 
 }

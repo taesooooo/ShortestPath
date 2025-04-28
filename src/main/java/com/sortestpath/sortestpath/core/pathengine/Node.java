@@ -6,6 +6,7 @@ import java.util.Objects;
 
 import com.sortestpath.sortestpath.util.PathUtil;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -14,6 +15,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class Node implements Comparable<Node> {
 	private int id;
 	private String category;
