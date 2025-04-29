@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.sortestpath.sortestpath.core.pathengine.Coordinate;
 import com.sortestpath.sortestpath.core.pathengine.Engine;
 import com.sortestpath.sortestpath.core.pathengine.Node;
 import com.sortestpath.sortestpath.dto.request.RequestFindPathDto;
@@ -22,13 +23,16 @@ public class MapServiceImpl implements MapService {
 	private final Engine engine;
 
 	@Override
-	public ResponseFindPathDto findPath(RequestFindPathDto findPathDto) {			
-		ArrayList<Node> resultPath = engine.shortestPathFind(findPathDto.getStartCoordinate(), findPathDto.getEndCoordinate());
+	public ResponseFindPathDto findPath(RequestFindPathDto findPathDto) {
+		Coordinate startCoordinate = new Coordinate(findPathDto.getStart());
+		Coordinate endCoordinate = new Coordinate(findPathDto.getEnd());
+		
+		ArrayList<Node> resultPath = engine.shortestPathFind(startCoordinate, endCoordinate);
 
 		return ResponseFindPathDto.builder()
-				.startCoordinate(findPathDto.getStartCoordinate())
-				.endCoordinate(findPathDto.getEndCoordinate())
-				.paths(resultPath.stream().map((node) -> node.getCoordinate()).collect(Collectors.toCollection(ArrayList::new)))
+				.start(startCoordinate)
+				.end(endCoordinate)
+				.routeList(resultPath.stream().map((node) -> node.getCoordinate()).collect(Collectors.toCollection(ArrayList::new)))
 				.build();
 	}
 

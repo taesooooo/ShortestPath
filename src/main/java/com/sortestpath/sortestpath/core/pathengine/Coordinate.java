@@ -19,6 +19,16 @@ public class Coordinate {
 	private double latitude;
 	private double longitude;
 	
+	public Coordinate(String coordinate) {
+		String[] splitStr = coordinate.split(",");
+		
+		double y = Double.parseDouble(splitStr[0]);
+		double x = Double.parseDouble(splitStr[1]);
+
+		this.latitude = y;
+		this.longitude = x;
+	}
+	
 	public double calculateDistanceToTarget(Coordinate coordinate) {
 		double dx = Math.pow(this.latitude - coordinate.getLatitude(), 2);
 		double dy = Math.pow(this.longitude - coordinate.getLongitude(), 2);

@@ -14,8 +14,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Getter
 public class ResponseFindPathDto {
-	private Coordinate startCoordinate;
-	private Coordinate endCoordinate;
-	private ArrayList<Coordinate> paths;
+	private Coordinate start;
+	private Coordinate end;
+	private ArrayList<Coordinate> routeList;
 
 }

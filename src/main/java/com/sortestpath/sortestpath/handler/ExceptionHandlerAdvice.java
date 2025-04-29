@@ -15,13 +15,15 @@ public class ExceptionHandlerAdvice {
 	
 	@ExceptionHandler(exception = Exception.class)
 	public ResponseEntity<Object> exception(Exception e) {
-		log.error(e.getMessage());
+		log.error("서버 에러: " + e.getMessage(), e);
+		e.getStackTrace();
 		return ResponseEntity.status(HttpStatus.CONFLICT).body("문제가 발생했습니다. 문제가 계속 된다면 개발자에게 문의 해주세요");
 	}
 	
 	@ExceptionHandler(exception = MethodArgumentNotValidException.class)
 	public ResponseEntity<Object> inValidException(Exception e, BindingResult result) {
-		log.info(e.getMessage());
+		log.info("유효성 검사 실패: " + e.getMessage(), e);
+		e.getStackTrace();
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result.getFieldError().getDefaultMessage());
 	}
 

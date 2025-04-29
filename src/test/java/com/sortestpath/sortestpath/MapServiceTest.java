@@ -29,13 +29,13 @@ class MapServiceTest {
 	@Test
 	void findPathTest() {
 		RequestFindPathDto testDto = RequestFindPathDto.builder()
-				.startCoordinate(new Coordinate(33.2417782, 126.5647375))
-				.endCoordinate(new Coordinate(33.2387792, 126.6015835))
+				.start("33.2417782, 126.5647375")
+				.end("33.2387792, 126.6015835")
 				.build();
 		
 		ResponseFindPathDto result = mapService.findPath(testDto);
 		
-		assertThat(result.getPaths()).isNotEmpty();
+		assertThat(result.getRouteList()).isNotEmpty();
 	}
 
 }

@@ -11,7 +11,7 @@ import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 
 @Documented
-@Constraint(validatedBy = CoordinateValidator.class)
+@Constraint(validatedBy = ValidCoordinateValidator.class)
 @Retention(RUNTIME)
 @Target(ElementType.FIELD)
 public @interface ValidCoordinate {
