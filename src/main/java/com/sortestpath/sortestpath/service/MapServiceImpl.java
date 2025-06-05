@@ -13,7 +13,6 @@ import com.sortestpath.sortestpath.core.pathengine.Engine;
 import com.sortestpath.sortestpath.core.pathengine.Node;
 import com.sortestpath.sortestpath.dto.request.RequestFindPathDto;
 import com.sortestpath.sortestpath.dto.response.ResponseFindPathDto;
-import com.sortestpath.sortestpath.dto.response.RouteDto;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,25 +24,25 @@ public class MapServiceImpl implements MapService {
 	private final Engine engine;
 
 	@Override
-	public ResponseFindPathDto findPath(List<RouteDto> coordinateList) {
+	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> coordinateList) {
 		
-		ArrayList<RouteDto> resultList = new ArrayList<RouteDto>();
+		ArrayList<ResponseFindPathDto> resultList = new ArrayList<ResponseFindPathDto>();
 		
 		for(int i=0; i<coordinateList.size(); i++) {
-			RouteDto route = coordinateList.get(i);
+			RequestFindPathDto route = coordinateList.get(i);
 			Coordinate startCoordinate = route.getStart();
 			Coordinate endCoordinate = route.getEnd();
 			
 			List<Node> pathList = engine.shortestPathFind(startCoordinate, endCoordinate);
 			
-			resultList.add(RouteDto.builder()
+			resultList.add(ResponseFindPathDto.builder()
 					.start(startCoordinate)
 					.end(endCoordinate)
 					.routeList(pathList.stream().map((node) -> node.getCoordinate()).collect(Collectors.toCollection(ArrayList::new)))
 					.build());
 		}
 		
-		return ResponseFindPathDto.builder().routeDto(resultList).build();
+		return resultList;
 	}
 
 }

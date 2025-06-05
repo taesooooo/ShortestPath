@@ -3,7 +3,6 @@ package com.sortestpath.sortestpath.controller;
 import java.util.List;
 import java.util.regex.PatternSyntaxException;
 
-import org.springframework.data.repository.query.Param;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,13 +10,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.sortestpath.sortestpath.Exception.InvalidCoordinate;
-import com.sortestpath.sortestpath.common.validation.ValidCoordinate;
 import com.sortestpath.sortestpath.core.pathengine.Coordinate;
 import com.sortestpath.sortestpath.dto.request.RequestFindPathDto;
-import com.sortestpath.sortestpath.dto.response.RouteDto;
 import com.sortestpath.sortestpath.service.MapService;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -28,7 +24,7 @@ public class MapController {
 
 	@GetMapping("/find-path")
 	public ResponseEntity<Object> findPath(@RequestParam("coordinates") List<String> list) {
-		List<RouteDto> coordinateList = list.stream().map(item -> {
+		List<RequestFindPathDto> coordinateList = list.stream().map(item -> {
 			boolean check = validCoordinate(item);
 			if(!check) {
 				throw new InvalidCoordinate("잘못된 좌표 리스트 형식입니다.");
@@ -45,7 +41,7 @@ public class MapController {
 			Coordinate start = new Coordinate(Double.parseDouble(startString[0]), Double.parseDouble(startString[1]));
 			Coordinate end = new Coordinate(Double.parseDouble(endString[0]), Double.parseDouble(endString[1]));
 			
-			RouteDto routeDto = RouteDto.builder().start(start).end(end).build();
+			RequestFindPathDto routeDto = RequestFindPathDto.builder().start(start).end(end).build();
 			return routeDto;
 		}).toList();
 
