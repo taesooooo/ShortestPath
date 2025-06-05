@@ -1,6 +1,8 @@
 package com.sortestpath.sortestpath.dto.response;
 
-import java.util.List;
+import java.util.ArrayList;
+
+import com.sortestpath.sortestpath.core.pathengine.Coordinate;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,6 +13,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
-public class ResponseFindPathDto {
-	List<RouteDto> routeDto;
+public class RouteDto {
+	private Coordinate start;
+	private Coordinate end;
+	private ArrayList<Coordinate> routeList;
 }

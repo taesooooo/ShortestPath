@@ -1,8 +1,7 @@
 package com.sortestpath.sortestpath.common.validation;
 
+import java.util.List;
 import java.util.regex.PatternSyntaxException;
-
-import com.sortestpath.sortestpath.core.pathengine.Coordinate;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -11,14 +10,18 @@ public class ValidCoordinateValidator implements ConstraintValidator<ValidCoordi
 	
 	@Override
 	public boolean isValid(String value, ConstraintValidatorContext context) {
-		if(value == null || value.isEmpty() || value.isBlank()) {
+		if(value == null|| value.isEmpty() || value.isBlank()) {
 			return false;
 		}
-
+		
+		return validCoordinate(value);
+	}
+	
+	private boolean validCoordinate(String value) {
 		boolean result = false;
 		
 		try {
-			String[] splitStr = value.split(",");
+			String[] splitStr = value.split("/");
 			
 			double y = Double.parseDouble(splitStr[0]);
 			double x = Double.parseDouble(splitStr[1]);
@@ -34,6 +37,4 @@ public class ValidCoordinateValidator implements ConstraintValidator<ValidCoordi
 		
 		return result;
 	}
-	
-
 }

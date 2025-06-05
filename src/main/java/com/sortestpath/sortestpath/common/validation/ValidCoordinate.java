@@ -13,7 +13,7 @@ import jakarta.validation.Payload;
 @Documented
 @Constraint(validatedBy = ValidCoordinateValidator.class)
 @Retention(RUNTIME)
-@Target(ElementType.FIELD)
+@Target({ElementType.FIELD, ElementType.PARAMETER})
 public @interface ValidCoordinate {
 	String message() default "좌표값이 유효하지 않습니다.";
 	Class<?>[] groups() default {};

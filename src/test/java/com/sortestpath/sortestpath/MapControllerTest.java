@@ -2,6 +2,7 @@ package com.sortestpath.sortestpath;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.stream.Stream;
@@ -23,7 +24,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sortestpath.sortestpath.dto.request.RequestFindPathDto;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -40,38 +40,40 @@ class MapControllerTest {
 	void setUp() throws Exception {
 		this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
 	}
-
+	
 	@Test
-	@DisplayName("경로 탐색 요청 - 정상")
-	void findMapTest() throws Exception {	
-		mockMvc.perform(get("/api/map/find-path")
-				.queryParam("start", "33.4824388,126.4898217")
-				.queryParam("end", "33.4845859,126.4963428")
-				.accept(MediaType.APPLICATION_JSON)
+	@DisplayName("경로 탐색 요청(리스트) - 정상")
+	public void findMapListTest() throws Exception {
+		// 33.3057279944/126.2466098987|33.3209235283/126.2460707194,33.3209235283/126.2460707194|33.4018299117/126.6876111209
+		// 33.4824388/126.4898217|33.4845859/126.4963428
+		this.mockMvc.perform(get("/api/map/find-path")
+				.queryParam("coordinates", "33.3057279944/126.2466098987|33.3209235283/126.2460707194,33.3209235283/126.2460707194|33.4018299117/126.6876111209")
+				.accept(MediaType.APPLICATION_JSON_VALUE)
 				.characterEncoding("UTF-8"))
 		.andDo(print())
-		.andExpect(status().isOk());
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$.routeDto").isArray())
+		.andExpect(jsonPath("$.routeDto[0].routeList").isNotEmpty());
 	}
 	
 	@ParameterizedTest()
 	@MethodSource("testArguments")
 	@DisplayName("경로 탐색 요청 - 잘못된 좌표")
-	void findMapInValidCoordinateTest(String startCo, String endCo) throws Exception {
+	void findMapInValidCoordinateTest(String parameter) throws Exception {
 		mockMvc.perform(get("/api/map/find-path")
+				.param("coordinates", parameter)
 				.accept(MediaType.APPLICATION_JSON)
 				.characterEncoding("UTF-8"))
 		.andDo(print())
 		.andExpect(status().isBadRequest());
 	}
 
-	private static Stream<Arguments> testArguments() {
-		return Stream.of(
-				Arguments.of("33.2417782,126.5647375", "321, 0123"),				// 잘못된 End 좌표
-				Arguments.of("123123, 125.32)", "33.2387792,126.6015835"),			// 잘못된 Start 좌표
-				Arguments.of("126.5647375,33.2417782", "33.2387792,126.6015835"), // 잘못된 Start 좌표 위도,경도 뒤바뀜
-				Arguments.of("33.2417782,126.5647375", "126.6015835,33.2387792"), // 잘못된 End 좌표 위도,경도 뒤바뀜
-				Arguments.of("0,0", "0,0")										// 잘못된 좌표
-				);
+	// 순서대로
+	// 잘못된 형식, 잘못된 자표
+	private static Stream<String> testArguments() {
+		return Stream.of( "33.4824388-126.4898217|33.4845859-126.4963428",
+				"33.2417782/126.5647375",
+				"126.4824388/33.4898217|33.4845859/126.4963428");
 	}
 
 }

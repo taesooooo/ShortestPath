@@ -99,8 +99,13 @@ public class Engine {
 			endNearestPoint = calculateNearestPointOnLine(linePoints[0], linePoints[1], endCoordinate); 
 			endNode = findNearestNode(linePoints, endNearestPoint);
 		}
+		long st = System.currentTimeMillis();
 		
 		ArrayList<Node> resultPath = findPath(startNode, endNode);
+		
+		long et = System.currentTimeMillis();
+		
+		log.info("탐색 완료 시간 - " + (et-st) / 1000.0);
 		
 		if(startNearestPoint != null) {
 			Node node = new Node();

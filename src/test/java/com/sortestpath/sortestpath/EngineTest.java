@@ -32,7 +32,8 @@ import com.sortestpath.sortestpath.util.PathUtil;
 class EngineTest {
 	private static final Logger log = LoggerFactory.getLogger(EngineTest.class);
 
-	private String filePath = getClass().getClassLoader().getResource("shp/test.shp").getFile();
+//	private String filePath = getClass().getClassLoader().getResource("shp/test.shp").getFile();
+	private String filePath = "C:\\Users\\Bear\\Documents\\gis\\제주링크.shp";
 	
 	private Loader loader;
 	private Engine engine;
@@ -77,8 +78,10 @@ class EngineTest {
 	void findPathByCooridnateTest() {
 		// 시작 지점 없는 좌표 33.4822905, 126.4904020
 		// 목표 지점 없는 좌표 33.4844175, 126.4962931
-		Coordinate startCoordinate = new Coordinate(33.4822905, 126.4904020);
-		Coordinate endCoordinate = new Coordinate(33.4844175, 126.4962931);
+		// start=33.3209235283,126.2460707194
+		// end=33.4893700755,126.5038611983
+		Coordinate startCoordinate = new Coordinate(33.3209235283,126.2460707194);
+		Coordinate endCoordinate = new Coordinate(33.4893700755, 126.5038611983);
 		
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startCoordinate, endCoordinate);
 		

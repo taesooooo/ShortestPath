@@ -1,6 +1,7 @@
 package com.sortestpath.sortestpath.service;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import com.sortestpath.sortestpath.core.pathengine.Engine;
 import com.sortestpath.sortestpath.core.pathengine.Node;
 import com.sortestpath.sortestpath.dto.request.RequestFindPathDto;
 import com.sortestpath.sortestpath.dto.response.ResponseFindPathDto;
+import com.sortestpath.sortestpath.dto.response.RouteDto;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,17 +25,25 @@ public class MapServiceImpl implements MapService {
 	private final Engine engine;
 
 	@Override
-	public ResponseFindPathDto findPath(RequestFindPathDto findPathDto) {
-		Coordinate startCoordinate = new Coordinate(findPathDto.getStart());
-		Coordinate endCoordinate = new Coordinate(findPathDto.getEnd());
+	public ResponseFindPathDto findPath(List<RouteDto> coordinateList) {
 		
-		ArrayList<Node> resultPath = engine.shortestPathFind(startCoordinate, endCoordinate);
-
-		return ResponseFindPathDto.builder()
-				.start(startCoordinate)
-				.end(endCoordinate)
-				.routeList(resultPath.stream().map((node) -> node.getCoordinate()).collect(Collectors.toCollection(ArrayList::new)))
-				.build();
+		ArrayList<RouteDto> resultList = new ArrayList<RouteDto>();
+		
+		for(int i=0; i<coordinateList.size(); i++) {
+			RouteDto route = coordinateList.get(i);
+			Coordinate startCoordinate = route.getStart();
+			Coordinate endCoordinate = route.getEnd();
+			
+			List<Node> pathList = engine.shortestPathFind(startCoordinate, endCoordinate);
+			
+			resultList.add(RouteDto.builder()
+					.start(startCoordinate)
+					.end(endCoordinate)
+					.routeList(pathList.stream().map((node) -> node.getCoordinate()).collect(Collectors.toCollection(ArrayList::new)))
+					.build());
+		}
+		
+		return ResponseFindPathDto.builder().routeDto(resultList).build();
 	}
 
 }

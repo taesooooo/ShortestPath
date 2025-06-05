@@ -9,6 +9,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.sortestpath.sortestpath.Exception.InvalidCoordinate;
+
 @RestControllerAdvice
 public class ExceptionHandlerAdvice {	
 	private static final Logger log = LoggerFactory.getLogger(ExceptionHandler.class);
@@ -25,6 +27,13 @@ public class ExceptionHandlerAdvice {
 		log.info("유효성 검사 실패: " + e.getMessage(), e);
 		e.getStackTrace();
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result.getFieldError().getDefaultMessage());
+	}
+	
+	@ExceptionHandler(exception = InvalidCoordinate.class)
+	public ResponseEntity<Object> inValidCoordinate(Exception e) {
+		log.info("유효성 검사 실패: " + e.getMessage(), e);
+		e.getStackTrace();
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
 	}
 
 }
