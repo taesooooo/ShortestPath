@@ -6,6 +6,7 @@ build/
 !**/src/test/**/build/
 
 *.properties
+!gradle/wrapper/gradle-wrapper.properties
 src/test/resources/shp/
 
 ### STS ###
