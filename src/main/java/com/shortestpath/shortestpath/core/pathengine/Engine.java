@@ -256,7 +256,7 @@ public class Engine {
 		org.locationtech.jts.geom.Coordinate start = lines[0];
 		org.locationtech.jts.geom.Coordinate end = lines[1];
 		
-		return new Coordinate[] {new Coordinate((float)start.y, (float)start.x), new Coordinate((float)end.y, (float)end.x)};
+		return new Coordinate[] {new Coordinate(start.y, start.x), new Coordinate(end.y, end.x)};
 	}
 	
 	/**
@@ -278,6 +278,6 @@ public class Engine {
 		double y = a.getLatitude() + t * (b.getLatitude() - a.getLatitude());
 		
 		
-		return new Coordinate((float)y, (float)x);
+		return new Coordinate(y, x);
 	}
 }
