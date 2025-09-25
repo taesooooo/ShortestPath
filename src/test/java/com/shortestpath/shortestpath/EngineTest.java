@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -31,9 +32,10 @@ import com.shortestpath.shortestpath.util.PathUtil;
 @Import(MapDataProvider.class)
 class EngineTest {
 	private static final Logger log = LoggerFactory.getLogger(EngineTest.class);
-
-//	private String filePath = getClass().getClassLoader().getResource("shp/test.shp").getFile();
-	private String filePath = "C:\\Users\\Bear\\Documents\\gis\\제주링크.shp";
+	@Value("${findpath.node-shp-path}")
+	private String nodeFilePath;
+	@Value("${findpath.link-shp-path}")
+	private String linkFilePath;
 	
 	private Loader loader;
 	private Engine engine;
@@ -43,7 +45,7 @@ class EngineTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
-		loader = new Loader(filePath);
+		loader = new Loader(nodeFilePath, linkFilePath);
 		engine = new Engine(loader, dataProvider);
 	}
 
@@ -52,8 +54,8 @@ class EngineTest {
 	void findPathByNodeTest() {	
 		Graph g = engine.getGraph();
 
-		Node startNode = g.getNode(new Coordinate(33.4824388, 126.4898217));
-		Node endNode = g.getNode(new Coordinate(33.4845859, 126.4963428));
+		Node startNode = g.getNode(new Coordinate(33.2403307, 126.5624673));
+		Node endNode = g.getNode(new Coordinate(33.2417782, 126.5647375));
 		
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
 		
@@ -61,12 +63,73 @@ class EngineTest {
 		
 		path.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
 	}
+
+	@Test
+	@DisplayName("경로탐색 - 시작 노드와 종료노드가 정확한 위치인지")
+	void findPathByNodeExactTest() {	
+		Graph g = engine.getGraph();
+
+		Node startNode = g.getNode(new Coordinate(33.2403307, 126.5624673));
+		Node endNode = g.getNode(new Coordinate(33.2417782, 126.5647375));
+		
+		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
+		
+		assertThat(path).isNotEmpty();
+		assertTrue(path.get(0).getCoordinate().equals(startNode.getCoordinate()));
+		assertTrue(path.get(path.size() - 1).getCoordinate().equals(endNode.getCoordinate()));
+		
+		path.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
+	}
+
+	@Test
+	@DisplayName("경로탐색 - 탐색 경로의 노드수가 기대값과 같은지")
+	void findPathByNodeCountTest() {	
+		// 탐색 경로 기대값은 qgis에서 직접 확인
+		Graph g = engine.getGraph();
+
+		Node startNode = g.getNode(new Coordinate(33.2403307, 126.5624673));
+		Node endNode = g.getNode(new Coordinate(33.2417782, 126.5647375));
+		
+		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
+		
+		assertThat(path).isNotEmpty();
+		assertThat(path.size()).isEqualTo(7);
+		
+		path.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
+	}
+
+	@Test
+	@DisplayName("경로탐색 - 탐색된 경로가 모두 이어져 있는지")
+	void findPathByNodeConnectTest() {	
+		Graph g = engine.getGraph();
+
+		Node startNode = g.getNode(new Coordinate(33.2403307, 126.5624673));
+		Node endNode = g.getNode(new Coordinate(33.2417782, 126.5647375));
+		
+		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
+		
+		assertThat(path).isNotEmpty();
+		
+		boolean isConnected = true;
+		for(int i=0; i < path.size() - 1; i++) {
+			Node n1 = path.get(i);
+			Node n2 = path.get(i + 1);
+			if(n1.getAdjacentNodes().contains(n2) == false) {
+				isConnected = false;
+				break;
+			}
+		}
+
+		assertTrue(isConnected);
+		
+		path.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
+	}
 	
 	@Test
 	@DisplayName("경로탐색 - 좌표")
 	void findPathByCoordinateTest() {	
-		Coordinate startCoordinate = new Coordinate(33.4824388, 126.4898217);
-		Coordinate endCoordinate = new Coordinate(33.4845859, 126.4963428);
+		Coordinate startCoordinate = new Coordinate(33.2403307, 126.5624673);
+		Coordinate endCoordinate = new Coordinate(33.2417782, 126.5647375);
 		
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startCoordinate, endCoordinate);
 		

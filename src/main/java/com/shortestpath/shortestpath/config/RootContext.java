@@ -16,8 +16,10 @@ import com.shortestpath.shortestpath.repository.MapRepository;
 @Configuration
 public class RootContext {
 	
-	@Value("${findpath.shp-path}")
-	private String filePath;
+	@Value("${findpath.node-shp-path}")
+	private String nodeFilePath;
+	@Value("${findpath.link-shp-path}")
+	private String linkFilePath;
 	private final DataProvider dataProvider;
 	
 	
@@ -27,7 +29,7 @@ public class RootContext {
 
 	@Bean
 	public Engine pathEngine() throws IOException {
-		Loader loader = new Loader(filePath);
+		Loader loader = new Loader(nodeFilePath, linkFilePath);
 		return new Engine(loader, dataProvider);
 	}
 }

@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.comparator.Comparators;
 
+import com.shortestpath.shortestpath.entity.GeoLink;
 import com.shortestpath.shortestpath.repository.MapRepository;
 import com.shortestpath.shortestpath.util.PathUtil;
 
@@ -48,9 +49,12 @@ public class Engine {
 		this.dataProvider = dataProvider;
 		try {
 			log.info("지도 링크 데이터 로드 시작");
-	        this.graph = this.loader.loadData();
+	        // this.graph = this.loader.loadData();
+			this.loader.loadNode();
+			this.loader.loadEdge();
+			this.graph = this.loader.getMapGraph();
 	        this.loader.dispose();
-	    } catch (IOException e) {
+	    } catch (Exception e) {
 	        log.error("로드 중 오류 발생: {}", e.getMessage(), e);
 	        throw e; // 예외를 다시 던져서 상위에서 처리하도록 함
 	    }
@@ -144,72 +148,92 @@ public class Engine {
 		return graph.getNode(minCoordinate);
 	}
 	
+	/**
+	 * A* 알고리즘을 이용해 시작 노드에서 종료 노드까지의 최단 경로를 탐색합니다.
+	 * 각 노드의 gCost(시작점부터 현재 노드까지의 거리), hCost(목적지까지의 휴리스틱, 하버사인 거리), fCost(gCost + hCost)를 계산하여
+	 * 우선순위 큐를 사용해 가장 fCost가 낮은 노드를 우선적으로 탐색합니다.
+	 * 
+	 * @param startNode 출발 노드
+	 * @param endNode 도착 노드
+	 * @return 최단 경로에 포함된 노드 리스트(순서대로)
+	 */
 	private ArrayList<Node> findPath(Node startNode, Node endNode) {
-		PriorityQueue<Cost> openList = new PriorityQueue<Cost>(Comparator.comparingDouble(c -> c.getFCost()));
-		HashSet<Cost> closeList = new HashSet<Cost>();
-		HashMap<Node, Node> location = new HashMap<Node, Node>();
-		HashMap<Node, Cost> costList = new HashMap<Node, Cost>();
-		
-		//		for(Node node : graph.getAllNodes()) {  
-		//		node.calculateHeuristic(endNode);  // 목적지로 휴리스틱 선계산
-		//	}
+	    // fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
+	    PriorityQueue<Cost> openList = new PriorityQueue<Cost>(Comparator.comparingDouble(c -> c.getFCost()));
+	    // 이미 방문한 노드 집합
+	    HashSet<Cost> closeList = new HashSet<Cost>();
+	    // 각 노드의 이전 노드를 저장(경로 역추적용)
+	    HashMap<Node, Node> location = new HashMap<Node, Node>();
+	    // 각 노드의 비용 정보를 저장
+	    HashMap<Node, Cost> costList = new HashMap<Node, Cost>();
 
-		// AStar
-		double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
-		Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
-		openList.add(startCost);
-		costList.put(startNode, startCost);
+	    // 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
+	    double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
+	    Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
+	    openList.add(startCost);
+	    costList.put(startNode, startCost);
 
-		while(!openList.isEmpty()) {
-			Cost minNode = openList.poll();
-			Cost minNodeCost = costList.get(minNode.getNode());
+	    // A* 탐색 루프
+	    while(!openList.isEmpty()) {
+	        // fCost가 가장 낮은 노드를 꺼냄
+	        Cost minNode = openList.poll();
+	        Cost minNodeCost = costList.get(minNode.getNode());
 
-			if(minNode.getNode().equals(endNode)) {
-				log.info("경로 탐색 종료");
-				break;
-			}
+	        // 도착 노드에 도달하면 탐색 종료
+	        if(minNode.getNode().equals(endNode)) {
+	            log.info("경로 탐색 종료");
+	            break;
+	        }
 
-			closeList.add(minNode);
+	        // 현재 노드를 closeList에 추가
+	        closeList.add(minNode);
 
-			for(Edge edge : minNode.getNode().getEdge().values()) {
-				Cost toCost = costList.get(edge.getTo());
-				if(toCost == null) {
-					toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
-					costList.put(edge.getTo(), toCost);
-				}
-				
-				if(closeList.contains(toCost)) {
-					continue;
-				}
-				
-				
-				double newDist = minNodeCost.getGCost() + edge.getDistance();
-				if(!openList.contains(toCost) && newDist < toCost.getGCost()) {
-					double hCost = PathUtil.haversine(edge.getTo().getCoordinate(), endNode.getCoordinate());
-					double fCost = newDist + hCost;
-					Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
-					costList.put(edge.getTo(), c);
-					
-					openList.add(c);
-					location.put(edge.getTo(), minNode.getNode());
-				}
-			}
-		}
-		
-		// 탐색 결과 역추적
-		ArrayList<Node> path = new ArrayList<Node>();
-		Node node = location.get(endNode);
-		while(node != null) {
-			path.add(node);
-			node = location.get(node);
-		}
-		
-		Collections.reverse(path);
-		
-		// 마지막 좌표 추가
-		path.add(endNode);
-		
-		return path;
+	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
+	        for(Edge edge : minNode.getNode().getEdge().values()) {
+	            Cost toCost = costList.get(edge.getTo());
+	            if(toCost == null) {
+	                // 아직 방문하지 않은 노드라면 초기값으로 등록
+	                toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
+	                costList.put(edge.getTo(), toCost);
+	            }
+
+	            // 이미 방문한 노드는 건너뜀
+	            if(closeList.contains(toCost)) {
+	                continue;
+	            }
+
+	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
+	            double newDist = minNodeCost.getGCost() + edge.getDistance();
+	            // openList에 없고, 더 짧은 경로라면 갱신
+	            if(!openList.contains(toCost) && newDist < toCost.getGCost()) {
+	                // hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
+	                double hCost = PathUtil.haversine(edge.getTo().getCoordinate(), endNode.getCoordinate());
+	                double fCost = newDist + hCost;
+	                Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
+	                costList.put(edge.getTo(), c);
+
+	                openList.add(c);
+	                // 경로 역추적을 위해 이전 노드 저장
+	                location.put(edge.getTo(), minNode.getNode());
+	            }
+	        }
+	    }
+
+	    // 탐색 결과를 역추적하여 경로 리스트 생성
+	    ArrayList<Node> path = new ArrayList<Node>();
+	    Node node = location.get(endNode);
+	    while(node != null) {
+	        path.add(node);
+	        node = location.get(node);
+	    }
+
+	    // 경로를 올바른 순서로 뒤집음
+	    Collections.reverse(path);
+
+	    // 마지막 도착 노드 추가
+	    path.add(endNode);
+
+	    return path;
 	}
 	
 	/**
@@ -221,11 +245,14 @@ public class Engine {
 		org.locationtech.jts.geom.Coordinate convertCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
 		Point point = new GeometryFactory().createPoint(convertCoordinate);
 
-		List<Geometry> geoList = dataProvider.findNearestLine(point.getX(), point.getY(), 0.001);
+		// 주어진 좌표에서 가까운 라인들을 가져온다.
+		List<GeoLink> geoDataList = dataProvider.findNearestLine(point.getX(), point.getY(), 0.001);
 		
-		if(geoList.isEmpty()) {
+		if(geoDataList.isEmpty()) {
 			throw new EmptyGeometryListException("지오메트리 리스트가 비어있습니다. 데이터베이스 또는 DataProvider를 확인해주세요.");
 		}
+
+		List<Geometry> geoList = geoDataList.stream().map(item -> item.getShape()).toList();
 		
 		// 후보 라인 중 거리가 제일 가까운 라인 검색
 		Geometry nearestGeoLine = null;
@@ -240,22 +267,41 @@ public class Engine {
 		}
 
 		org.locationtech.jts.geom.Coordinate[] lines = nearestGeoLine.getCoordinates();
+		org.locationtech.jts.geom.Coordinate[] sortLines = null;
+		org.locationtech.jts.geom.Coordinate start = null;
+		org.locationtech.jts.geom.Coordinate end = null;
 		
+		// 만약 가까운 라인에 포인트가 두개 이상이라면 시작점과 끝점을 가져오고
+		// 가까운 점 기준으로 정렬한 뒤 시작 노드와 끝 노드를 결정한다.
+		// 요청 좌표와 가까운 점을 선택하기 위함
 		if(nearestGeoLine.getNumPoints() > 2) {
-			for(int i=0;i< nearestGeoLine.getNumPoints();i++) {
-				for(int j=0;j< nearestGeoLine.getNumPoints() - 1 - i; j++) {
-					if(lines[j].distance(convertCoordinate) > lines[j + 1].distance(convertCoordinate)) {
-						org.locationtech.jts.geom.Coordinate temp = lines[j];
-						lines[j] = lines[j + 1];
-						lines[j + 1] = temp;
-					}
-				}
+			sortLines = new org.locationtech.jts.geom.Coordinate[2];
+			if(lines[0].distance(convertCoordinate) > lines[lines.length - 1].distance(convertCoordinate)) {
+				sortLines[0] = lines[0];
+				sortLines[1] = lines[lines.length - 1];
 			}
+			else {
+				sortLines[0] = lines[lines.length - 1];
+				sortLines[1] = lines[0];
+			}
+			
+			start = sortLines[0];
+			end = sortLines[1];
+			
+//			for(int i=0;i< nearestGeoLine.getNumPoints();i++) {
+//				for(int j=0;j< nearestGeoLine.getNumPoints() - 1 - i; j++) {
+//					if(lines[j].distance(convertCoordinate) > lines[j + 1].distance(convertCoordinate)) {
+//						org.locationtech.jts.geom.Coordinate temp = lines[j];
+//						lines[j] = lines[j + 1];
+//						lines[j + 1] = temp;
+//					}
+//				}
+//			}
 		}
-
-		org.locationtech.jts.geom.Coordinate start = lines[0];
-		org.locationtech.jts.geom.Coordinate end = lines[1];
-		
+		else {
+			start = lines[0];
+			end = lines[lines.length - 1];			
+		}
 		return new Coordinate[] {new Coordinate(start.y, start.x), new Coordinate(end.y, end.x)};
 	}
 	

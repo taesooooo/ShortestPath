@@ -1,6 +1,8 @@
 package com.shortestpath.shortestpath.core.pathengine;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -45,6 +47,16 @@ public class Node implements Comparable<Node> {
 		this.hCost = newDistance;
 		
 		this.fCost = gCost + hCost;
+	}
+
+	public List<Node> getAdjacentNodes() {
+		List<Node> adjacentNodes = new ArrayList<Node>();
+		
+		for(Edge e : edge.values()) {
+			adjacentNodes.add(e.getTo());
+		}
+		
+		return adjacentNodes;
 	}
 	
 	@Override

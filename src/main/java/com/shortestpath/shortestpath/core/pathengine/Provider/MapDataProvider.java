@@ -6,6 +6,7 @@ import org.locationtech.jts.geom.Geometry;
 import org.springframework.stereotype.Component;
 
 import com.shortestpath.shortestpath.core.pathengine.DataProvider;
+import com.shortestpath.shortestpath.entity.GeoLink;
 import com.shortestpath.shortestpath.repository.MapRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,7 @@ public class MapDataProvider implements DataProvider {
 	public final MapRepository mapRepository;
 
 	@Override
-	public List<Geometry> findNearestLine(double longitude, double latitude, double range) {
+	public List<GeoLink> findNearestLine(double longitude, double latitude, double range) {
 		return mapRepository.findNearestLine(longitude, latitude, range);
 	}
 

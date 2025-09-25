@@ -13,9 +13,13 @@ import com.shortestpath.shortestpath.entity.GeoLink;
 
 @Repository
 public interface MapRepository extends JpaRepository<GeoLink, Integer> {
-	@Query(value = "SELECT SHAPE "
+	// @Query(value = "SELECT SHAPE "
+	// 		+ "FROM map "
+	// 		+ "WHERE mbrintersects(SHAPE, ST_GeomFromText(ST_AsText(ST_Buffer(ST_GeomFromText(CONCAT('POINT(', :longitude, ' ', :latitude, ')'), 0), :distance)), 1))", nativeQuery = true)
+	// public List<Geometry> findNearestLine(@Param("longitude") double longitude, @Param("latitude") double latitude, @Param("distance") double distance);
+	@Query(value = "SELECT OGR_FID, SHAPE, osm_id, code, fclass, name, ref, oneway, maxspeed, layer, bridge, tunnel "
 			+ "FROM map "
-			+ "WHERE mbrintersects(SHAPE, ST_GeomFromText(ST_AsText(ST_Buffer(ST_GeomFromText(CONCAT('POINT(', :longitude, ' ', :latitude, ')'), 0), :range)), 1))", nativeQuery = true)
-	public List<Geometry> findNearestLine(@Param("longitude") double longitude, @Param("latitude") double latitude, @Param("range") double range);
+			+ "WHERE mbrintersects(SHAPE, ST_GeomFromText(ST_AsText(ST_Buffer(ST_GeomFromText(CONCAT('POINT(', :longitude, ' ', :latitude, ')'), 0), :distance)), 1))", nativeQuery = true)
+	public List<GeoLink> findNearestLine(@Param("longitude") double longitude, @Param("latitude") double latitude, @Param("distance") double distance);
 
 }

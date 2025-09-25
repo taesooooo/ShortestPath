@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.shortestpath.shortestpath.entity.GeoLink;
 import com.shortestpath.shortestpath.repository.MapRepository;
 
 @ActiveProfiles("test")
@@ -33,13 +34,15 @@ class MapRepositoryTest {
 	@Test
 	@DisplayName("주어진 좌표에서 가까운 라인 가져오기")
 	void findNearestLineTest() {
-		//126.4898217 33.4824388
-		List<Geometry> list = mapRepository.findNearestLine(126.4898217, 33.4824388, 0.001);
-		
-		assertThat(list).isNotEmpty();
-//		assertThat(list.stream().map(item -> item.getOgrFID()).toList())
-//		.containsExactly(489,533,521,23,146,218,202,56,90,102,195,101,62,73,225,199);
-		
-//		list.forEach(item -> log.info(item.getShape().toText()));
+		// 126.4898217 33.4824388
+		List<GeoLink> list = mapRepository.findNearestLine(126.5624673, 33.2403307, 0.001);
+
+		assertThat(list)
+				.as("가까운 라인을 찾지 못했습니다.")
+				.isNotEmpty()
+				.extracting(GeoLink::getOsmId)
+				.contains("75606417", "232438708", "232439144", "232439144", "232439145", "280266099", "292864982",
+						"292864994", "292864996", "292864999", "292865000", "292865003", "369770453", "375861208", "375861209",
+						"375861209");
 	}
 }

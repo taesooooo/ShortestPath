@@ -52,8 +52,21 @@ class MapControllerTest {
 				.characterEncoding("UTF-8"))
 		.andDo(print())
 		.andExpect(status().isOk())
-		.andExpect(jsonPath("$.routeDto").isArray())
-		.andExpect(jsonPath("$.routeDto[0].routeList").isNotEmpty());
+		.andExpect(jsonPath("$").isArray())
+		.andExpect(jsonPath("$.[0].routeList").isNotEmpty());
+	}
+	
+	@Test
+	@DisplayName("경로 탐색 요청(리스트)2 - 정상")
+	public void findMapListTest2() throws Exception {
+		this.mockMvc.perform(get("/api/map/find-path")
+				.queryParam("coordinates", "33.2403145/126.5624921|33.2417637/126.5647694")
+				.accept(MediaType.APPLICATION_JSON_VALUE)
+				.characterEncoding("UTF-8"))
+		.andDo(print())
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$").isArray())
+		.andExpect(jsonPath("$.[0].routeList").isNotEmpty());
 	}
 	
 	@ParameterizedTest()

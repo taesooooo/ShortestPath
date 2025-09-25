@@ -3,16 +3,28 @@ package com.shortestpath.shortestpath.core.pathengine;
 import java.util.Collection;
 import java.util.HashMap;
 
+import org.locationtech.jts.geom.Geometry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.shortestpath.shortestpath.util.PathUtil;
+
+import lombok.extern.log4j.Log4j;
 
 
 public class Graph {
+	private Logger logger = LoggerFactory.getLogger(getClass());
+
 	private HashMap<Coordinate, Node> graph;
 	
 	public Graph() {
 		graph = new HashMap<Coordinate, Node>();
 	}
-	
+
+	public Graph(HashMap<Coordinate, Node> graph) {
+		this.graph = graph;
+	}
+
 	public void addNode(Node node) {
 		graph.putIfAbsent(node.getCoordinate(), node);
 	}
@@ -23,10 +35,22 @@ public class Graph {
 	 * @param startNode
 	 * @param endNode
 	 */
-	public void addEdge(Node startNode, Node endNode) {
-		double distance = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
-		graph.get(startNode.getCoordinate()).getEdge().put(endNode.getId(), new Edge(endNode, distance));
-		graph.get(endNode.getCoordinate()).getEdge().put(startNode.getId(), new Edge(startNode, distance));
+	public void addEdge(Coordinate startCoordinate, Coordinate endCoordinate, Geometry geometry) {
+		double distance = PathUtil.haversine(startCoordinate, endCoordinate);
+		
+		Node startNode = graph.get(startCoordinate);
+		Node endNode = graph.get(endCoordinate);
+		
+		if(startNode == null) {
+			throw new NullPointerException("해당 하는 좌표의 노드가 없습니다. - " + startCoordinate.toWKT());
+		}
+		
+		if(endNode == null) {
+			throw new NullPointerException("해당 하는 좌표의 노드가 없습니다. - " + endCoordinate.toWKT());
+		}
+		
+		startNode.getEdge().put(endNode.getId(), new Edge(endNode, distance, geometry));
+		endNode.getEdge().put(startNode.getId(), new Edge(startNode, distance, geometry));
 	}
 	
 	public Node getNode(Coordinate coordinate) {
@@ -43,6 +67,10 @@ public class Graph {
 	
 	public Collection<Node> getAllNodes() {
 		return graph.values();
+	}
+
+	public int size() {
+		return graph.size();
 	}
 	
 	public void printAll() {
