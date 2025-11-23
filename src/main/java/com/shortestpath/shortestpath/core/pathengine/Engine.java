@@ -9,55 +9,33 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
 
-import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.index.strtree.STRtree;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.util.comparator.Comparators;
 
+import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.entity.GeoLink;
-import com.shortestpath.shortestpath.repository.MapRepository;
 import com.shortestpath.shortestpath.util.PathUtil;
 
-import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class Engine {
-	private static final Logger log = LoggerFactory.getLogger(Engine.class);
-	
-	@Getter
-	private Graph graph;
-	private Loader loader;
-	private STRtree stRtree;
+	private DataStore store;
 	private final DataProvider dataProvider;
-//	private PriorityQueue<Node> openList;
-//	private HashSet<Node> closeList;
-//	private HashMap<Node, Node> location;
 		
-	public Engine(Loader loader, DataProvider dataProvider) throws IOException {
-		if(loader == null) {
-			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. 로더가 null입니다..");
+	public Engine(DataStore store, DataProvider dataProvider) throws IOException {
+		if(store == null) {
+			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataStore가 null입니다..");
 		}
 		
 		if(dataProvider == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataProvider가 null입니다.");
 		}
 		
-		this.loader = loader;
+		this.store = store;
 		this.dataProvider = dataProvider;
-		try {
-			log.info("지도 링크 데이터 로드 시작");
-	        // this.graph = this.loader.loadData();
-			this.loader.loadNode();
-			this.loader.loadEdge();
-			this.graph = this.loader.getMapGraph();
-	        this.loader.dispose();
-	    } catch (Exception e) {
-	        log.error("로드 중 오류 발생: {}", e.getMessage(), e);
-	        throw e; // 예외를 다시 던져서 상위에서 처리하도록 함
-	    }
+
 		log.info("엔진 초기화 완료");
 	}
 	
@@ -67,8 +45,9 @@ public class Engine {
 	 * @param endNode
 	 * @return 탐색된 최단 경로 리스트
 	 * @throws NullPointerException
+	 * @throws IOException 
 	 */
-	public ArrayList<Node> shortestPathFind(Node startNode, Node endNode) throws NullPointerException {
+	public ArrayList<Node> shortestPathFind(Node startNode, Node endNode) throws NullPointerException, IOException {
 		if(startNode == null || endNode == null) {
 			throw new NullPointerException("탐색에 필요한 노드가 없습니다.");
 		}
@@ -83,10 +62,11 @@ public class Engine {
 	 * @param startCoordinate
 	 * @param endCoordinate
 	 * @return 탐색된 최단 경로 리스트
+	 * @throws IOException 
 	 */
-	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) {
-		Node startNode = graph.getNode(startCoordinate);
-		Node endNode = graph.getNode(endCoordinate);
+	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) throws IOException {
+		Node startNode = null;
+		Node endNode = null;
 		Coordinate startNearestPoint = null;
 		Coordinate endNearestPoint = null;
 		
@@ -111,18 +91,6 @@ public class Engine {
 		
 		log.info("탐색 완료 시간 - " + (et-st) / 1000.0);
 		
-		if(startNearestPoint != null) {
-			Node node = new Node();
-			node.setCoordinate(startNearestPoint);
-			resultPath.add(0, node);
-		}
-		
-		if(endNearestPoint != null) {
-			Node node = new Node();
-			node.setCoordinate(endNearestPoint);
-			resultPath.add(node);
-		}
-		
 		return resultPath;
 	}
 	
@@ -132,8 +100,9 @@ public class Engine {
 	 * @param coordinateArray
 	 * @param targetCoordinate
 	 * @return 그래프에서 노드를 찾아 반환
+	 * @throws IOException 
 	 */
-	private Node findNearestNode(Coordinate[] coordinateArray, Coordinate targetCoordinate) {
+	private Node findNearestNode(Coordinate[] coordinateArray, Coordinate targetCoordinate) throws IOException {
 		double minDistance = Double.MAX_VALUE;
 		Coordinate minCoordinate = null;
 		
@@ -145,7 +114,9 @@ public class Engine {
 			}
 		}
 		
-		return graph.getNode(minCoordinate);
+		int offset = store.getNodeOffset(minCoordinate);
+
+		return store.readNode(offset);
 	}
 	
 	/**
@@ -156,65 +127,81 @@ public class Engine {
 	 * @param startNode 출발 노드
 	 * @param endNode 도착 노드
 	 * @return 최단 경로에 포함된 노드 리스트(순서대로)
+	 * @throws IOException 
 	 */
-	private ArrayList<Node> findPath(Node startNode, Node endNode) {
+	private ArrayList<Node> findPath(Node startNode, Node endNode) throws IOException {
 	    // fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
-	    PriorityQueue<Cost> openList = new PriorityQueue<Cost>(Comparator.comparingDouble(c -> c.getFCost()));
+	    PriorityQueue<Node> openList = new PriorityQueue<Node>(Comparator.comparingDouble(c -> c.getFCost()));
 	    // 이미 방문한 노드 집합
-	    HashSet<Cost> closeList = new HashSet<Cost>();
+	    HashSet<Node> closeList = new HashSet<Node>();
 	    // 각 노드의 이전 노드를 저장(경로 역추적용)
 	    HashMap<Node, Node> location = new HashMap<Node, Node>();
-	    // 각 노드의 비용 정보를 저장
-	    HashMap<Node, Cost> costList = new HashMap<Node, Cost>();
+
+		HashMap<Integer, Node> nodeList = new HashMap<>();
+		HashMap<Integer, Edge> edgeList = new HashMap<>();
 
 	    // 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
 	    double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
-	    Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
-	    openList.add(startCost);
-	    costList.put(startNode, startCost);
+	    // Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
+
+		// 첫 시작 노드 gCost = 0 설정
+		startNode.setGCost(0);
+		startNode.setHCost(heuristic);
+		startNode.setFCost(heuristic);
+		nodeList.put(startNode.getId(), startNode);
+		// 첫 시작 노드를 추가
+	    openList.add(startNode);
+	    // costList.put(startNode, startCost);
 
 	    // A* 탐색 루프
 	    while(!openList.isEmpty()) {
 	        // fCost가 가장 낮은 노드를 꺼냄
-	        Cost minNode = openList.poll();
-	        Cost minNodeCost = costList.get(minNode.getNode());
+	        Node minNode = openList.poll();
+	        // Cost minNodeCost = costList.get(minNode.getNode());
 
 	        // 도착 노드에 도달하면 탐색 종료
-	        if(minNode.getNode().equals(endNode)) {
-	            log.info("경로 탐색 종료");
-	            break;
+	        if(minNode.equals(endNode)) {
+				break;
 	        }
 
 	        // 현재 노드를 closeList에 추가
 	        closeList.add(minNode);
 
 	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
-	        for(Edge edge : minNode.getNode().getEdge().values()) {
-	            Cost toCost = costList.get(edge.getTo());
-	            if(toCost == null) {
-	                // 아직 방문하지 않은 노드라면 초기값으로 등록
-	                toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
-	                costList.put(edge.getTo(), toCost);
-	            }
-
+	        for(Edge edge : getConnectedEdges(edgeList, minNode)) {
+	            // Cost toCost = costList.get(edge.getTo());
+	            // if(toCost == null) {
+	            //     // 아직 방문하지 않은 노드라면 초기값으로 등록
+	            //     toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
+	            //     costList.put(edge.getTo(), toCost);
+	            // }
+				Node storeNode = store.readNode(edge.getTo());
+				Node listNode = nodeList.get(storeNode.getId());
+				if(listNode == null) {
+					nodeList.put(storeNode.getId(), storeNode);
+				}
+				Node toNode = listNode != null ? listNode : storeNode;
 	            // 이미 방문한 노드는 건너뜀
-	            if(closeList.contains(toCost)) {
+	            if(closeList.contains(toNode)) {
 	                continue;
 	            }
 
 	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
-	            double newDist = minNodeCost.getGCost() + edge.getDistance();
+	            double newDist = minNode.getGCost() + edge.getDistance();
 	            // openList에 없고, 더 짧은 경로라면 갱신
-	            if(!openList.contains(toCost) && newDist < toCost.getGCost()) {
+	            if(!openList.contains(toNode) && newDist < toNode.getGCost()) {
 	                // hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
-	                double hCost = PathUtil.haversine(edge.getTo().getCoordinate(), endNode.getCoordinate());
+	                double hCost = PathUtil.haversine(toNode.getCoordinate(), endNode.getCoordinate());
 	                double fCost = newDist + hCost;
-	                Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
-	                costList.put(edge.getTo(), c);
+					toNode.setHCost(hCost);
+					toNode.setGCost(newDist);
+					toNode.setFCost(fCost);
+	                // Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
+	                // costList.put(edge.getTo(), c);
 
-	                openList.add(c);
+	                openList.add(toNode);
 	                // 경로 역추적을 위해 이전 노드 저장
-	                location.put(edge.getTo(), minNode.getNode());
+	                location.put(toNode, minNode);
 	            }
 	        }
 	    }
@@ -230,10 +217,38 @@ public class Engine {
 	    // 경로를 올바른 순서로 뒤집음
 	    Collections.reverse(path);
 
-	    // 마지막 도착 노드 추가
-	    path.add(endNode);
+		path.add(endNode);
 
 	    return path;
+	}
+
+
+	/**
+	 * 노드와 연결된 엣지를 모두 반환합니다.
+	 * @param Node
+	 * @return List<Edge>
+	 * @throws IOException 
+	 */
+	private List<Edge> getConnectedEdges(HashMap<Integer,Edge> edgeList, Node node) throws IOException {
+		ArrayList<Edge> edges = new ArrayList<Edge>();
+		
+		Edge storeEdge = store.readEdge(node.getStartEdgeOffset());
+		Edge listEdge = edgeList.get(storeEdge.getId());
+		if(listEdge == null) {
+			edgeList.put(storeEdge.getId(), storeEdge);
+		}
+		edges.add(storeEdge);
+
+		while(edges.get(edges.size() - 1).getNextEdgeOffset() != -1) {
+			storeEdge = store.readEdge(edges.get(edges.size() - 1).getNextEdgeOffset());
+			listEdge = edgeList.get(storeEdge.getId());
+			if(listEdge == null) {
+				edgeList.put(storeEdge.getId(), storeEdge);
+			}
+			edges.add(storeEdge);
+		}
+		
+		return edges;
 	}
 	
 	/**
@@ -243,9 +258,15 @@ public class Engine {
 	 */
 	private Coordinate[] findNearestLineCoordinate(Coordinate coordinate) {
 		org.locationtech.jts.geom.Coordinate convertCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
+		// double searchDistance = 0.001;
+		// Envelope envelope = new Envelope(
+		// 	convertCoordinate.getX() - searchDistance, convertCoordinate.getX() + searchDistance, 
+		// 	convertCoordinate.getY() - searchDistance, convertCoordinate.getY() + searchDistance
+		// );
+		// List<Geometry> geoList = ((STRtree)store.getIndex()).query(envelope);
 		Point point = new GeometryFactory().createPoint(convertCoordinate);
 
-		// 주어진 좌표에서 가까운 라인들을 가져온다.
+// 		// 주어진 좌표에서 가까운 라인들을 가져온다.
 		List<GeoLink> geoDataList = dataProvider.findNearestLine(point.getX(), point.getY(), 0.001);
 		
 		if(geoDataList.isEmpty()) {
@@ -254,19 +275,23 @@ public class Engine {
 
 		List<Geometry> geoList = geoDataList.stream().map(item -> item.getShape()).toList();
 		
+		// if(geoList.isEmpty()) {
+		// 	throw new EmptyGeometryListException("지정한 좌표 범위에 지오메트리가 존재하지 않습니다.");
+		// }
+
 		// 후보 라인 중 거리가 제일 가까운 라인 검색
-		Geometry nearestGeoLine = null;
+		Geometry nearestLine = null;
 		double minDistance = Double.MAX_VALUE;
 		
 		for(Geometry geo : geoList) {
 			double distance = geo.distance(point);
 			if(distance < minDistance) {
 				minDistance = distance;
-				nearestGeoLine = geo;
+				nearestLine = geo;
 			}
 		}
 
-		org.locationtech.jts.geom.Coordinate[] lines = nearestGeoLine.getCoordinates();
+		org.locationtech.jts.geom.Coordinate[] lines = nearestLine.getCoordinates();
 		org.locationtech.jts.geom.Coordinate[] sortLines = null;
 		org.locationtech.jts.geom.Coordinate start = null;
 		org.locationtech.jts.geom.Coordinate end = null;
@@ -274,7 +299,7 @@ public class Engine {
 		// 만약 가까운 라인에 포인트가 두개 이상이라면 시작점과 끝점을 가져오고
 		// 가까운 점 기준으로 정렬한 뒤 시작 노드와 끝 노드를 결정한다.
 		// 요청 좌표와 가까운 점을 선택하기 위함
-		if(nearestGeoLine.getNumPoints() > 2) {
+		if(nearestLine.getNumPoints() > 2) {
 			sortLines = new org.locationtech.jts.geom.Coordinate[2];
 			if(lines[0].distance(convertCoordinate) > lines[lines.length - 1].distance(convertCoordinate)) {
 				sortLines[0] = lines[0];
@@ -288,15 +313,15 @@ public class Engine {
 			start = sortLines[0];
 			end = sortLines[1];
 			
-//			for(int i=0;i< nearestGeoLine.getNumPoints();i++) {
-//				for(int j=0;j< nearestGeoLine.getNumPoints() - 1 - i; j++) {
-//					if(lines[j].distance(convertCoordinate) > lines[j + 1].distance(convertCoordinate)) {
-//						org.locationtech.jts.geom.Coordinate temp = lines[j];
-//						lines[j] = lines[j + 1];
-//						lines[j + 1] = temp;
-//					}
-//				}
-//			}
+// //			for(int i=0;i< nearestGeoLine.getNumPoints();i++) {
+// //				for(int j=0;j< nearestGeoLine.getNumPoints() - 1 - i; j++) {
+// //					if(lines[j].distance(convertCoordinate) > lines[j + 1].distance(convertCoordinate)) {
+// //						org.locationtech.jts.geom.Coordinate temp = lines[j];
+// //						lines[j] = lines[j + 1];
+// //						lines[j + 1] = temp;
+// //					}
+// //				}
+// //			}
 		}
 		else {
 			start = lines[0];

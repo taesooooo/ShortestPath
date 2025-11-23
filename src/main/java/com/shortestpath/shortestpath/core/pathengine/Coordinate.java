@@ -2,6 +2,8 @@ package com.shortestpath.shortestpath.core.pathengine;
 
 import java.util.Objects;
 
+import com.shortestpath.shortestpath.util.PathUtil;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,6 +21,10 @@ public class Coordinate {
 	private double latitude;
 	private double longitude;
 	
+	/**
+	 * 위도, 경도 순서로 이루어진 문자열을 좌표 객체로 변환합니다.
+	 * @param coordinate
+	 */
 	public Coordinate(String coordinate) {
 		String[] splitStr = coordinate.split(",");
 		
@@ -30,10 +36,13 @@ public class Coordinate {
 	}
 	
 	public double calculateDistanceToTarget(Coordinate coordinate) {
-		double dx = Math.pow(this.latitude - coordinate.getLatitude(), 2);
-		double dy = Math.pow(this.longitude - coordinate.getLongitude(), 2);
+		// // 유클리드 공식
+		// double dx = Math.pow(this.latitude - coordinate.getLatitude(), 2);
+		// double dy = Math.pow(this.longitude - coordinate.getLongitude(), 2);
 		
-		return Math.sqrt(dx + dy);
+		// return Math.sqrt(dx + dy);
+
+		return PathUtil.haversine(this, coordinate);
 	}
 	
 	public String toWKT() {

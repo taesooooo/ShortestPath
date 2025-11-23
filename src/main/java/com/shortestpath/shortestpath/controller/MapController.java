@@ -1,5 +1,6 @@
 package com.shortestpath.shortestpath.controller;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.regex.PatternSyntaxException;
 
@@ -23,7 +24,7 @@ public class MapController {
 	private final MapService mapService;
 
 	@GetMapping("/find-path")
-	public ResponseEntity<Object> findPath(@RequestParam("coordinates") List<String> list) {
+	public ResponseEntity<Object> findPath(@RequestParam("coordinates") List<String> list) throws IOException {
 		List<RequestFindPathDto> coordinateList = list.stream().map(item -> {
 			boolean check = validCoordinate(item);
 			if(!check) {

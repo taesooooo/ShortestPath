@@ -12,8 +12,11 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Edge{
-	private Node to;
+	private int id;
+	private int from;
+	private int to;
 	private double distance;
-	private Geometry geometry;
+	private int nextEdgeOffset;
+	// private Geometry geometry;
 	
 }

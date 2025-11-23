@@ -49,8 +49,8 @@ public class Graph {
 			throw new NullPointerException("해당 하는 좌표의 노드가 없습니다. - " + endCoordinate.toWKT());
 		}
 		
-		startNode.getEdge().put(endNode.getId(), new Edge(endNode, distance, geometry));
-		endNode.getEdge().put(startNode.getId(), new Edge(startNode, distance, geometry));
+		// startNode.getEdge().put(endNode.getId(), new Edge(endNode, distance, geometry));
+		// endNode.getEdge().put(startNode.getId(), new Edge(startNode, distance, geometry));
 	}
 	
 	public Node getNode(Coordinate coordinate) {
@@ -73,24 +73,24 @@ public class Graph {
 		return graph.size();
 	}
 	
-	public void printAll() {
-		for(Coordinate c : graph.keySet()) {
-			System.out.print("[" +  c.getLatitude() + " " + c.getLongitude() + "]");
-			for(Edge e : graph.get(c).getEdge().values()) {
-				System.out.print(e.getTo().getCoordinate().getLatitude() + " " + e.getTo().getCoordinate().getLongitude() + " ");
-			}
-			System.out.println("");
-		}
-	}
+	// public void printAll() {
+	// 	for(Coordinate c : graph.keySet()) {
+	// 		System.out.print("[" +  c.getLatitude() + " " + c.getLongitude() + "]");
+	// 		for(Edge e : graph.get(c).getEdge().values()) {
+	// 			System.out.print(e.getTo().getCoordinate().getLatitude() + " " + e.getTo().getCoordinate().getLongitude() + " ");
+	// 		}
+	// 		System.out.println("");
+	// 	}
+	// }
 	
-	public void printMoveTo(Node checkNode) {
-		System.out.println("EndNode로 향하는 연결 목록: ");
-		for (Node node : graph.values()) {
-		    for (Edge edge : node.getEdge().values()) {
-		        if (edge.getTo().equals(checkNode)) {
-		            System.out.println("연결: " + node.getCoordinate() + " -> " + checkNode.getCoordinate() + " / 거리: " + edge.getDistance());
-		        }
-		    }
-		}
-	}
+	// public void printMoveTo(Node checkNode) {
+	// 	System.out.println("EndNode로 향하는 연결 목록: ");
+	// 	for (Node node : graph.values()) {
+	// 	    for (Edge edge : node.getEdge().values()) {
+	// 	        if (edge.getTo().equals(checkNode)) {
+	// 	            System.out.println("연결: " + node.getCoordinate() + " -> " + checkNode.getCoordinate() + " / 거리: " + edge.getDistance());
+	// 	        }
+	// 	    }
+	// 	}
+	// }
 }

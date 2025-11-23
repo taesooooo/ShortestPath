@@ -19,11 +19,16 @@ public class PathUtil {
         Coordinate endPoint = b;
 
         double r = 6371; // 지구 반지름
-        double deltaLon = Math.toRadians(endPoint.getLongitude()) - Math.toRadians(startPoint.getLongitude());
-        double deltaLat = Math.toRadians(endPoint.getLatitude()) - Math.toRadians(startPoint.getLatitude());
+
+        double lat1 = Math.toRadians(startPoint.getLatitude());
+        double lat2 = Math.toRadians(endPoint.getLatitude());
+        double lon1 = Math.toRadians(startPoint.getLongitude());
+        double lon2 = Math.toRadians(endPoint.getLongitude());
+        double deltaLon = lon2 - lon1;
+        double deltaLat = lat2 - lat1;
         double sinLon = Math.sin(deltaLon/2);
         double sinLat = Math.sin(deltaLat/2);
-        double middleResult = Math.sqrt((sinLat * sinLat) + Math.cos(startPoint.getLatitude()) * Math.cos(endPoint.getLatitude()) * (sinLon * sinLon));
+        double middleResult = Math.sqrt((sinLat * sinLat) + Math.cos(lat1) * Math.cos(lat2) * (sinLon * sinLon));
         double newDistance = 2 * r * Math.asin(middleResult);
         
         return newDistance;

@@ -20,9 +20,10 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Node implements Comparable<Node> {
 	private int id;
-	private String category;
+	// private String category;
 	private Coordinate coordinate;
-	private Map<Integer, Edge> edge = new HashMap<Integer, Edge>();
+	private int startEdgeOffset;
+	// private Map<Integer, Edge> edge = new HashMap<Integer, Edge>();
 	private double gCost = Double.MAX_VALUE;
 	private double hCost;
 	private double fCost;
@@ -50,13 +51,15 @@ public class Node implements Comparable<Node> {
 	}
 
 	public List<Node> getAdjacentNodes() {
-		List<Node> adjacentNodes = new ArrayList<Node>();
+		// List<Node> adjacentNodes = new ArrayList<Node>();
 		
-		for(Edge e : edge.values()) {
-			adjacentNodes.add(e.getTo());
-		}
+		// for(Edge e : edge.values()) {
+		// 	adjacentNodes.add(e.getTo());
+		// }
 		
-		return adjacentNodes;
+		// return adjacentNodes;
+
+		return null;
 	}
 	
 	@Override

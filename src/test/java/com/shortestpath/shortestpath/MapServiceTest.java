@@ -27,6 +27,11 @@ import com.shortestpath.shortestpath.service.MapServiceImpl;
 
 class MapServiceTest {
 
+	@BeforeEach
+	public void setup() {
+
+	}
+
 	@Mock
 	private Engine engine;
 
@@ -69,37 +74,37 @@ class MapServiceTest {
 						);
 	}
 
-	private ArrayList<Node> createTestNode() throws ParseException {
-		ArrayList<Node> testNodes = new ArrayList<Node>();
-		// MULTIPOINT ((1 1),(2 1),(2 2),(3 3),(4 4),(5 5),(6 5),(6 6))
-		// MULTILINESTRING ((1 1, 2 1),(2 1, 2 2),(2 2, 3 3),(3 3, 4 4),(4 4, 5 5),(5 5, 6 5),(6 5, 6 6))
+	// private ArrayList<Node> createTestNode() throws ParseException {
+	// 	ArrayList<Node> testNodes = new ArrayList<Node>();
+	// 	// MULTIPOINT ((1 1),(2 1),(2 2),(3 3),(4 4),(5 5),(6 5),(6 6))
+	// 	// MULTILINESTRING ((1 1, 2 1),(2 1, 2 2),(2 2, 3 3),(3 3, 4 4),(4 4, 5 5),(5 5, 6 5),(6 5, 6 6))
 
-		// 반복문으로 노드와 엣지 생성
-		int[][] points = {
-			{1,1}, {2,1}, {2,2}, {3,3}, {4,4}, {5,5}, {6,5}, {6,6}
-		};
-		String[] lines = {"MULTILINESTRING ((1 1, 2 1))", "MULTILINESTRING ((2 1, 2 2))", "MULTILINESTRING ((2 2, 3 3))",
-				"MULTILINESTRING ((3 3, 4 4))", "MULTILINESTRING ((4 4, 5 5))", "MULTILINESTRING ((5 5, 6 5))", "MULTILINESTRING ((6 5, 6 6))"};
+	// 	// 반복문으로 노드와 엣지 생성
+	// 	int[][] points = {
+	// 		{1,1}, {2,1}, {2,2}, {3,3}, {4,4}, {5,5}, {6,5}, {6,6}
+	// 	};
+	// 	String[] lines = {"MULTILINESTRING ((1 1, 2 1))", "MULTILINESTRING ((2 1, 2 2))", "MULTILINESTRING ((2 2, 3 3))",
+	// 			"MULTILINESTRING ((3 3, 4 4))", "MULTILINESTRING ((4 4, 5 5))", "MULTILINESTRING ((5 5, 6 5))", "MULTILINESTRING ((6 5, 6 6))"};
 
-		ArrayList<Node> nodes = new ArrayList<>();
-		for (int i = 0; i < points.length; i++) {
-			Node node = new Node(i+1, null, new Coordinate(points[i][0], points[i][1]), new HashMap<Integer, Edge>(), 0, 0, 0);
-			nodes.add(node);
-		}
+	// 	ArrayList<Node> nodes = new ArrayList<>();
+	// 	for (int i = 0; i < points.length; i++) {
+	// 		Node node = new Node(i+1, null, new Coordinate(points[i][0], points[i][1]), new HashMap<Integer, Edge>(), 0, 0, 0);
+	// 		nodes.add(node);
+	// 	}
 
-		// MULTILINESTRING의 각 선분을 따라 양방향 엣지 연결
-		for (int i = 0; i < lines.length; i++) {
-			Node from = nodes.get(i);
-			Node to = nodes.get(i+1);
-			double distance = from.getCoordinate().calculateDistanceToTarget(to.getCoordinate());
-			from.getEdge().put(to.getId(), new Edge(to, distance, new WKTReader().read(lines[i])));
-			to.getEdge().put(from.getId(), new Edge(from, distance, new WKTReader().read(lines[i])));
-		}
+	// 	// MULTILINESTRING의 각 선분을 따라 양방향 엣지 연결
+	// 	for (int i = 0; i < lines.length; i++) {
+	// 		Node from = nodes.get(i);
+	// 		Node to = nodes.get(i+1);
+	// 		double distance = from.getCoordinate().calculateDistanceToTarget(to.getCoordinate());
+	// 		from.getEdge().put(to.getId(), new Edge(to, distance, new WKTReader().read(lines[i])));
+	// 		to.getEdge().put(from.getId(), new Edge(from, distance, new WKTReader().read(lines[i])));
+	// 	}
 
-		// 테스트 노드 리스트에 추가
-		testNodes.addAll(nodes);
+	// 	// 테스트 노드 리스트에 추가
+	// 	testNodes.addAll(nodes);
 
-		return testNodes;
-	}
+	// 	return testNodes;
+	// }
 
 }

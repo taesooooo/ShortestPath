@@ -35,6 +35,8 @@ dependencies {
 	implementation group:'org.geotools', name:'gt-main', version: '33.0'
 	implementation group:'org.geotools', name:'gt-referencing', version: '33.0'
 	implementation group:'org.geotools', name:'gt-shapefile', version: '33.0'
+	// https://mvnrepository.com/artifact/com.opencsv/opencsv
+	implementation("com.opencsv:opencsv:5.12.0")
 }
 
 tasks.named('test') {
