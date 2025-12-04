@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath.intergration;
+package com.shortestpath.shortestpath.pathengine.intergration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -22,7 +22,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
 
-public class InterLoaderTest {
+public class InteLoaderTest {
     @Test
     @DisplayName("Loader 데이터 추출 통합 테스트 - 특정 노드에 이웃 노드를 제대로 연결이 되어있는지 확인")
     public void LoaderLoadTest() throws Exception {

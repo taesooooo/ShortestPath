@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath;
+package com.shortestpath.shortestpath.core.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,20 +93,20 @@ class EngineTest {
 
 	private DataStore testDataStore() throws IOException {
 		TestFileDataStore store = new TestFileDataStore("");
-		store.saveNode(new Node(1, new Coordinate(1,1), 1, 10,0,0), 1);
-		store.saveNode(new Node(2, new Coordinate(1,2), 5, 10,0,0), 2);
-		store.saveNode(new Node(3, new Coordinate(2,2), 7, 10,0,0), 3);
-		store.saveNode(new Node(4, new Coordinate(1,4), 6, 10,0,0), 4);
-		
-		store.saveNode(new Node(5, new Coordinate(2,3), -1, 10,0,0), 5);
+		store.saveNode(new Node(1, new Coordinate(1, 1), 1, Double.MAX_VALUE, 0, 0), 1);
+		store.saveNode(new Node(2, new Coordinate(1, 2), 5, Double.MAX_VALUE, 0, 0), 2);
+		store.saveNode(new Node(3, new Coordinate(2, 2), 7, Double.MAX_VALUE, 0, 0), 3);
+		store.saveNode(new Node(4, new Coordinate(1, 4), 6, Double.MAX_VALUE, 0, 0), 4);
 
-		store.saveEdge(new Edge(1, 1, 2, 2, 3), 1);
-		store.saveEdge(new Edge(2, 2 ,1, 2, -1), 2);
+		store.saveNode(new Node(5, new Coordinate(2, 3), -1, Double.MAX_VALUE, 0, 0), 5);
+
+		store.saveEdge(new Edge(1, 1, 2, 50, 3), 1);
+		store.saveEdge(new Edge(2, 2, 1, 2, -1), 2);
 		store.saveEdge(new Edge(3, 1, 3, 1, -1), 3);
 		store.saveEdge(new Edge(4, 3, 1, 1, -1), 4);
-		store.saveEdge(new Edge(5, 2, 4, 2, 2), 5);
+		store.saveEdge(new Edge(5, 2, 4, 2, -1), 5);
 		store.saveEdge(new Edge(6, 4, 2, 2, 8), 6);
-		store.saveEdge(new Edge(7, 3, 4, 1, 4), 7);
+		store.saveEdge(new Edge(7, 3, 4, 1, -1), 7);
 		store.saveEdge(new Edge(8, 4, 3, 1, -1), 8);
 
 		return store;

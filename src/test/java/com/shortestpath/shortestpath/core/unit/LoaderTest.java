@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath;
+package com.shortestpath.shortestpath.core.unit;
 
 import org.junit.jupiter.api.BeforeEach;
 

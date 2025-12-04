@@ -1,5 +1,6 @@
-package com.shortestpath.shortestpath;
+package com.shortestpath.shortestpath.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,11 +25,12 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 
-@ActiveProfiles("test")
+@ActiveProfiles("inte")
 @SpringBootTest
-class MapControllerTest {
-	private static final Logger log = LoggerFactory.getLogger(MapControllerTest.class);
+class InteMapControllerTest {
+	private static final Logger log = LoggerFactory.getLogger(InteMapControllerTest.class);
 
 	@Autowired
 	private WebApplicationContext context;
@@ -44,10 +46,11 @@ class MapControllerTest {
 	@Test
 	@DisplayName("경로 탐색 요청(리스트) - 정상")
 	public void findMapListTest() throws Exception {
-		// 33.3057279944/126.2466098987|33.3209235283/126.2460707194,33.3209235283/126.2460707194|33.4018299117/126.6876111209
-		// 33.4824388/126.4898217|33.4845859/126.4963428
+		// 33.2403307/126.5624673|33.2417782/126.5647375
+		// 33.2417782/126.5647375|33.2573009/126.574876
+
 		this.mockMvc.perform(get("/api/map/find-path")
-				.queryParam("coordinates", "33.3057279944/126.2466098987|33.3209235283/126.2460707194,33.3209235283/126.2460707194|33.4018299117/126.6876111209")
+				.queryParam("coordinates", "33.2403307/126.5624673|33.2417782/126.5647375,33.2417782/126.5647375|33.2573009/126.574876")
 				.accept(MediaType.APPLICATION_JSON_VALUE)
 				.characterEncoding("UTF-8"))
 		.andDo(print())
@@ -57,10 +60,12 @@ class MapControllerTest {
 	}
 	
 	@Test
-	@DisplayName("경로 탐색 요청(리스트)2 - 정상")
-	public void findMapListTest2() throws Exception {
+	@DisplayName("경로 탐색 요청(단일) - 정상")
+	public void findMapTest() throws Exception {
+		// 33.2403307/126.5624673|33.2417782/126.5647375
+		
 		this.mockMvc.perform(get("/api/map/find-path")
-				.queryParam("coordinates", "33.2403145/126.5624921|33.2417637/126.5647694")
+				.queryParam("coordinates", "33.2403307/126.5624673|33.2417782/126.5647375")
 				.accept(MediaType.APPLICATION_JSON_VALUE)
 				.characterEncoding("UTF-8"))
 		.andDo(print())
@@ -72,8 +77,8 @@ class MapControllerTest {
 	@ParameterizedTest()
 	@MethodSource("testArguments")
 	@DisplayName("경로 탐색 요청 - 잘못된 좌표")
-	void findMapInValidCoordinateTest(String parameter) throws Exception {
-		mockMvc.perform(get("/api/map/find-path")
+	private void findMapInValidCoordinateTest(String parameter) throws Exception {
+		this.mockMvc.perform(get("/api/map/find-path")
 				.param("coordinates", parameter)
 				.accept(MediaType.APPLICATION_JSON)
 				.characterEncoding("UTF-8"))
@@ -88,5 +93,16 @@ class MapControllerTest {
 				"33.2417782/126.5647375",
 				"126.4824388/33.4898217|33.4845859/126.4963428");
 	}
+
+	// @Test
+	// @DisplayName("경로 탐색 요청 - 경로 없음")
+	// public void notFoundPathTest() throws Exception {
+	// 	this.mockMvc.perform(get("/api/map/find-path")
+	// 			.queryParam("coordinates", "33.0000000/126.0000000|33.1000000/126.1000000")
+	// 			.accept(MediaType.APPLICATION_JSON_VALUE)
+	// 			.characterEncoding("UTF-8"))
+	// 	.andDo(print())
+	// 	.andExpect(status().isOk());
+	// }
 
 }

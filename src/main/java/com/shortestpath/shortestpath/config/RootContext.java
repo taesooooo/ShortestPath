@@ -22,10 +22,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RootContext {
 	
-	@Value("${findpath.node-shp-path}")
-	private String nodeFilePath;
-	@Value("${findpath.link-shp-path}")
-	private String linkFilePath;
+	@Value("${findpath.shp-path}")
+	private String shpFilePath;
 	private final DataProvider dataProvider;
 	
 	
@@ -35,15 +33,15 @@ public class RootContext {
 
 	@Bean
 	public Engine pathEngine() throws Exception {
-		FileDataStore dataStore = new FileDataStore(new File(nodeFilePath).getParent());
-		Extractor extractor = new NodeEdgeExtractor(nodeFilePath, dataStore);
+		FileDataStore dataStore = new FileDataStore(new File(shpFilePath).getParent());
+		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore);
 		Loader loader = new Loader(extractor);
 
 		if(!loader.isDataExtracted()) {
 			log.info("추출된 노드 및 엣지 데이터가 없으므로 추출을 시작합니다.");
 
 			loader.extractData();
-			dataStore = new FileDataStore(new File(nodeFilePath).getParent());
+			dataStore = new FileDataStore(new File(shpFilePath).getParent());
 		}
 		
 		return new Engine(dataStore, dataProvider);

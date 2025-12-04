@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath;
+package com.shortestpath.shortestpath.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,8 +21,8 @@ import com.shortestpath.shortestpath.repository.MapRepository;
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-class MapRepositoryTest {
-	private static final Logger log = LoggerFactory.getLogger(MapRepositoryTest.class);
+class InteMapRepositoryTest {
+	private static final Logger log = LoggerFactory.getLogger(InteMapRepositoryTest.class);
 
 	@Autowired
 	private MapRepository mapRepository;

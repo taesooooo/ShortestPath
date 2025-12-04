@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath.intergration;
+package com.shortestpath.shortestpath.pathengine.intergration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,11 +22,11 @@ import com.shortestpath.shortestpath.core.pathengine.Provider.MapDataProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
 
-@ActiveProfiles("test")
+@ActiveProfiles("inte")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(MapDataProvider.class)
-public class InterEngineTest {
+public class InteEngineTest {
     private DataStore store;
     private Engine engine;
 
