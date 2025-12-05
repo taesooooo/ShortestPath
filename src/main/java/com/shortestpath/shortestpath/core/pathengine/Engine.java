@@ -40,10 +40,10 @@ public class Engine {
 	}
 	
 	/**
-	 * 그래프에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
+	 * 저장소에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
 	 * @param startNode
 	 * @param endNode
-	 * @return 탐색된 최단 경로 리스트
+	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
 	 * @throws NullPointerException
 	 * @throws IOException 
 	 */
@@ -57,11 +57,11 @@ public class Engine {
 	
 	/**
 	 * 좌표를 이용하여 경로를 탐색하고 탐색 경로를 리스트로 반환합니다.
-	 * 주어진 좌표가 그래프에 없는 좌표 또는 이어진 좌표가 아니라면 주어진 좌표에서
+	 * 주어진 좌표가 저장소에 없는 좌표 또는 이어진 좌표가 아니라면 주어진 좌표에서
 	 * 가까운 라인의 좌표가 생성되어 경로를 탐색합니다.
 	 * @param startCoordinate
 	 * @param endCoordinate
-	 * @return 탐색된 최단 경로 리스트
+	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
 	 * @throws IOException 
 	 */
 	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) throws IOException {
@@ -137,12 +137,12 @@ public class Engine {
 	    // 각 노드의 이전 노드를 저장(경로 역추적용)
 	    HashMap<Node, Node> location = new HashMap<Node, Node>();
 
+		// 노드와 엣지 캐싱 맵
 		HashMap<Integer, Node> nodeList = new HashMap<>();
 		HashMap<Integer, Edge> edgeList = new HashMap<>();
 
 	    // 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
 	    double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
-	    // Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
 
 		// 첫 시작 노드 gCost = 0 설정
 		startNode.setGCost(0);
@@ -169,12 +169,6 @@ public class Engine {
 
 	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
 	        for(Edge edge : getConnectedEdges(edgeList, minNode)) {
-	            // Cost toCost = costList.get(edge.getTo());
-	            // if(toCost == null) {
-	            //     // 아직 방문하지 않은 노드라면 초기값으로 등록
-	            //     toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
-	            //     costList.put(edge.getTo(), toCost);
-	            // }
 				Node storeNode = store.readNode(edge.getTo());
 				Node listNode = nodeList.get(storeNode.getId());
 				if(listNode == null) {
@@ -196,8 +190,6 @@ public class Engine {
 					toNode.setHCost(hCost);
 					toNode.setGCost(newDist);
 					toNode.setFCost(fCost);
-	                // Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
-	                // costList.put(edge.getTo(), c);
 
 	                openList.add(toNode);
 	                // 경로 역추적을 위해 이전 노드 저장
@@ -219,12 +211,17 @@ public class Engine {
 
 		path.add(endNode);
 
+		if(path.isEmpty() || path.get(0) != startNode) {
+			// 연결된 노드가 없는 경우
+			return null;
+		}
+
 	    return path;
 	}
 
 
 	/**
-	 * 노드와 연결된 엣지를 모두 반환합니다.
+	 * 노드와 연결된 엣지를 모두 반환합니다. edgeList에 없는 엣지는 store에서 읽어와 추가합니다.
 	 * @param Node
 	 * @return List<Edge>
 	 * @throws IOException 
@@ -258,12 +255,6 @@ public class Engine {
 	 */
 	private Coordinate[] findNearestLineCoordinate(Coordinate coordinate) {
 		org.locationtech.jts.geom.Coordinate convertCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
-		// double searchDistance = 0.001;
-		// Envelope envelope = new Envelope(
-		// 	convertCoordinate.getX() - searchDistance, convertCoordinate.getX() + searchDistance, 
-		// 	convertCoordinate.getY() - searchDistance, convertCoordinate.getY() + searchDistance
-		// );
-		// List<Geometry> geoList = ((STRtree)store.getIndex()).query(envelope);
 		Point point = new GeometryFactory().createPoint(convertCoordinate);
 
 // 		// 주어진 좌표에서 가까운 라인들을 가져온다.
@@ -274,10 +265,6 @@ public class Engine {
 		}
 
 		List<Geometry> geoList = geoDataList.stream().map(item -> item.getShape()).toList();
-		
-		// if(geoList.isEmpty()) {
-		// 	throw new EmptyGeometryListException("지정한 좌표 범위에 지오메트리가 존재하지 않습니다.");
-		// }
 
 		// 후보 라인 중 거리가 제일 가까운 라인 검색
 		Geometry nearestLine = null;
@@ -312,16 +299,6 @@ public class Engine {
 			
 			start = sortLines[0];
 			end = sortLines[1];
-			
-// //			for(int i=0;i< nearestGeoLine.getNumPoints();i++) {
-// //				for(int j=0;j< nearestGeoLine.getNumPoints() - 1 - i; j++) {
-// //					if(lines[j].distance(convertCoordinate) > lines[j + 1].distance(convertCoordinate)) {
-// //						org.locationtech.jts.geom.Coordinate temp = lines[j];
-// //						lines[j] = lines[j + 1];
-// //						lines[j + 1] = temp;
-// //					}
-// //				}
-// //			}
 		}
 		else {
 			start = lines[0];

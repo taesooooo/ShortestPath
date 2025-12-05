@@ -48,7 +48,7 @@ class EngineTest {
 
 	@Test
 	@DisplayName("경로탐색 - 연결이 끊어져 있어 탐색이 불가한 경우")
-	public void findPathDisconnecttNode() throws IOException {
+	public void findPathDisconnectNode() throws IOException {
 		DataStore store = testDataStore();
 		Engine engine = new Engine(store, dataProvider);
 
@@ -57,8 +57,7 @@ class EngineTest {
 
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
 		
-		assertThat(path).extracting(Node::getId)
-				.containsExactly(5);
+		assertThat(path).isNull();
 	}
 	
 	// @Test
