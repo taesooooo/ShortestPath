@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
@@ -95,6 +96,26 @@ class MapServiceTest {
     }
 
     @Test
+    @DisplayName("경로를 찾을 수 없는 경우 테스트")
+    void findPathNotFoundTest() throws Exception {
+        List<RequestFindPathDto> testRequestList = new ArrayList<>();
+        testRequestList.add(
+            RequestFindPathDto.builder()
+                .start(new Coordinate(0, 0))
+                .end(new Coordinate(5, 5))
+                .build()
+        );
+
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
+            .thenThrow(new EmptyGeometryListException("지오메트리를 가져올 수 없습니다."));
+
+        List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
+
+        assertThat(responseFindPathDto.get(0).getRouteList())
+            .isEmpty();
+    }
+
+    @Test
     @DisplayName("여러 경로 요청 테스트")
     void findPathMultipleTest() throws Exception {
 		ArrayList<Node> testNodes1 = createSimpleTestNodes();
@@ -126,6 +147,37 @@ class MapServiceTest {
             .hasSize(4);
         assertThat(responseFindPathDto.get(1).getRouteList())
             .hasSize(4);
+    }
+
+    @Test
+    @DisplayName("여러 경로 요청 - 성공과 예외 둘다 테스트")
+    void findPathMultipleMixTest() throws Exception {
+		ArrayList<Node> testNodes1 = createSimpleTestNodes();
+        // ArrayList<Node> testNodes2 = createSimpleTestNodes2();
+
+        List<RequestFindPathDto> testRequestList = new ArrayList<>();
+        testRequestList.add(
+            RequestFindPathDto.builder()
+                .start(new Coordinate(0, 0))
+                .end(new Coordinate(3, 3))
+                .build()
+        );
+        testRequestList.add(
+            RequestFindPathDto.builder()
+                .start(new Coordinate(1, 1))
+                .end(new Coordinate(4, 4))
+                .build()
+        );
+
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
+            .thenReturn(testNodes1)
+            .thenThrow(new EmptyGeometryListException("지오메트리를 가져올 수 없습니다."));
+
+        List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
+
+        assertThat(responseFindPathDto).hasSize(2);
+        assertThat(responseFindPathDto.get(0).getRouteList()).hasSize(4);
+        assertThat(responseFindPathDto.get(1).getRouteList()).isEmpty();
     }
 
     @Test

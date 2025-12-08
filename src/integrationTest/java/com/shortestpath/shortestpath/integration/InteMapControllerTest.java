@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 
 @ActiveProfiles("inte")
@@ -56,7 +57,10 @@ class InteMapControllerTest {
 		.andDo(print())
 		.andExpect(status().isOk())
 		.andExpect(jsonPath("$").isArray())
-		.andExpect(jsonPath("$.[0].routeList").isNotEmpty());
+		.andExpect(jsonPath("$.[0].routeList").isNotEmpty())
+		.andExpect(jsonPath("$.[0].routeList").isArray())
+		.andExpect(jsonPath("$.[0].routeList[0].latitude").isNumber())
+		.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber());
 	}
 	
 	@Test
@@ -71,7 +75,10 @@ class InteMapControllerTest {
 		.andDo(print())
 		.andExpect(status().isOk())
 		.andExpect(jsonPath("$").isArray())
-		.andExpect(jsonPath("$.[0].routeList").isNotEmpty());
+		.andExpect(jsonPath("$.[0].routeList").isNotEmpty())
+		.andExpect(jsonPath("$.[0].routeList").isArray())
+		.andExpect(jsonPath("$.[0].routeList[0].latitude").isNumber())
+		.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber());
 	}
 	
 	@ParameterizedTest()
@@ -94,15 +101,16 @@ class InteMapControllerTest {
 				"126.4824388/33.4898217|33.4845859/126.4963428");
 	}
 
-	// @Test
-	// @DisplayName("경로 탐색 요청 - 경로 없음")
-	// public void notFoundPathTest() throws Exception {
-	// 	this.mockMvc.perform(get("/api/map/find-path")
-	// 			.queryParam("coordinates", "33.0000000/126.0000000|33.1000000/126.1000000")
-	// 			.accept(MediaType.APPLICATION_JSON_VALUE)
-	// 			.characterEncoding("UTF-8"))
-	// 	.andDo(print())
-	// 	.andExpect(status().isOk());
-	// }
+	@Test
+	@DisplayName("경로 탐색 요청 - 경로 없음")
+	public void notFoundPathTest() throws Exception {
+		this.mockMvc.perform(get("/api/map/find-path")
+				.queryParam("coordinates", "33.0000000/126.0000000|33.1000000/126.1000000")
+				.accept(MediaType.APPLICATION_JSON_VALUE)
+				.characterEncoding("UTF-8"))
+		.andDo(print())
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$.[0].routeList").isEmpty());
+	}
 
 }

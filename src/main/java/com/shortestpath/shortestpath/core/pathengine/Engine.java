@@ -64,7 +64,7 @@ public class Engine {
 	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
 	 * @throws IOException 
 	 */
-	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) throws IOException {
+	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) throws IOException, EmptyGeometryListException {
 		Node startNode = null;
 		Node endNode = null;
 		Coordinate startNearestPoint = null;
@@ -99,7 +99,7 @@ public class Engine {
 	 * 가장 가까운 좌표인지 비교하는 방법은 유클리드 거리 공식을 이용하여 배열에 있는 좌표들을 모두 비교합니다.
 	 * @param coordinateArray
 	 * @param targetCoordinate
-	 * @return 그래프에서 노드를 찾아 반환
+	 * @return 저장소에서 노드를 찾아 반환
 	 * @throws IOException 
 	 */
 	private Node findNearestNode(Coordinate[] coordinateArray, Coordinate targetCoordinate) throws IOException {

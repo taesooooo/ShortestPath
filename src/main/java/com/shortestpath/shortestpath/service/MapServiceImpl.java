@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
+import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
@@ -39,19 +40,34 @@ public class MapServiceImpl implements MapService {
 			Coordinate startCoordinate = route.getStart();
 			Coordinate endCoordinate = route.getEnd();
 			
-			List<Node> pathList = engine.shortestPathFind(startCoordinate, endCoordinate);
-			
-			resultList.add(ResponseFindPathDto.builder()
+			try {
+				List<Node> pathList = engine.shortestPathFind(startCoordinate, endCoordinate);
+				
+				resultList.add(ResponseFindPathDto.builder()
 					.start(startCoordinate)
 					.end(endCoordinate)
 					.routeList(getNodeCoordinate(pathList))
 					.build());
+			}
+			catch(EmptyGeometryListException e) {
+				log.info(e.getMessage());
+
+				resultList.add(ResponseFindPathDto.builder()
+					.start(startCoordinate)
+					.end(endCoordinate)
+					.routeList(getNodeCoordinate(null))
+					.build());
+			}
 		}
 		
 		return resultList;
 	}
 	
 	private ArrayList<Coordinate> getNodeCoordinate(List<Node> pathList) {
+		if(pathList == null || pathList.isEmpty()) {
+			return new ArrayList<Coordinate>();
+		}
+
 		return pathList.stream().map(node -> node.getCoordinate())
 			.collect(Collectors.toCollection(ArrayList::new));
 	}
