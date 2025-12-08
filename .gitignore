@@ -5,6 +5,7 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+### PROJECT ###
 *.properties
 src/test/resources/shp/
 
