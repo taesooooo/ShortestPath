@@ -1,11 +1,10 @@
-package com.shortestpath.shortestpath.core.pathengine.Provider;
+package com.shortestpath.shortestpath.provider;
 
 import java.util.List;
 
-import org.locationtech.jts.geom.Geometry;
 import org.springframework.stereotype.Component;
 
-import com.shortestpath.shortestpath.core.pathengine.DataProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
 import com.shortestpath.shortestpath.entity.GeoLink;
 import com.shortestpath.shortestpath.repository.MapRepository;
 
@@ -13,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class MapDataProvider implements DataProvider {
+public class JapMapDataProvider implements DataProvider {
 	
 	public final MapRepository mapRepository;
 

@@ -10,6 +10,7 @@ import lombok.ToString;
 @Setter
 @ToString
 public class IndexInfo {
+    public int id;
     public int nodeIndex;
     public int lastEdgeIndex;
 }

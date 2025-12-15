@@ -1,6 +1,7 @@
 package com.shortestpath.shortestpath.core.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -13,10 +14,11 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
-import com.shortestpath.shortestpath.core.pathengine.DataProvider;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 
 class EngineTest {
@@ -116,7 +118,7 @@ class EngineTest {
          private HashMap<Integer, Edge> edgeMap = new HashMap<Integer, Edge>();
 
         public TestFileDataStore(String filePath) throws IOException {
-            super(filePath);
+            super(filePath, mock(NodeIndexProvider.class));
         }
 
         public int getEdgeByteSize() {

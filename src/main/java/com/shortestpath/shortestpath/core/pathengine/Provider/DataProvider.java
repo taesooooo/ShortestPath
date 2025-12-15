@@ -1,8 +1,6 @@
-package com.shortestpath.shortestpath.core.pathengine;
+package com.shortestpath.shortestpath.core.pathengine.Provider;
 
 import java.util.List;
-
-import org.locationtech.jts.geom.Geometry;
 
 import com.shortestpath.shortestpath.entity.GeoLink;
 

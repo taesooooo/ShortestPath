@@ -39,6 +39,7 @@ import org.mockito.MockedStatic;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 
 public class NodeEdgeExtractorTest  {
@@ -49,7 +50,7 @@ public class NodeEdgeExtractorTest  {
         File tempFile = tempDir.resolve("test.shp").toFile();
 
         assertThrows(IOException.class, () -> {
-            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.getAbsolutePath(), null);
+            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.getAbsolutePath(), null, null);
         }, "파일이 존재하지 않으면 IOException이 발생해야 합니다.");
     }
 
@@ -59,8 +60,18 @@ public class NodeEdgeExtractorTest  {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
 
         assertThrows(IllegalArgumentException.class, () -> {
-            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null);
+            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null, null);
         }, "DataStroe가 null이면 IllegalArgumentException이 발생해야 합니다.");
+    }
+
+     @Test
+    @DisplayName("NodeExtractor 객체 생성 테스트 - nodeIndexProvider null")
+    public void NodeExtractorConstructorNodeIndexProvidereNullTest(@TempDir Path tempDir) throws IOException {
+        Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null, null);
+        }, "nodeIndexProvider null이면 IllegalArgumentException이 발생해야 합니다.");
     }
 
     @Test
@@ -68,7 +79,7 @@ public class NodeEdgeExtractorTest  {
     public void NodeExtractorConstructorNormalTest(@TempDir Path tempDir) throws IOException {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
 
-        NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), mock(TestFileDataStore.class));
+        NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), mock(TestFileDataStore.class),  mock(NodeIndexProvider.class));
 
         assertThat(extractor).isNotNull();
     }
@@ -105,8 +116,8 @@ public class NodeEdgeExtractorTest  {
          when(featureSource.getFeatures()).thenReturn(collection);
 
          DataStore testStore = spy(new TestFileDataStore(tmp.getParent()));
-
-         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore);
+         NodeIndexProvider nodeIndexProvider = mock(NodeIndexProvider.class);
+         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore, nodeIndexProvider);
          extractor.extract();
 
          ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
@@ -160,7 +171,8 @@ public class NodeEdgeExtractorTest  {
          when(featureSource.getFeatures()).thenReturn(collection);
 
          DataStore testStore = spy(new TestFileDataStore(tmp.getParent()));
-         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore);
+         NodeIndexProvider nodeIndexProvider = mock(NodeIndexProvider.class);
+         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore, nodeIndexProvider);
          extractor.extract();
 
          ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
@@ -196,7 +208,7 @@ public class NodeEdgeExtractorTest  {
          private HashMap<Integer, Edge> edgeMap = new HashMap<Integer, Edge>();
 
         public TestFileDataStore(String filePath) throws IOException {
-            super(filePath);
+            super(filePath, mock(NodeIndexProvider.class));
         }
 
         public int getEdgeByteSize() {

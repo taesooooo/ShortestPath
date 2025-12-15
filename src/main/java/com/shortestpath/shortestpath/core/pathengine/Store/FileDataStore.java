@@ -18,6 +18,7 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,7 @@ public class FileDataStore implements DataStore {
 
     // @Getter
     private HashMap<Coordinate, Integer> nodeOffsetIndex;
+    private NodeIndexProvider nodeIndexProvider;
 
     @Getter
     private Path nodeFilePath;
@@ -50,20 +52,22 @@ public class FileDataStore implements DataStore {
     @Getter
     private Path indexFilePath;
 
-    public FileDataStore(String fileDirectory) throws IOException {
+    public FileDataStore(String fileDirectory, NodeIndexProvider nodeIndexProvider) throws IOException {
         this.fileDirectory = fileDirectory;
         this.nodeFilePath = new File(fileDirectory).toPath().resolve("node.bin");
         this.edgeFilePath = new File(fileDirectory).toPath().resolve("edge.bin");
         this.indexFilePath = new File(fileDirectory).toPath().resolve("nodeindex.bin");
         
-        this.nodeIndexFileChannel = FileChannel.open(indexFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
+        // this.nodeIndexFileChannel = FileChannel.open(indexFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         this.nodeFileChannel = FileChannel.open(nodeFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         this.edgeFileChannel = FileChannel.open(edgeFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         
         if (this.hasExtractedData()) {
             this.nodeMappedBuffer = nodeFileChannel.map(MapMode.READ_WRITE, 0, nodeFilePath.toFile().length());
             this.edgeMappedBuffer = edgeFileChannel.map(MapMode.READ_WRITE, 0, edgeFilePath.toFile().length());
-            this.nodeOffsetIndex = loadNodeOffsetIndex();
+            log.info("노드 인덱스 로드 시작");
+            // this.nodeOffsetIndex = loadNodeOffsetIndex();
+            log.info("노드 인덱스 로드 완료");
             this.graphRead = true;
             
             log.info("경로탐색에 필요한 파일이 존재합니다.");
@@ -78,6 +82,10 @@ public class FileDataStore implements DataStore {
             log.info("경로탐색에 필요한 파일이 존재하지 않아 파일을 생성했습니다.");
         }
 
+        if(nodeIndexProvider == null) {
+            throw new IllegalArgumentException("NodeIndexProvider 객체는 null 일 수 없습니다.");
+        }
+        this.nodeIndexProvider = nodeIndexProvider;
         
         log.info("FileDirectory = {}", this.fileDirectory);
     }
@@ -303,22 +311,30 @@ public class FileDataStore implements DataStore {
     @Override
     public HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws IOException {
         HashMap<Coordinate, Integer> nodeIndex = new HashMap<>();
-        ByteBuffer buffer = ByteBuffer.allocate(20);
+        // 4KB씩 읽기
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
         int read = 0;
-        while(read != -1) {
+        while(nodeIndexFileChannel.position() < nodeIndexFileChannel.size()) {
             buffer.clear();
             read = nodeIndexFileChannel.read(buffer);
 
-            if(read == buffer.capacity()) {
-                buffer.flip();
-                double x = buffer.getDouble();
-                double y = buffer.getDouble();
-                int nodeOffset = buffer.getInt();
+            if(read == -1) {
+                break;
+            }
+
+            buffer.flip();
+            
+            // 버퍼에 20바이트까지 남아있을 때까지 읽기
+            while(buffer.remaining() >= 20) {
+                double x = buffer.getDouble();      // 8바이트
+                double y = buffer.getDouble();      // 8바이트
+                int nodeOffset = buffer.getInt();   // 4바이트
+                
                 Coordinate coord = new Coordinate(y, x);
                 nodeIndex.put(coord, nodeOffset);
             }
 
-            read = nodeIndexFileChannel.read(buffer);
+            // read = nodeIndexFileChannel.read(buffer);
         }
 
         return nodeIndex;
@@ -326,7 +342,8 @@ public class FileDataStore implements DataStore {
 
     @Override
     public int getNodeOffset(Coordinate coordinate) {
-        return nodeOffsetIndex.get(coordinate);
+        // return nodeOffsetIndex.get(coordinate);
+        return nodeIndexProvider.getNodeIndex(coordinate);
     }
 
     @Override
@@ -337,10 +354,5 @@ public class FileDataStore implements DataStore {
     public boolean saveIndex(STRtree rtree) {
         
         return true;
-    }
-    
-    public STRtree loadIndex() {
-        
-        return new STRtree();
     }
 }

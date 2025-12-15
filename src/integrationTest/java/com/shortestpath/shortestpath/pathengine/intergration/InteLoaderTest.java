@@ -1,17 +1,16 @@
 package com.shortestpath.shortestpath.pathengine.intergration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
@@ -19,16 +18,25 @@ import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
 
+import jakarta.transaction.Transactional;
+
+@SpringBootTest
+@ActiveProfiles("inte")
+@Transactional
 public class InteLoaderTest {
+    @Autowired
+    private NodeIndexProvider nodeIndexProvider;
+
     @Test
     @DisplayName("Loader 데이터 추출 통합 테스트 - 특정 노드에 이웃 노드를 제대로 연결이 되어있는지 확인")
     public void LoaderLoadTest() throws Exception {
         String filePath = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
-        FileDataStore dataStore = new FileDataStore(new File(filePath).getParent());
-        Extractor extractor = new NodeEdgeExtractor(filePath, dataStore);
+        FileDataStore dataStore = new FileDataStore(new File(filePath).getParent(), nodeIndexProvider);
+        Extractor extractor = new NodeEdgeExtractor(filePath, dataStore, nodeIndexProvider);
         Loader loader = new Loader(extractor);
         loader.extractData();
         

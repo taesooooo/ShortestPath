@@ -2,6 +2,7 @@ package com.shortestpath.shortestpath.core.unit.Store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
 
 /**
@@ -35,7 +37,7 @@ public class FileDataStoreTest {
         String edgePath = tempEdgeFile.getAbsolutePath();
 
         // FileDataStore 생성 시 데이터 파일이 존재해야 함
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
 
         File testNodeFile = new File(nodePath);
         File testEdgeFile = new File(edgePath);
@@ -53,7 +55,7 @@ public class FileDataStoreTest {
     public void saveNodeNullPointerException() throws Exception {
         // 임시 파일 생성 및 경로 전달
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         // null을 전달하면 saveNode에서 NullPointerException이 발생해야 함
         assertThrows(IllegalArgumentException.class, () -> {
@@ -65,7 +67,7 @@ public class FileDataStoreTest {
     @DisplayName("saveNode가 파일 쓰기 데이터 확인")
     public void saveNodeWriteBytes() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         int testId = 66;
         int testStartEdgeOffset = 100;
@@ -102,7 +104,7 @@ public class FileDataStoreTest {
     @DisplayName("saveNode가 지정된 오프셋에 데이터를 기록하는지 확인")
     public void saveNodeWriteBytesAtOffset() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         int testId = 66;
         int testStartEdgeOffset = 100;
@@ -142,7 +144,7 @@ public class FileDataStoreTest {
     public void saveEdgeNullPointerException() throws Exception {
         // 임시 파일 생성 및 경로 전달
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         // null을 전달하면 saveEdge에서 NullPointerException이 발생해야 함
         assertThrows(IllegalArgumentException.class, () -> {
@@ -154,7 +156,7 @@ public class FileDataStoreTest {
     @DisplayName("saveEdge가 파일 쓰기 데이터 확인")
     public void saveEdgeWriteBytes() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         int testId = 0;
         int testFromOffset = 66;
@@ -193,7 +195,7 @@ public class FileDataStoreTest {
     @DisplayName("saveEdge가 지정된 오프셋에 데이터를 기록하는지 확인")
     public void saveEdgeWriteBytesAtOffset() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         int testId = 0;
         int testFromOffset = 0;
@@ -235,7 +237,7 @@ public class FileDataStoreTest {
     @DisplayName("readNode가 임의 위치에 저장된 Node 데이터를 올바르게 반환하는지 확인")
     public void readNodeReturnDataConfirm() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         int testId = 123;
         int testStartEdgeOffset = 456;
@@ -260,7 +262,7 @@ public class FileDataStoreTest {
     @DisplayName("readEdge가 임의 위치에 저장된 Edge 데이터를 올바르게 반환하는지 확인")
     public void readEdgeReturnDataConfirm() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         int testId = 1;
         int testFromOffset = 10;
@@ -290,7 +292,7 @@ public class FileDataStoreTest {
         Path tempDir = (Path)testInfo[0];
         Node testNode = (Node)testInfo[1];
         
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
         Node readNode = store.readNode(20L);
 
@@ -309,7 +311,7 @@ public class FileDataStoreTest {
         Path tempDir = (Path)testInfo[0];
         Edge testEdge = (Edge)testInfo[2];
         
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
         
 
         Edge readEdge = store.readEdge(20L);
@@ -323,7 +325,7 @@ public class FileDataStoreTest {
     }
 
     private Object[] testFileCreate(Path tempDir) throws IOException {
-        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString());
+        FileDataStore store = new FileDataStore(tempDir.toAbsolutePath().toString(), mock(NodeIndexProvider.class));
  
         int testId = 123;
         int testStartEdgeOffset = 456;

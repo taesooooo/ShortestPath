@@ -2,12 +2,9 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.geotools.api.data.FeatureSource;
 import org.geotools.api.data.FileDataStore;
@@ -16,14 +13,12 @@ import org.geotools.api.feature.simple.SimpleFeature;
 import org.geotools.api.feature.simple.SimpleFeatureType;
 import org.geotools.feature.FeatureCollection;
 import org.geotools.feature.FeatureIterator;
-import org.locationtech.jts.geom.CoordinateXY;
-import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.index.strtree.STRtree;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 
 import lombok.extern.slf4j.Slf4j;
@@ -33,11 +28,11 @@ public class NodeEdgeExtractor implements Extractor {
     private HashMap<Coordinate, IndexInfo> indexMap = new HashMap<Coordinate, IndexInfo>();
 	private File file;
 	private DataStore store;
+	private NodeIndexProvider indexProvider; 
 	private int nodeIndex = 0;
 	private int edgeIndex = 0;
-	private STRtree rtree;
 
-    public NodeEdgeExtractor(String filePath, DataStore dataStore) throws IOException {
+    public NodeEdgeExtractor(String filePath, DataStore dataStore, NodeIndexProvider indexProvider) throws IOException {
         this.file = new File(filePath);
 		if (!file.exists()) {
 			// logger.error(filePath + " 위치에 파일이 존재 하지 않습니다.");
@@ -48,8 +43,11 @@ public class NodeEdgeExtractor implements Extractor {
 		if(this.store == null) {
 			throw new IllegalArgumentException("DataStore 객체는 null 일 수 없습니다.");
 		}
-
-		this.rtree = new STRtree();
+		
+		this.indexProvider = indexProvider;
+		if(this.indexProvider == null) {
+			throw new IllegalArgumentException("NodeIndexProvider 객체는 null 일 수 없습니다.");
+		}
     }
 	
 	@Override
@@ -64,7 +62,6 @@ public class NodeEdgeExtractor implements Extractor {
 
 	private void doExtract(ProgressStatus progressStatus) throws IOException {
         log.info("노드 및 엣지 추출 및 저장 시작");
-		int count = 0;
 		FileDataStore shpStore = null;
 
 		try {
@@ -110,15 +107,11 @@ public class NodeEdgeExtractor implements Extractor {
 						// 인덱스 정보에 노드에 연결되어있는 마지막 엣지 오프셋 업데이트
 						startNodeInfo.setLastEdgeIndex(edgeOffset);
 						endNodeInfo.setLastEdgeIndex(reverseEdgeOffset);
-					}
-
-					count += geo.getNumPoints() - 1;
-
-					// rtree.insert(geo.getEnvelopeInternal(), geo);
-					
-					// 진행률 표시 메서드 호출
-					if(progressStatus != null) {
-						progressStatus.progress(totalNodecount, nodeIndex);
+						
+						// 진행률 표시 메서드 호출
+						if(progressStatus != null) {
+							progressStatus.progress(totalNodecount, nodeIndex);
+						}
 					}
 				}
 
@@ -154,10 +147,9 @@ public class NodeEdgeExtractor implements Extractor {
 		if (startInfo == null) {
 			node = createNode(nodeIndex++, coordinate);
 			int offset = store.saveNode(node);
-			IndexInfo newIndexInfo = new IndexInfo(offset, -1);
+			IndexInfo newIndexInfo = new IndexInfo(nodeIndex, offset, -1);
 			indexMap.put(coordinate, newIndexInfo);
 			startInfo = newIndexInfo;
-			// rtree.insert(new Envelope(new CoordinateXY(node.getCoordinate().getLongitude(), node.getCoordinate().getLatitude())), node);
 		}
 		else {
 			node = store.readNode(startInfo.nodeIndex);
@@ -286,16 +278,11 @@ public class NodeEdgeExtractor implements Extractor {
 	private void saveNodeIndex() throws IOException {
 		log.info("노드 인덱스 저장 시작");
 		
-		store.saveNodeIndex(indexMap);
+		indexProvider.insertNodeIndex(indexMap);	
 	}
 
 	@Override
 	public DataStore getStore() {
 		return this.store;
-	}
-
-	@Override
-	public STRtree getRtree() {
-		return rtree;
 	}
 }

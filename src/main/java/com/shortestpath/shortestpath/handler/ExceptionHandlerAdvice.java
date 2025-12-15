@@ -9,7 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.shortestpath.shortestpath.Exception.InvalidCoordinate;
+import com.shortestpath.shortestpath.exception.InvalidCoordinateException;
 
 @RestControllerAdvice
 public class ExceptionHandlerAdvice {	
@@ -29,7 +29,7 @@ public class ExceptionHandlerAdvice {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result.getFieldError().getDefaultMessage());
 	}
 	
-	@ExceptionHandler(exception = InvalidCoordinate.class)
+	@ExceptionHandler(exception = InvalidCoordinateException.class)
 	public ResponseEntity<Object> inValidCoordinate(Exception e) {
 		log.info("유효성 검사 실패: " + e.getMessage(), e);
 		e.getStackTrace();

@@ -13,6 +13,7 @@ import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 
+import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.entity.GeoLink;
 import com.shortestpath.shortestpath.util.PathUtil;
@@ -22,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class Engine {
 	private DataStore store;
-	private final DataProvider dataProvider;
+	private DataProvider dataProvider;
 		
 	public Engine(DataStore store, DataProvider dataProvider) throws IOException {
 		if(store == null) {
@@ -32,7 +33,7 @@ public class Engine {
 		if(dataProvider == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataProvider가 null입니다.");
 		}
-		
+
 		this.store = store;
 		this.dataProvider = dataProvider;
 

@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.File;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,21 +28,37 @@ import org.springframework.web.context.WebApplicationContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.Engine;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
+
+import jakarta.transaction.Transactional;
 
 @ActiveProfiles("inte")
 @SpringBootTest
+@Transactional
 class InteMapControllerTest {
 	private static final Logger log = LoggerFactory.getLogger(InteMapControllerTest.class);
 
 	@Autowired
 	private WebApplicationContext context;
+
+	@Autowired
+	private NodeIndexProvider nodeIndexProvider;
 	
 	private MockMvc mockMvc;
 	private ObjectMapper om = new ObjectMapper();
+	private FileDataStore store;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+		String path = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
+        this.store = new FileDataStore(new File(path).getParent(), nodeIndexProvider);
+        Extractor extractor = new NodeEdgeExtractor(path, this.store, nodeIndexProvider);
+		extractor.extract();
 	}
 	
 	@Test
