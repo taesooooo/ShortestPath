@@ -9,9 +9,7 @@ import java.nio.channels.FileChannel.MapMode;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
-import java.util.List;
 
-import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.index.strtree.STRtree;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
@@ -24,7 +22,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class FileDataStore implements DataStore {
+public class HybridDataStore implements DataStore {
     // Node의 id(int, 4바이트), startEdgeOffset(int, 4바이트), x(double, 8바이트), y(double, 8바이트)
     private final int nodeByteSize = 4 + 4 + 8 + 8;
     // Edge id(int, 4바이트), from(int, 4바이트), to(int, 4바이트), distance(double, 8바이트), nextEdgeOffset(int, 4바이트)
@@ -33,41 +31,30 @@ public class FileDataStore implements DataStore {
     private String fileDirectory;
     private int totalNodeCount;
     private int totalEdgeCount;
-    private FileChannel nodeIndexFileChannel = null;
     private FileChannel nodeFileChannel = null;
     private FileChannel edgeFileChannel = null;
     private MappedByteBuffer nodeMappedBuffer = null;
     private MappedByteBuffer edgeMappedBuffer = null;
     private boolean graphRead = false;
-    private STRtree rtree;
 
-    // @Getter
-    private HashMap<Coordinate, Integer> nodeOffsetIndex;
     private NodeIndexProvider nodeIndexProvider;
 
     @Getter
     private Path nodeFilePath;
     @Getter
     private Path edgeFilePath;
-    @Getter
-    private Path indexFilePath;
 
-    public FileDataStore(String fileDirectory, NodeIndexProvider nodeIndexProvider) throws IOException {
+    public HybridDataStore(String fileDirectory, NodeIndexProvider nodeIndexProvider) throws IOException {
         this.fileDirectory = fileDirectory;
         this.nodeFilePath = new File(fileDirectory).toPath().resolve("node.bin");
         this.edgeFilePath = new File(fileDirectory).toPath().resolve("edge.bin");
-        this.indexFilePath = new File(fileDirectory).toPath().resolve("nodeindex.bin");
         
-        // this.nodeIndexFileChannel = FileChannel.open(indexFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         this.nodeFileChannel = FileChannel.open(nodeFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         this.edgeFileChannel = FileChannel.open(edgeFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         
         if (this.hasExtractedData()) {
             this.nodeMappedBuffer = nodeFileChannel.map(MapMode.READ_WRITE, 0, nodeFilePath.toFile().length());
             this.edgeMappedBuffer = edgeFileChannel.map(MapMode.READ_WRITE, 0, edgeFilePath.toFile().length());
-            log.info("노드 인덱스 로드 시작");
-            // this.nodeOffsetIndex = loadNodeOffsetIndex();
-            log.info("노드 인덱스 로드 완료");
             this.graphRead = true;
             
             log.info("경로탐색에 필요한 파일이 존재합니다.");
@@ -89,14 +76,6 @@ public class FileDataStore implements DataStore {
         
         log.info("FileDirectory = {}", this.fileDirectory);
     }
-    
-    // public STRtree getRtree() {
-    //     return rtree;
-    // }
-
-    // public void setRtree(STRtree rtree) {
-    //     this.rtree = rtree;
-    // }
 
     public int getNodeByteSize() {
         return nodeByteSize;
@@ -292,67 +271,43 @@ public class FileDataStore implements DataStore {
 
     @Override
     public void saveNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) throws IOException {
-        indexFilePath.toFile().createNewFile();
-        for(Coordinate coord : indexMap.keySet()) {
-            ByteBuffer buffer = ByteBuffer.allocate(8 + 8 + 4);
-            double x = coord.getLongitude();
-            double y = coord.getLatitude();
-            int nodeOffset = indexMap.get(coord).getNodeIndex();
-
-            buffer.putDouble(x);
-            buffer.putDouble(y);
-            buffer.putInt(nodeOffset);
-            buffer.flip();
-
-            nodeIndexFileChannel.write(buffer);
-        }
+        this.nodeIndexProvider.insertNodeIndex(indexMap);
     }
 
-    @Override
-    public HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws IOException {
-        HashMap<Coordinate, Integer> nodeIndex = new HashMap<>();
-        // 4KB씩 읽기
-        ByteBuffer buffer = ByteBuffer.allocate(4096);
-        int read = 0;
-        while(nodeIndexFileChannel.position() < nodeIndexFileChannel.size()) {
-            buffer.clear();
-            read = nodeIndexFileChannel.read(buffer);
+    // @Override
+    // public HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws IOException {
+    //     HashMap<Coordinate, Integer> nodeIndex = new HashMap<>();
+    //     // 4KB씩 읽기
+    //     ByteBuffer buffer = ByteBuffer.allocate(4096);
+    //     int read = 0;
+    //     while(nodeIndexFileChannel.position() < nodeIndexFileChannel.size()) {
+    //         buffer.clear();
+    //         read = nodeIndexFileChannel.read(buffer);
 
-            if(read == -1) {
-                break;
-            }
+    //         if(read == -1) {
+    //             break;
+    //         }
 
-            buffer.flip();
+    //         buffer.flip();
             
-            // 버퍼에 20바이트까지 남아있을 때까지 읽기
-            while(buffer.remaining() >= 20) {
-                double x = buffer.getDouble();      // 8바이트
-                double y = buffer.getDouble();      // 8바이트
-                int nodeOffset = buffer.getInt();   // 4바이트
+    //         // 버퍼에 20바이트까지 남아있을 때까지 읽기
+    //         while(buffer.remaining() >= 20) {
+    //             double x = buffer.getDouble();      // 8바이트
+    //             double y = buffer.getDouble();      // 8바이트
+    //             int nodeOffset = buffer.getInt();   // 4바이트
                 
-                Coordinate coord = new Coordinate(y, x);
-                nodeIndex.put(coord, nodeOffset);
-            }
+    //             Coordinate coord = new Coordinate(y, x);
+    //             nodeIndex.put(coord, nodeOffset);
+    //         }
 
-            // read = nodeIndexFileChannel.read(buffer);
-        }
+    //         // read = nodeIndexFileChannel.read(buffer);
+    //     }
 
-        return nodeIndex;
-    }
+    //     return nodeIndex;
+    // }
 
     @Override
     public int getNodeOffset(Coordinate coordinate) {
-        // return nodeOffsetIndex.get(coordinate);
         return nodeIndexProvider.getNodeIndex(coordinate);
-    }
-
-    @Override
-    public Object getGeometryIndex() {
-        return rtree;
-    }
-
-    public boolean saveIndex(STRtree rtree) {
-        
-        return true;
     }
 }

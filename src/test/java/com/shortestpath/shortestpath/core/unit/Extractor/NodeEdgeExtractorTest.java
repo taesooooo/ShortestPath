@@ -50,7 +50,7 @@ public class NodeEdgeExtractorTest  {
         File tempFile = tempDir.resolve("test.shp").toFile();
 
         assertThrows(IOException.class, () -> {
-            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.getAbsolutePath(), null, null);
+            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.getAbsolutePath(), null);
         }, "파일이 존재하지 않으면 IOException이 발생해야 합니다.");
     }
 
@@ -60,7 +60,7 @@ public class NodeEdgeExtractorTest  {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
 
         assertThrows(IllegalArgumentException.class, () -> {
-            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null, null);
+            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null);
         }, "DataStroe가 null이면 IllegalArgumentException이 발생해야 합니다.");
     }
 
@@ -70,7 +70,7 @@ public class NodeEdgeExtractorTest  {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
 
         assertThrows(IllegalArgumentException.class, () -> {
-            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null, null);
+            NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), null);
         }, "nodeIndexProvider null이면 IllegalArgumentException이 발생해야 합니다.");
     }
 
@@ -79,7 +79,7 @@ public class NodeEdgeExtractorTest  {
     public void NodeExtractorConstructorNormalTest(@TempDir Path tempDir) throws IOException {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
 
-        NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), mock(TestFileDataStore.class),  mock(NodeIndexProvider.class));
+        NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toAbsolutePath().toString(), mock(TestFileDataStore.class));
 
         assertThat(extractor).isNotNull();
     }
@@ -117,7 +117,7 @@ public class NodeEdgeExtractorTest  {
 
          DataStore testStore = spy(new TestFileDataStore(tmp.getParent()));
          NodeIndexProvider nodeIndexProvider = mock(NodeIndexProvider.class);
-         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore, nodeIndexProvider);
+         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore);
          extractor.extract();
 
          ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
@@ -172,7 +172,7 @@ public class NodeEdgeExtractorTest  {
 
          DataStore testStore = spy(new TestFileDataStore(tmp.getParent()));
          NodeIndexProvider nodeIndexProvider = mock(NodeIndexProvider.class);
-         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore, nodeIndexProvider);
+         NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore);
          extractor.extract();
 
          ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
@@ -203,7 +203,7 @@ public class NodeEdgeExtractorTest  {
     //     return null;
     //  }
 
-     public static class TestFileDataStore extends com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore {
+     public static class TestFileDataStore extends com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore {
          private HashMap<Integer, Node> nodeMap = new HashMap<Integer, Node>();
          private HashMap<Integer, Edge> edgeMap = new HashMap<Integer, Edge>();
 

@@ -18,8 +18,7 @@ public interface DataStore {
     Node readNode(long offset) throws IOException;
     Edge readEdge(long offset) throws IOException;
     void saveNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) throws IOException;
-    HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws Exception;
+    // HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws Exception;
     int getNodeOffset(Coordinate coordinate);
-    Object  getGeometryIndex();
     boolean hasExtractedData();
 }

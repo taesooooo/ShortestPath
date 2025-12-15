@@ -12,7 +12,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
-import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,15 +25,15 @@ public class RootContext {
 
 	@Bean
 	public Engine pathEngine(DataProvider dataProvider, NodeIndexProvider nodeIndexProvider) throws Exception {
-		FileDataStore dataStore = new FileDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
-		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, nodeIndexProvider);
+		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
+		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore);
 		Loader loader = new Loader(extractor);
 
 		if(!loader.isDataExtracted()) {
 			log.info("추출된 노드 및 엣지 데이터가 없으므로 추출을 시작합니다.");
 
 			loader.extractData();
-			dataStore = new FileDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
+			dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
 		}
 		
 		return new Engine(dataStore, dataProvider);

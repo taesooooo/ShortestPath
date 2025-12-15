@@ -113,7 +113,7 @@ class EngineTest {
 		return store;
 	}
 
-	 public static class TestFileDataStore extends com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore {
+	 public static class TestFileDataStore extends com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore {
          private HashMap<Integer, Node> nodeMap = new HashMap<Integer, Node>();
          private HashMap<Integer, Edge> edgeMap = new HashMap<Integer, Edge>();
 

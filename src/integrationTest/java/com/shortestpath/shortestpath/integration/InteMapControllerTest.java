@@ -32,7 +32,7 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
-import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import jakarta.transaction.Transactional;
 
@@ -50,14 +50,14 @@ class InteMapControllerTest {
 	
 	private MockMvc mockMvc;
 	private ObjectMapper om = new ObjectMapper();
-	private FileDataStore store;
+	private HybridDataStore store;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
 		String path = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
-        this.store = new FileDataStore(new File(path).getParent(), nodeIndexProvider);
-        Extractor extractor = new NodeEdgeExtractor(path, this.store, nodeIndexProvider);
+        this.store = new HybridDataStore(new File(path).getParent(), nodeIndexProvider);
+        Extractor extractor = new NodeEdgeExtractor(path, this.store);
 		extractor.extract();
 	}
 	

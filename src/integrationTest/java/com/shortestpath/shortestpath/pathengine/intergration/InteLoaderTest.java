@@ -20,7 +20,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
-import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import jakarta.transaction.Transactional;
 
@@ -35,8 +35,8 @@ public class InteLoaderTest {
     @DisplayName("Loader 데이터 추출 통합 테스트 - 특정 노드에 이웃 노드를 제대로 연결이 되어있는지 확인")
     public void LoaderLoadTest() throws Exception {
         String filePath = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
-        FileDataStore dataStore = new FileDataStore(new File(filePath).getParent(), nodeIndexProvider);
-        Extractor extractor = new NodeEdgeExtractor(filePath, dataStore, nodeIndexProvider);
+        HybridDataStore dataStore = new HybridDataStore(new File(filePath).getParent(), nodeIndexProvider);
+        Extractor extractor = new NodeEdgeExtractor(filePath, dataStore);
         Loader loader = new Loader(extractor);
         loader.extractData();
         

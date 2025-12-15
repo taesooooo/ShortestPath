@@ -4,31 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
-import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
-import com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore;
-import com.shortestpath.shortestpath.provider.JapMapDataProvider;
-import com.shortestpath.shortestpath.provider.JpaNodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import jakarta.transaction.Transactional;
 
@@ -48,9 +41,9 @@ public class InteEngineTest {
     @BeforeEach
     public void setUp() throws IOException {
         String path = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
-        this.store = new FileDataStore(new File(path).getParent(), nodeIndexProvider);
+        this.store = new HybridDataStore(new File(path).getParent(), nodeIndexProvider);
         this.engine = new Engine(store, dataProvider);
-        Extractor extractor = new NodeEdgeExtractor(path, this.store, nodeIndexProvider);
+        Extractor extractor = new NodeEdgeExtractor(path, this.store);
         extractor.extract();
     }
     

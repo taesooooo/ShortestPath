@@ -28,11 +28,10 @@ public class NodeEdgeExtractor implements Extractor {
     private HashMap<Coordinate, IndexInfo> indexMap = new HashMap<Coordinate, IndexInfo>();
 	private File file;
 	private DataStore store;
-	private NodeIndexProvider indexProvider; 
 	private int nodeIndex = 0;
 	private int edgeIndex = 0;
 
-    public NodeEdgeExtractor(String filePath, DataStore dataStore, NodeIndexProvider indexProvider) throws IOException {
+    public NodeEdgeExtractor(String filePath, DataStore dataStore) throws IOException {
         this.file = new File(filePath);
 		if (!file.exists()) {
 			// logger.error(filePath + " 위치에 파일이 존재 하지 않습니다.");
@@ -43,11 +42,7 @@ public class NodeEdgeExtractor implements Extractor {
 		if(this.store == null) {
 			throw new IllegalArgumentException("DataStore 객체는 null 일 수 없습니다.");
 		}
-		
-		this.indexProvider = indexProvider;
-		if(this.indexProvider == null) {
-			throw new IllegalArgumentException("NodeIndexProvider 객체는 null 일 수 없습니다.");
-		}
+	
     }
 	
 	@Override
@@ -202,7 +197,7 @@ public class NodeEdgeExtractor implements Extractor {
 
 		IndexInfo info = indexMap.get(node.getCoordinate());
 		if(info == null) {
-			offset = node.getId() * ((com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore)store).getNodeByteSize();
+			offset = node.getId() * ((com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore)store).getNodeByteSize();
 		}
 		else {
 			offset = info.getNodeIndex();
@@ -217,7 +212,7 @@ public class NodeEdgeExtractor implements Extractor {
 	 * @return
 	 */
 	private int getEdgeOffset(Edge edge) {
-		return edge.getId() * ((com.shortestpath.shortestpath.core.pathengine.Store.FileDataStore)store).getEdgeByteSize();
+		return edge.getId() * ((com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore)store).getEdgeByteSize();
 	}
 	
 
@@ -278,7 +273,7 @@ public class NodeEdgeExtractor implements Extractor {
 	private void saveNodeIndex() throws IOException {
 		log.info("노드 인덱스 저장 시작");
 		
-		indexProvider.insertNodeIndex(indexMap);	
+		this.store.saveNodeIndex(indexMap);
 	}
 
 	@Override
