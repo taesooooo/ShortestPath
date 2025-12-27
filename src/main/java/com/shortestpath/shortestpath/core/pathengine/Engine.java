@@ -9,23 +9,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
 
-import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-
-import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
-import com.shortestpath.shortestpath.entity.GeoLink;
-import com.shortestpath.shortestpath.util.PathUtil;
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Engine {
 	private DataStore store;
-	private DataProvider dataProvider;
+	private NodeProvider dataProvider;
 		
-	public Engine(DataStore store, DataProvider dataProvider) throws IOException {
+	public Engine(DataStore store, NodeProvider dataProvider) throws IOException {
 		if(store == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataStore가 null입니다..");
 		}
@@ -73,16 +68,24 @@ public class Engine {
 		
 		if(startNode == null) {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
-			Coordinate[] linePoints = findNearestLineCoordinate(startCoordinate);
-			startNearestPoint = calculateNearestPointOnLine(linePoints[0], linePoints[1], startCoordinate); 
-			startNode = findNearestNode(linePoints, startNearestPoint);
+			Node nearestNode = findNearestNode(startCoordinate);
+			Edge nearestEdge = findNearestEdge(nearestNode, startCoordinate);
+			Node fromNode = store.readNode(nearestEdge.getFrom());
+			Node toNode = store.readNode(nearestEdge.getTo());
+			startNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), startCoordinate);
+
+			startNode = nearestNode;
 		}
 		
 		if(endNode == null) {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
-			Coordinate[] linePoints = findNearestLineCoordinate(endCoordinate);
-			endNearestPoint = calculateNearestPointOnLine(linePoints[0], linePoints[1], endCoordinate); 
-			endNode = findNearestNode(linePoints, endNearestPoint);
+			Node nearestNode = findNearestNode(endCoordinate);
+			Edge nearestEdge = findNearestEdge(nearestNode, endCoordinate);
+			Node fromNode = store.readNode(nearestEdge.getFrom());
+			Node toNode = store.readNode(nearestEdge.getTo());
+			endNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), endCoordinate); 
+			// endNode = findNearestNode(fromNode, toNode, endNearestPoint);
+			endNode = nearestNode;
 		}
 		long st = System.currentTimeMillis();
 		
@@ -93,31 +96,6 @@ public class Engine {
 		log.info("탐색 완료 시간 - " + (et-st) / 1000.0);
 		
 		return resultPath;
-	}
-	
-	/**
-	 * 좌표 배열에서 목표 좌표에 가장 가까운 좌표를 찾고 찾은 좌표를 이용해 그래프에서 좌표에 해당하는 노드를 찾아 반환합니다.
-	 * 가장 가까운 좌표인지 비교하는 방법은 유클리드 거리 공식을 이용하여 배열에 있는 좌표들을 모두 비교합니다.
-	 * @param coordinateArray
-	 * @param targetCoordinate
-	 * @return 저장소에서 노드를 찾아 반환
-	 * @throws IOException 
-	 */
-	private Node findNearestNode(Coordinate[] coordinateArray, Coordinate targetCoordinate) throws IOException {
-		double minDistance = Double.MAX_VALUE;
-		Coordinate minCoordinate = null;
-		
-		for(Coordinate coordinate : coordinateArray) {
-			double distance = coordinate.calculateDistanceToTarget(targetCoordinate);
-			if(distance < minDistance) {
-				minCoordinate = coordinate;
-				minDistance = distance; 
-			}
-		}
-		
-		int offset = store.getNodeOffset(minCoordinate);
-
-		return store.readNode(offset);
 	}
 	
 	/**
@@ -143,7 +121,7 @@ public class Engine {
 		HashMap<Integer, Edge> edgeList = new HashMap<>();
 
 	    // 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
-	    double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
+	    double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate());
 
 		// 첫 시작 노드 gCost = 0 설정
 		startNode.setGCost(0);
@@ -186,7 +164,7 @@ public class Engine {
 	            // openList에 없고, 더 짧은 경로라면 갱신
 	            if(!openList.contains(toNode) && newDist < toNode.getGCost()) {
 	                // hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
-	                double hCost = PathUtil.haversine(toNode.getCoordinate(), endNode.getCoordinate());
+	                double hCost = PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate());
 	                double fCost = newDist + hCost;
 					toNode.setHCost(hCost);
 					toNode.setGCost(newDist);
@@ -248,64 +226,94 @@ public class Engine {
 		
 		return edges;
 	}
-	
+
 	/**
-	 * 주어진 좌표와 거리가 가까운 라인의 시작과 끝 좌표를 찾아 반환합니다.
-	 * @param coordinate
-	 * @return 배열 첫 번째는 시작 좌표 마지막 배열 값은 마지막 좌표
+	 * 노드와 연결된 엣지를 모두 반환합니다.
+	 * @param edgeList
+	 * @return 연결된 모든 엣지
+	 * @throws IOException 
 	 */
-	private Coordinate[] findNearestLineCoordinate(Coordinate coordinate) {
-		org.locationtech.jts.geom.Coordinate convertCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
-		Point point = new GeometryFactory().createPoint(convertCoordinate);
-
-// 		// 주어진 좌표에서 가까운 라인들을 가져온다.
-		List<GeoLink> geoDataList = dataProvider.findNearestLine(point.getX(), point.getY(), 0.001);
+	private ArrayList<Edge> getConnectedEdges(Node node) throws IOException {
+		ArrayList<Edge> edges = new ArrayList<Edge>();
 		
-		if(geoDataList.isEmpty()) {
-			throw new EmptyGeometryListException("지오메트리 리스트가 비어있습니다. 데이터베이스 또는 DataProvider를 확인해주세요.");
+		Edge edge = store.readEdge(node.getStartEdgeOffset());
+		edges.add(edge);
+
+		while(edges.get(edges.size() - 1).getNextEdgeOffset() != -1) {
+			edge = store.readEdge(edges.get(edges.size() - 1).getNextEdgeOffset());
+			edges.add(edge);
+		}
+		
+		return edges;
+	}
+
+	/**
+	 * 주어진 좌표와 거리가 가까운 노드들을 찾고 그 중 가장 가까운 노드를 반환합니다.
+	 * @param coordinate
+	 * @return 가까운 노드 좌표
+	 * @throws IOException 
+	 */
+	private Node findNearestNode(Coordinate coordinate) throws IOException {
+		// 주어진 좌표에서 가까운 노드 오프셋을 가져온다. 30미터 이내
+		List<Integer> nodeIdList = dataProvider.findNearestNodeId(coordinate, 30);
+		ArrayList<Node> nodeList = new ArrayList<Node>();
+
+		if(nodeIdList.isEmpty()) {
+			throw new EmptyGeometryListException("해당 좌표에 가까운 노드 데이터를 찾을 수 없습니다. 좌표 : " + coordinate.toString());
 		}
 
-		List<Geometry> geoList = geoDataList.stream().map(item -> item.getShape()).toList();
-
-		// 후보 라인 중 거리가 제일 가까운 라인 검색
-		Geometry nearestLine = null;
-		double minDistance = Double.MAX_VALUE;
-		
-		for(Geometry geo : geoList) {
-			double distance = geo.distance(point);
-			if(distance < minDistance) {
-				minDistance = distance;
-				nearestLine = geo;
-			}
+		for(Integer nodeId : nodeIdList) {
+			Node n = store.readNode(nodeId);
+			nodeList.add(n);
 		}
 
-		org.locationtech.jts.geom.Coordinate[] lines = nearestLine.getCoordinates();
-		org.locationtech.jts.geom.Coordinate[] sortLines = null;
-		org.locationtech.jts.geom.Coordinate start = null;
-		org.locationtech.jts.geom.Coordinate end = null;
-		
-		// 만약 가까운 라인에 포인트가 두개 이상이라면 시작점과 끝점을 가져오고
-		// 가까운 점 기준으로 정렬한 뒤 시작 노드와 끝 노드를 결정한다.
-		// 요청 좌표와 가까운 점을 선택하기 위함
-		if(nearestLine.getNumPoints() > 2) {
-			sortLines = new org.locationtech.jts.geom.Coordinate[2];
-			if(lines[0].distance(convertCoordinate) > lines[lines.length - 1].distance(convertCoordinate)) {
-				sortLines[0] = lines[0];
-				sortLines[1] = lines[lines.length - 1];
+		// 후보 노드 중 거리가 제일 가까운 라인 검색
+		if(nodeList.size() >= 2) {
+			double minDistance = Double.MAX_VALUE;
+			Node minNode = null;
+			for(Node node : nodeList) {
+				double distance = node.getCoordinate().calculateDistanceToTarget(coordinate);
+				if(distance < minDistance) {
+					minDistance = distance;
+					minNode = node;
+				}
 			}
-			else {
-				sortLines[0] = lines[lines.length - 1];
-				sortLines[1] = lines[0];
-			}
-			
-			start = sortLines[0];
-			end = sortLines[1];
+			return minNode;
 		}
 		else {
-			start = lines[0];
-			end = lines[lines.length - 1];			
+			Node node = nodeList.get(0);
+			return node;
 		}
-		return new Coordinate[] {new Coordinate(start.y, start.x), new Coordinate(end.y, end.x)};
+	}
+	
+	/**
+	 * 주어진 노드의 연결된 엣지중 주어진 좌표에 거리가 가까운 엣지를 찾아 반환합니다.
+	 * @param edge
+	 * @return 주어진 좌표에 거리와 가장 가까운 엣지
+	 * @throws IOException 
+	 */
+	private Edge findNearestEdge(Node node, Coordinate coordinate) throws IOException {
+		// 주어진 노드에 연결된 엣지들을 가져온다.
+		ArrayList<Edge> edgeList = getConnectedEdges(node);
+		if (edgeList.isEmpty()) {
+			throw new EmptyGeometryListException("노드에 연결된 엣지 데이터가 없습니다. 노드 ID : " + node.getId());
+		}
+
+		// 후보 라인 중 거리가 제일 가까운 라인 검색
+		Edge nearestEdge = null;
+		double minDistance = Double.MAX_VALUE;
+		
+		// 노드에서 각 엣지의 도착 노드까지의 거리를 확인하여 가까운 엣지를 선택
+		for(Edge edge : edgeList) {
+			Node toNode = store.readNode(edge.getTo());
+			double distance = coordinate.calculateDistanceToTarget(toNode.getCoordinate());
+			if(distance < minDistance) {
+				minDistance = distance;
+				nearestEdge = edge;
+			}
+		}
+
+		return nearestEdge;
 	}
 	
 	/**

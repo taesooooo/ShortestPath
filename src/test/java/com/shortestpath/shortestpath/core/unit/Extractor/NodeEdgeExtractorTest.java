@@ -39,7 +39,7 @@ import org.mockito.MockedStatic;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 
 public class NodeEdgeExtractorTest  {
@@ -116,7 +116,7 @@ public class NodeEdgeExtractorTest  {
          when(featureSource.getFeatures()).thenReturn(collection);
 
          DataStore testStore = spy(new TestFileDataStore(tmp.getParent()));
-         NodeIndexProvider nodeIndexProvider = mock(NodeIndexProvider.class);
+         NodeProvider nodeIndexProvider = mock(NodeProvider.class);
          NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore);
          extractor.extract();
 
@@ -171,7 +171,7 @@ public class NodeEdgeExtractorTest  {
          when(featureSource.getFeatures()).thenReturn(collection);
 
          DataStore testStore = spy(new TestFileDataStore(tmp.getParent()));
-         NodeIndexProvider nodeIndexProvider = mock(NodeIndexProvider.class);
+         NodeProvider nodeIndexProvider = mock(NodeProvider.class);
          NodeEdgeExtractor extractor = new NodeEdgeExtractor(tmp.toString(), testStore);
          extractor.extract();
 
@@ -208,7 +208,7 @@ public class NodeEdgeExtractorTest  {
          private HashMap<Integer, Edge> edgeMap = new HashMap<Integer, Edge>();
 
         public TestFileDataStore(String filePath) throws IOException {
-            super(filePath, mock(NodeIndexProvider.class));
+            super(filePath, mock(NodeProvider.class));
         }
 
         public int getEdgeByteSize() {

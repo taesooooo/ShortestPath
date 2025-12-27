@@ -17,14 +17,14 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
-import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 
 class EngineTest {
 
 	@Mock
-	private DataProvider dataProvider;
+	private NodeProvider dataProvider;
 	
 	@BeforeEach
 	void setUp() throws Exception {
@@ -118,7 +118,7 @@ class EngineTest {
          private HashMap<Integer, Edge> edgeMap = new HashMap<Integer, Edge>();
 
         public TestFileDataStore(String filePath) throws IOException {
-            super(filePath, mock(NodeIndexProvider.class));
+            super(filePath, mock(NodeProvider.class));
         }
 
         public int getEdgeByteSize() {

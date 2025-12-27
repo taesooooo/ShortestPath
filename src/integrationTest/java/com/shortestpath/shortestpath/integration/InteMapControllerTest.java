@@ -31,7 +31,7 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import jakarta.transaction.Transactional;
@@ -46,7 +46,7 @@ class InteMapControllerTest {
 	private WebApplicationContext context;
 
 	@Autowired
-	private NodeIndexProvider nodeIndexProvider;
+	private NodeProvider nodeIndexProvider;
 	
 	private MockMvc mockMvc;
 	private ObjectMapper om = new ObjectMapper();

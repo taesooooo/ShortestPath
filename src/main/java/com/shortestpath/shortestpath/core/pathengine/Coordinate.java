@@ -2,7 +2,7 @@ package com.shortestpath.shortestpath.core.pathengine;
 
 import java.util.Objects;
 
-import com.shortestpath.shortestpath.util.PathUtil;
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -42,7 +42,7 @@ public class Coordinate {
 		
 		// return Math.sqrt(dx + dy);
 
-		return PathUtil.haversine(this, coordinate);
+		return PathUtil.haversineDistance(this, coordinate);
 	}
 	
 	public String toWKT() {

@@ -10,8 +10,8 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +24,7 @@ public class RootContext {
 	private String shpFilePath;
 
 	@Bean
-	public Engine pathEngine(DataProvider dataProvider, NodeIndexProvider nodeIndexProvider) throws Exception {
+	public Engine pathEngine(NodeProvider dataProvider, NodeProvider nodeIndexProvider) throws Exception {
 		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
 		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore);
 		Loader loader = new Loader(extractor);

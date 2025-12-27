@@ -7,7 +7,7 @@ import org.locationtech.jts.geom.Geometry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.shortestpath.shortestpath.util.PathUtil;
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.extern.log4j.Log4j;
 
@@ -36,7 +36,7 @@ public class Graph {
 	 * @param endNode
 	 */
 	public void addEdge(Coordinate startCoordinate, Coordinate endCoordinate, Geometry geometry) {
-		double distance = PathUtil.haversine(startCoordinate, endCoordinate);
+		double distance = PathUtil.haversineDistance(startCoordinate, endCoordinate);
 		
 		Node startNode = graph.get(startCoordinate);
 		Node endNode = graph.get(endCoordinate);

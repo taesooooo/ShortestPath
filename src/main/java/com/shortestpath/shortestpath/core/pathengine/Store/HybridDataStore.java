@@ -16,7 +16,7 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -37,14 +37,14 @@ public class HybridDataStore implements DataStore {
     private MappedByteBuffer edgeMappedBuffer = null;
     private boolean graphRead = false;
 
-    private NodeIndexProvider nodeIndexProvider;
+    private NodeProvider nodeIndexProvider;
 
     @Getter
     private Path nodeFilePath;
     @Getter
     private Path edgeFilePath;
 
-    public HybridDataStore(String fileDirectory, NodeIndexProvider nodeIndexProvider) throws IOException {
+    public HybridDataStore(String fileDirectory, NodeProvider nodeIndexProvider) throws IOException {
         this.fileDirectory = fileDirectory;
         this.nodeFilePath = new File(fileDirectory).toPath().resolve("node.bin");
         this.edgeFilePath = new File(fileDirectory).toPath().resolve("edge.bin");

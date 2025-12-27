@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.shortestpath.shortestpath.util.PathUtil;
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -43,7 +43,7 @@ public class Node implements Comparable<Node> {
         Coordinate startPoint = this.getCoordinate();
         Coordinate endPoint = endNode.getCoordinate();
 
-        double newDistance = PathUtil.haversine(startPoint, endPoint);
+        double newDistance = PathUtil.haversineDistance(startPoint, endPoint);
         
 		this.hCost = newDistance;
 		

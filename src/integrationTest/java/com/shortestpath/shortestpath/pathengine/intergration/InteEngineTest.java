@@ -18,8 +18,8 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.DataProvider;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeIndexProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
@@ -33,10 +33,10 @@ public class InteEngineTest {
     private Engine engine;
 
     @Autowired
-	private DataProvider dataProvider;
+	private NodeProvider dataProvider;
     
     @Autowired
-    private NodeIndexProvider nodeIndexProvider;
+    private NodeProvider nodeIndexProvider;
     
     @BeforeEach
     public void setUp() throws IOException {

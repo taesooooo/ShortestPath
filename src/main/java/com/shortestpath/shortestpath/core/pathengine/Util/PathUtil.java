@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath.util;
+package com.shortestpath.shortestpath.core.pathengine.Util;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,7 +13,7 @@ public class PathUtil {
 		return new Coordinate(lat, lon);
 	}
 	
-	public static Double haversine(Coordinate a, Coordinate b) {
+	public static Double haversineDistance(Coordinate a, Coordinate b) {
 		// 하버사인 거리 공식
         Coordinate startPoint = a;
         Coordinate endPoint = b;
@@ -34,7 +34,7 @@ public class PathUtil {
         return newDistance;
 	}
 	
-	public static Double Euclidean(Coordinate a, Coordinate b) {
+	public static Double euclideanDistance(Coordinate a, Coordinate b) {
 		// 맨하튼 거리 공식
 		Coordinate currentNode = a;
 		

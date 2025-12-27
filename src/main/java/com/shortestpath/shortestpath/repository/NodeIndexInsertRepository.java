@@ -10,21 +10,21 @@ import java.util.Map;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public class NodeIndexInsertRepository{
-
+public class NodeIndexInsertRepository {
+    
     private final JdbcTemplate jdbcTemplate;
-
+    
     @Transactional
     public void insertNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) {
         int batchSize = 1000;
