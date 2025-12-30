@@ -1,12 +1,12 @@
 HELP.md
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 !**/src/main/**/build/
 !**/src/test/**/build/
 
 ### PROJECT ###
-*.properties
+src/**/**.properties
 src/test/resources/shp/
 
 ### STS ###
