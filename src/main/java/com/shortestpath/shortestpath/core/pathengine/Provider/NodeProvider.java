@@ -9,6 +9,6 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 public interface NodeProvider {
     public void insertNodeIndex(HashMap<Coordinate, IndexInfo> indexMap);
     public int getNodeIndex(Coordinate coordinate);
-    public Coordinate getNearestNode(Coordinate coordinate, double distance);
-    public List<Integer> findNearestNodeId(Coordinate coordinate, double distance);
+    public Coordinate getNearestNode(Coordinate coordinate);
+    public List<Integer> findNearestNodeId(Coordinate coordinate);
 }

@@ -255,7 +255,7 @@ public class Engine {
 	 */
 	private Node findNearestNode(Coordinate coordinate) throws IOException {
 		// 주어진 좌표에서 가까운 노드 오프셋을 가져온다. 30미터 이내
-		List<Integer> nodeIdList = dataProvider.findNearestNodeId(coordinate, 30);
+		List<Integer> nodeIdList = dataProvider.findNearestNodeId(coordinate);
 		ArrayList<Node> nodeList = new ArrayList<Node>();
 
 		if(nodeIdList.isEmpty()) {

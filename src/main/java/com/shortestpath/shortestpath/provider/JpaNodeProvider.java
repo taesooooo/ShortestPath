@@ -35,8 +35,8 @@ public class JpaNodeProvider implements NodeProvider{
     }
 
     @Override
-    public Coordinate getNearestNode(Coordinate coordinate, double distance) {
-        List<NodeIndex> nodeIndexList = nodeIndexRepository.findNearestNode(coordinate, distance);
+    public Coordinate getNearestNode(Coordinate coordinate) {
+        List<NodeIndex> nodeIndexList = nodeIndexRepository.findNearestNode(coordinate);
         if(nodeIndexList.isEmpty()) {
             throw new NodeIndexNotFoundException("가장 가까운 노드 인덱스를 찾을 수 없습니다.");
         }
@@ -45,7 +45,7 @@ public class JpaNodeProvider implements NodeProvider{
     }
 
    @Override
-	public List<Integer> findNearestNodeId(Coordinate coordinate, double distance) {
-		return nodeIndexRepository.findNearestNode(coordinate, distance).stream().map(data -> data.getOffset()).toList();
+	public List<Integer> findNearestNodeId(Coordinate coordinate) {
+		return nodeIndexRepository.findNearestNode(coordinate).stream().map(data -> data.getOffset()).toList();
 	}
 }

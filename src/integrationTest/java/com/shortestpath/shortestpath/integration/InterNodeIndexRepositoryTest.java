@@ -50,7 +50,7 @@ public class InterNodeIndexRepositoryTest {
         nodeIndexRepository.save(new NodeIndex(2944, new Coordinate(33.2406488, 126.561731), 0));
 
         // 100미터 이내 가까운 노드 인덱스 조회
-        List<NodeIndex> nodeIndex = nodeIndexRepository.findNearestNode(new Coordinate(33.2403307, 126.5624673), 100);
+        List<NodeIndex> nodeIndex = nodeIndexRepository.findNearestNode(new Coordinate(33.2403307, 126.5624673));
         
         assertThat(nodeIndex.isEmpty()).as("가장 가까운 노드가 존재하지 않습니다.").isFalse();
 

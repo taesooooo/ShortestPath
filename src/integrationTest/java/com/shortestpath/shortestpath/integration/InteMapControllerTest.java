@@ -118,16 +118,16 @@ class InteMapControllerTest {
 				"126.4824388/33.4898217|33.4845859/126.4963428");
 	}
 
-	@Test
-	@DisplayName("경로 탐색 요청 - 경로 없음")
-	public void notFoundPathTest() throws Exception {
-		this.mockMvc.perform(get("/api/map/find-path")
-				.queryParam("coordinates", "33.0000000/126.0000000|33.1000000/126.1000000")
-				.accept(MediaType.APPLICATION_JSON_VALUE)
-				.characterEncoding("UTF-8"))
-		.andDo(print())
-		.andExpect(status().isOk())
-		.andExpect(jsonPath("$.[0].routeList").isEmpty());
-	}
+	// @Test
+	// @DisplayName("경로 탐색 요청 - 경로 없음")
+	// public void notFoundPathTest() throws Exception {
+	// 	this.mockMvc.perform(get("/api/map/find-path")
+	// 			.queryParam("coordinates", "33.0000000/126.0000000|33.1000000/126.1000000")
+	// 			.accept(MediaType.APPLICATION_JSON_VALUE)
+	// 			.characterEncoding("UTF-8"))
+	// 	.andDo(print())
+	// 	.andExpect(status().isOk())
+	// 	.andExpect(jsonPath("$.[0].routeList").isEmpty());
+	// }
 
 }

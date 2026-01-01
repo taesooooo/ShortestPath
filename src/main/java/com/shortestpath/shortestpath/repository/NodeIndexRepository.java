@@ -22,9 +22,9 @@ public interface NodeIndexRepository extends JpaRepository<NodeIndex, Integer> {
     @Query(value = 
         """
         SELECT id, coordinate, ST_Distance_Sphere(coordinate, POINT(:#{#coordinate.longitude},:#{#coordinate.latitude})) AS distance, offset 
-        FROM node_index
-        HAVING distance <= :distance
-        ORDER BY distance;
+        FROM node_index 
+        ORDER BY distance 
+        LIMIT 5;
         """, nativeQuery = true)
-    public List<NodeIndex> findNearestNode(@Param("coordinate")Coordinate coordinate, @Param("distance") double distance);
+    public List<NodeIndex> findNearestNode(@Param("coordinate")Coordinate coordinate);
 }
