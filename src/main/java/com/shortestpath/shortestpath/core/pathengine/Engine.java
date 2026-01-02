@@ -9,6 +9,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
 
+import org.locationtech.jts.geom.Envelope;
+
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
@@ -255,7 +257,8 @@ public class Engine {
 	 */
 	private Node findNearestNode(Coordinate coordinate) throws IOException {
 		// 주어진 좌표에서 가까운 노드 오프셋을 가져온다. 30미터 이내
-		List<Integer> nodeIdList = dataProvider.findNearestNodeId(coordinate);
+		Envelope envelope = createSearchEnvelope(coordinate, 100);
+		List<Integer> nodeIdList = dataProvider.findNearestNodeId(envelope, coordinate);
 		ArrayList<Node> nodeList = new ArrayList<Node>();
 
 		if(nodeIdList.isEmpty()) {
@@ -284,6 +287,18 @@ public class Engine {
 			Node node = nodeList.get(0);
 			return node;
 		}
+	}
+
+	private Envelope createSearchEnvelope(Coordinate coordinate, double distance) {
+		double latDiff = distance / 111111.0; // 위도 1도는 약 111km
+		double lonDiff = distance / (111111.0 * Math.cos(Math.toRadians(coordinate.getLatitude()))); // 경도 1도는 위도에 따라 다름
+
+		double minLat = coordinate.getLatitude() - latDiff;
+		double maxLat = coordinate.getLatitude() + latDiff;
+		double minLon = coordinate.getLongitude() - lonDiff;
+		double maxLon = coordinate.getLongitude() + lonDiff;
+
+		return new Envelope(minLon, maxLon, minLat, maxLat);
 	}
 	
 	/**

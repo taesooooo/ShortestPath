@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 import com.shortestpath.shortestpath.entity.NodeIndex;
 import com.shortestpath.shortestpath.repository.NodeIndexRepository;
 
@@ -50,7 +51,9 @@ public class InterNodeIndexRepositoryTest {
         nodeIndexRepository.save(new NodeIndex(2944, new Coordinate(33.2406488, 126.561731), 0));
 
         // 100미터 이내 가까운 노드 인덱스 조회
-        List<NodeIndex> nodeIndex = nodeIndexRepository.findNearestNode(new Coordinate(33.2403307, 126.5624673));
+        Coordinate coordinate = new Coordinate(33.2403307, 126.5624673);
+        String bbox = GeometryUtil.toWkt(GeometryUtil.createSearchEnvelope(coordinate, 100));
+        List<NodeIndex> nodeIndex = nodeIndexRepository.findNearestNode(bbox, coordinate);
         
         assertThat(nodeIndex.isEmpty()).as("가장 가까운 노드가 존재하지 않습니다.").isFalse();
 

@@ -3,6 +3,7 @@ package com.shortestpath.shortestpath.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.locationtech.jts.geom.Polygon;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,8 +24,9 @@ public interface NodeIndexRepository extends JpaRepository<NodeIndex, Integer> {
         """
         SELECT id, coordinate, ST_Distance_Sphere(coordinate, POINT(:#{#coordinate.longitude},:#{#coordinate.latitude})) AS distance, offset 
         FROM node_index 
+        WHERE ST_Within(coordinate, ST_GeomFromText(:bbox,0)) 
         ORDER BY distance 
         LIMIT 5;
         """, nativeQuery = true)
-    public List<NodeIndex> findNearestNode(@Param("coordinate")Coordinate coordinate);
+    public List<NodeIndex> findNearestNode(@Param("bbox")String bboxWkt, @Param("coordinate")Coordinate coordinate);
 }

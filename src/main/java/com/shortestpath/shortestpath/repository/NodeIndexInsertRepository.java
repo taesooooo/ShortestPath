@@ -27,7 +27,7 @@ public class NodeIndexInsertRepository {
     
     @Transactional
     public void insertNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) {
-        int batchSize = 1000;
+        int batchSize = 10000;
         String sql = "INSERT INTO node_index (id, coordinate, offset) VALUES (?, POINT(?, ?), ?)";
         List<Map.Entry<Coordinate, IndexInfo>> entries = new ArrayList<>(indexMap.entrySet());
         
@@ -37,7 +37,7 @@ public class NodeIndexInsertRepository {
 
             try {
                 batchInsert(sql, batch);
-                log.info("노드 인덱스 배치 저장 완료: {} ~ {} (총 {}개)", i, endIndex - 1, endIndex - i);
+                log.info("노드 인덱스 배치 저장 완료: {} ~ {} (총 {}개)", i, endIndex - 1, indexMap.size());
             } catch (Exception e) {
                 log.error("노드 인덱스 배치 저장 실패: {} ~ {}", i, endIndex - 1, e);
                 throw new RuntimeException("노드 인덱스 저장 중 오류 발생", e);
