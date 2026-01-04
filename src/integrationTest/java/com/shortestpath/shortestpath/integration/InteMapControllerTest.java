@@ -7,13 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,17 +22,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.JsonPath;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
-import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTrackDto;
 
 import jakarta.transaction.Transactional;
 
@@ -116,6 +116,49 @@ class InteMapControllerTest {
 		return Stream.of( "33.4824388-126.4898217|33.4845859-126.4963428",
 				"33.2417782/126.5647375",
 				"126.4824388/33.4898217|33.4845859/126.4963428");
+	}
+
+	@Test
+	@DisplayName("경로 추적 요청 - 정상")
+	public void searchRouteTrackTest() throws Exception {
+		ArrayList<Coordinate> routeCoordinates = new ArrayList<Coordinate>();
+		routeCoordinates.add(new Coordinate(33.2403234, 126.5627931));
+		routeCoordinates.add(new Coordinate(33.2402282, 126.5630821));
+		routeCoordinates.add(new Coordinate(33.2401702, 126.5632367));
+		routeCoordinates.add(new Coordinate(33.2403103, 126.5634159));
+		routeCoordinates.add(new Coordinate(33.2404554, 126.5635482));
+		routeCoordinates.add(new Coordinate(33.2408904, 126.5637502));
+		routeCoordinates.add(new Coordinate(33.2407988, 126.5643231));
+		routeCoordinates.add(new Coordinate(33.2408074, 126.5644749));
+
+		ArrayList<Coordinate> searchCoordinates = new ArrayList<Coordinate>();
+		searchCoordinates.add(new Coordinate(33.2403234, 126.5627931));
+		searchCoordinates.add(new Coordinate(33.2402282, 126.5630821));
+		searchCoordinates.add(new Coordinate(33.2401702, 126.5632367));
+		searchCoordinates.add(new Coordinate(33.2403103, 126.5634159));
+		searchCoordinates.add(new Coordinate(33.2404554, 126.5635482));
+		searchCoordinates.add(new Coordinate(33.2408904, 126.5637502));
+		searchCoordinates.add(new Coordinate(33.2407988, 126.5643231));
+		searchCoordinates.add(new Coordinate(33.2408074, 126.5644749));
+		searchCoordinates.add(new Coordinate(33.2403307, 126.5624673));
+		searchCoordinates.add(new Coordinate(33.2404177, 126.5631293));
+		searchCoordinates.add(new Coordinate(33.2409855, 126.5631549));
+		searchCoordinates.add(new Coordinate(33.2412932, 126.5638586));
+		searchCoordinates.add(new Coordinate(33.2399523, 126.5638167));
+
+		MvcResult mvcResult = this.mockMvc.perform(get("/api/map/search-route-track")
+				.queryParam("coordinates", "33.2403234/126.5627931|33.2408074/126.5644749")
+				.accept(MediaType.APPLICATION_JSON_VALUE)
+				.characterEncoding("UTF-8"))
+		.andDo(print())
+		.andExpect(status().isOk())
+		.andReturn();
+
+		String contentAsString = mvcResult.getResponse().getContentAsString();
+		ResponeseRouteSearchTrackDto responseDto = om.readValue(contentAsString, ResponeseRouteSearchTrackDto.class);
+		
+		assertThat(responseDto.getRouteCoordinates()).as("경로 좌표가 일치하지 않습니다.").containsExactlyElementsOf(routeCoordinates);
+		assertThat(responseDto.getVisitedCoordinates()).as("예상한 탐색 노드가 없습니다.").containsExactlyInAnyOrderElementsOf(searchCoordinates);
 	}
 
 	// @Test

@@ -48,6 +48,29 @@ public class MapController {
 
 		return ResponseEntity.ok().body(mapService.findPath(coordinateList));
 	}
+
+	@GetMapping("/search-route-track")
+	public ResponseEntity<Object> searchRouteTrack(@RequestParam("coordinates") String coordinate) throws Exception {
+		boolean check = validCoordinate(coordinate);
+		if(!check) {
+			throw new InvalidCoordinateException("잘못된 좌표 형식입니다.");
+		}
+		
+		String[] str = coordinate.split("\\|");
+		if(str.length != 2) {
+			throw new InvalidCoordinateException("잘못된 좌표 형식입니다.");
+		}
+		
+		String[] startString = str[0].split("/");
+		String[] endString = str[1].split("/");
+		
+		Coordinate start = new Coordinate(Double.parseDouble(startString[0]), Double.parseDouble(startString[1]));
+		Coordinate end = new Coordinate(Double.parseDouble(endString[0]), Double.parseDouble(endString[1]));
+		
+		RequestFindPathDto routeDto = RequestFindPathDto.builder().start(start).end(end).build();
+
+		return ResponseEntity.ok().body(mapService.searchRouteTrack(routeDto));
+	}
 	
 	private boolean validCoordinate(String value) {
 		String[] str = value.split("\\|");

@@ -50,7 +50,7 @@ public class Engine {
 			throw new NullPointerException("탐색에 필요한 노드가 없습니다.");
 		}
 		
-		return findPath(startNode, endNode);
+		return findPath(startNode, endNode, null);
 	}
 	
 	/**
@@ -62,7 +62,7 @@ public class Engine {
 	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
 	 * @throws IOException 
 	 */
-	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) throws IOException, EmptyGeometryListException {
+	public RouteSearchResult shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate, boolean trackRoute) throws IOException, EmptyGeometryListException {
 		Node startNode = null;
 		Node endNode = null;
 		Coordinate startNearestPoint = null;
@@ -91,13 +91,21 @@ public class Engine {
 		}
 		long st = System.currentTimeMillis();
 		
-		ArrayList<Node> resultPath = findPath(startNode, endNode);
+		RouteTracker routeTracker = null;
+		if(trackRoute) {
+			routeTracker = new RouteTracker();
+		}
+
+		ArrayList<Node> resultPath = findPath(startNode, endNode, routeTracker);
 		
 		long et = System.currentTimeMillis();
+		double searchTime = (et - st) / 1000.0;
 		
-		log.info("탐색 완료 시간 - " + (et-st) / 1000.0);
+		log.info("탐색 완료 시간 - " + searchTime);
 		
-		return resultPath;
+		RouteSearchResult result = new RouteSearchResult(resultPath, routeTracker, searchTime);
+		
+		return result;
 	}
 	
 	/**
@@ -110,7 +118,7 @@ public class Engine {
 	 * @return 최단 경로에 포함된 노드 리스트(순서대로)
 	 * @throws IOException 
 	 */
-	private ArrayList<Node> findPath(Node startNode, Node endNode) throws IOException {
+	private ArrayList<Node> findPath(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
 	    // fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
 	    PriorityQueue<Node> openList = new PriorityQueue<Node>(Comparator.comparingDouble(c -> c.getFCost()));
 	    // 이미 방문한 노드 집합
@@ -138,16 +146,19 @@ public class Engine {
 	    while(!openList.isEmpty()) {
 	        // fCost가 가장 낮은 노드를 꺼냄
 	        Node minNode = openList.poll();
-	        // Cost minNodeCost = costList.get(minNode.getNode());
-
+	        
+			if(routeTracker != null) {
+				routeTracker.addCoordinate(minNode.getCoordinate());
+			}
+			
 	        // 도착 노드에 도달하면 탐색 종료
 	        if(minNode.equals(endNode)) {
 				break;
 	        }
-
+			
 	        // 현재 노드를 closeList에 추가
 	        closeList.add(minNode);
-
+			
 	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
 	        for(Edge edge : getConnectedEdges(edgeList, minNode)) {
 				Node storeNode = store.readNode(edge.getTo());
@@ -155,12 +166,17 @@ public class Engine {
 				if(listNode == null) {
 					nodeList.put(storeNode.getId(), storeNode);
 				}
+				
 				Node toNode = listNode != null ? listNode : storeNode;
+				
 	            // 이미 방문한 노드는 건너뜀
 	            if(closeList.contains(toNode)) {
-	                continue;
+					continue;
 	            }
-
+				
+				if(routeTracker != null) {
+					routeTracker.addCoordinate(toNode.getCoordinate());
+				}
 	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
 	            double newDist = minNode.getGCost() + edge.getDistance();
 	            // openList에 없고, 더 짧은 경로라면 갱신

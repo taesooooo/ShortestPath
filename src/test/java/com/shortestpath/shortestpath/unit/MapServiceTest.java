@@ -2,9 +2,12 @@ package com.shortestpath.shortestpath.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,11 +19,14 @@ import org.mockito.MockitoAnnotations;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
+import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
+import com.shortestpath.shortestpath.core.pathengine.RouteTracker;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
+import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTrackDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
 import com.shortestpath.shortestpath.service.MapServiceImpl;
-import com.shortestpath.shortestpath.core.pathengine.Engine;
 
 class MapServiceTest {
 
@@ -47,8 +53,8 @@ class MapServiceTest {
                 .build()
         );
 
-        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
-            .thenReturn(testNodes);
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
+            .thenReturn(new RouteSearchResult(testNodes, 0.0));
 
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
 
@@ -86,8 +92,8 @@ class MapServiceTest {
                 .build()
         );
 
-        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
-            .thenReturn(emptyNodes);
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
+            .thenReturn(new RouteSearchResult(emptyNodes, 0.0));
 
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
 
@@ -106,7 +112,7 @@ class MapServiceTest {
                 .build()
         );
 
-        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
             .thenThrow(new EmptyGeometryListException("지오메트리를 가져올 수 없습니다."));
 
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
@@ -135,9 +141,9 @@ class MapServiceTest {
                 .build()
         );
 
-        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
-            .thenReturn(testNodes1)
-            .thenReturn(testNodes2);
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
+            .thenReturn(new RouteSearchResult(testNodes1, 0.0))
+            .thenReturn(new RouteSearchResult(testNodes2, 0.0));
 
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
 
@@ -169,8 +175,8 @@ class MapServiceTest {
                 .build()
         );
 
-        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
-            .thenReturn(testNodes1)
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
+            .thenReturn(new RouteSearchResult(testNodes1, 0.0))
             .thenThrow(new EmptyGeometryListException("지오메트리를 가져올 수 없습니다."));
 
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
@@ -195,8 +201,8 @@ class MapServiceTest {
                 .build()
         );
 
-        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class)))
-            .thenReturn(singleNode);
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
+            .thenReturn(new RouteSearchResult(singleNode, 0.0));
 
         // When
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
@@ -205,6 +211,46 @@ class MapServiceTest {
         assertThat(responseFindPathDto.get(0).getRouteList())
             .hasSize(1)
             .containsExactly(new Coordinate(2, 2));
+    }
+
+    @Test
+    @DisplayName("경로탐색추적 - 정상")
+    public void searchRouteTrackTest() throws Exception {
+        ArrayList<Node> testNodes = createSimpleTestNodes();
+        LinkedHashSet<Coordinate> testTrackCoordinates = new LinkedHashSet<>(Arrays.asList(
+            new Coordinate(0, 0),
+            new Coordinate(1, 1),
+            new Coordinate(2, 2),
+            new Coordinate(3, 3)
+        ));
+
+        when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(true)))
+            .thenReturn(new RouteSearchResult(testNodes, new RouteTracker(testTrackCoordinates), 0.0));
+
+        RequestFindPathDto requestDto = RequestFindPathDto.builder()
+            .start(new Coordinate(0, 0))
+            .end(new Coordinate(3, 3))
+            .build();
+
+        ResponeseRouteSearchTrackDto responseDto = mapService.searchRouteTrack(requestDto);
+
+        assertThat(responseDto.getRouteCoordinates())
+            .as("정상적인 경로 반환을 하지 못했습니다.")
+            .containsExactly(
+                new Coordinate(0, 0),
+                new Coordinate(1, 1),
+                new Coordinate(2, 2),
+                new Coordinate(3, 3)
+            );
+
+        assertThat(responseDto.getVisitedCoordinates())
+            .as("정상적인 탐색 좌표 반환을 하지 못했습니다.")
+            .containsExactly(
+                new Coordinate(0, 0),
+                new Coordinate(1, 1),
+                new Coordinate(2, 2),
+                new Coordinate(3, 3)
+            );
     }
 
     /**

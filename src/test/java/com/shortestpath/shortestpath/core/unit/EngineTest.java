@@ -1,15 +1,21 @@
 package com.shortestpath.shortestpath.core.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.locationtech.jts.geom.Envelope;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -17,7 +23,7 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 
@@ -60,6 +66,29 @@ class EngineTest {
 		ArrayList<Node> path = (ArrayList<Node>)engine.shortestPathFind(startNode, endNode);
 		
 		assertThat(path).isNull();
+	}
+	
+	@Test
+	@DisplayName("경로탐색추척 - 정상")
+	public void findPathWithTrackingTest() throws IOException {	
+		DataStore store = testDataStore();
+		Engine engine = new Engine(store, dataProvider);
+
+		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+				.thenReturn(List.of(1))
+				.thenReturn(List.of(4));
+		Node startNode = store.readNode(1);
+		Node endNode = store.readNode(4);
+
+		RouteSearchResult result = engine.shortestPathFind(startNode.getCoordinate(), endNode.getCoordinate(), true);
+		ArrayList<Node> path = result.getRouteNode();
+		LinkedHashSet<Coordinate> trackCoordinates = result.getRouteTracker().getRouteCoordinates();
+		
+		assertThat(path).extracting(Node::getId)
+				.containsExactly(1,3,4);
+
+		assertThat(trackCoordinates).extracting(Coordinate::getLatitude, Coordinate::getLongitude)
+				.containsExactly(tuple(1.0, 1.0), tuple(2.0, 2.0), tuple(1.0, 4.0));
 	}
 	
 	// @Test

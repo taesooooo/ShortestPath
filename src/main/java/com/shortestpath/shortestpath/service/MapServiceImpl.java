@@ -13,7 +13,9 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
+import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTrackDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
 
 import lombok.RequiredArgsConstructor;
@@ -36,7 +38,9 @@ public class MapServiceImpl implements MapService {
 			Coordinate endCoordinate = route.getEnd();
 			
 			try {
-				List<Node> pathList = engine.shortestPathFind(startCoordinate, endCoordinate);
+				RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+			
+				List<Node> pathList = searchResult.getRouteNode();
 				
 				resultList.add(ResponseFindPathDto.builder()
 					.start(startCoordinate)
@@ -58,6 +62,23 @@ public class MapServiceImpl implements MapService {
 		return resultList;
 	}
 	
+	
+	@Override
+	public ResponeseRouteSearchTrackDto searchRouteTrack(RequestFindPathDto searchRouteDto) throws EmptyGeometryListException, IOException {
+		Coordinate startCoordinate = searchRouteDto.getStart();
+		Coordinate endCoordinate = searchRouteDto.getEnd();
+
+		RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, true);
+
+		return ResponeseRouteSearchTrackDto.builder()
+				.start(startCoordinate)
+				.end(endCoordinate)
+				.routeCoordinates(getNodeCoordinate(searchResult.getRouteNode()))
+				.visitedCoordinates(searchResult.getRouteTracker().getRouteCoordinates())
+				.build();
+	}
+
+
 	private ArrayList<Coordinate> getNodeCoordinate(List<Node> pathList) {
 		if(pathList == null || pathList.isEmpty()) {
 			return new ArrayList<Coordinate>();

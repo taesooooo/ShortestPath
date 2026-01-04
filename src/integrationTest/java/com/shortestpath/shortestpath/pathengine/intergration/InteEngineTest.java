@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
@@ -66,7 +67,8 @@ public class InteEngineTest {
         Coordinate startCoordinate = new Coordinate(33.2403307, 126.5624673);
 	    Coordinate endCoordinate = new Coordinate(33.2417782, 126.5647375);
         
-        ArrayList<Node> findPath = engine.shortestPathFind(startCoordinate, endCoordinate);
+        RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+        ArrayList<Node> findPath = searchResult.getRouteNode();
         
         findPath.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
 
@@ -83,9 +85,9 @@ public class InteEngineTest {
         Coordinate startCoordinate = new Coordinate(33.2601044, 126.56571449999998);
         Coordinate endCoordinate = new Coordinate(33.257629, 126.5662567);
         
-        ArrayList<Node> findPath = engine.shortestPathFind(startCoordinate, endCoordinate);
+        RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
         
-        assertThat(findPath).isNull();
+        assertThat(searchResult.getRouteNode()).isNull();
     }
 
 }

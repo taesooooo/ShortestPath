@@ -28,7 +28,7 @@ public class NodeIndexInsertRepository {
     @Transactional
     public void insertNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) {
         int batchSize = 10000;
-        String sql = "INSERT INTO node_index (id, coordinate, offset) VALUES (?, POINT(?, ?), ?)";
+        String sql = "INSERT INTO node_index (id, coordinate, offset) VALUES (?, ST_SRID(POINT(?, ?), 4326), ?)";
         List<Map.Entry<Coordinate, IndexInfo>> entries = new ArrayList<>(indexMap.entrySet());
         
         for (int i = 0; i < entries.size(); i += batchSize) {
