@@ -1,27 +1,24 @@
 package com.shortestpath.shortestpath.core.pathengine;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.List;
 
 public class RouteTracker {
-    private LinkedHashSet<Coordinate> routeCoordinates;
+    private List<TraceRoute> trackRoutes = new ArrayList<TraceRoute>();
 
     public RouteTracker() {
-        this.routeCoordinates = new LinkedHashSet<>();
+
     }
 
-    public RouteTracker(LinkedHashSet<Coordinate> routeCoordinates) {
-        this.routeCoordinates = routeCoordinates;
+    public RouteTracker(List<TraceRoute> trackRoutes) {
+        this.trackRoutes = trackRoutes;
     }
 
-    public void addCoordinate(Coordinate coordinate) {
-        if (routeCoordinates == null) {
-            routeCoordinates = new LinkedHashSet<>();
-        }
-        routeCoordinates.add(coordinate);
+    public List<TraceRoute> getTrackRoutes() {
+        return trackRoutes;
     }
 
-    public LinkedHashSet<Coordinate> getRouteCoordinates() {
-        return routeCoordinates;
+    public void addTraceRoute(TraceRoute traceRoute) {
+        this.trackRoutes.add(traceRoute);
     }
 }

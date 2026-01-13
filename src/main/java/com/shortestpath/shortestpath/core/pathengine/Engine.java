@@ -89,6 +89,7 @@ public class Engine {
 			// endNode = findNearestNode(fromNode, toNode, endNearestPoint);
 			endNode = nearestNode;
 		}
+		log.info("노드 탐색 완료 / 경로 탐색 시작");
 		long st = System.currentTimeMillis();
 		
 		RouteTracker routeTracker = null;
@@ -144,13 +145,15 @@ public class Engine {
 
 	    // A* 탐색 루프
 	    while(!openList.isEmpty()) {
-	        // fCost가 가장 낮은 노드를 꺼냄
+			// fCost가 가장 낮은 노드를 꺼냄
 	        Node minNode = openList.poll();
-	        
-			if(routeTracker != null) {
-				routeTracker.addCoordinate(minNode.getCoordinate());
-			}
 			
+			TraceRoute traceRoute = null;
+			if(routeTracker != null) {
+				traceRoute = new TraceRoute(minNode.getCoordinate());
+				routeTracker.addTraceRoute(traceRoute);
+			}
+
 	        // 도착 노드에 도달하면 탐색 종료
 	        if(minNode.equals(endNode)) {
 				break;
@@ -174,8 +177,8 @@ public class Engine {
 					continue;
 	            }
 				
-				if(routeTracker != null) {
-					routeTracker.addCoordinate(toNode.getCoordinate());
+				if(routeTracker != null && traceRoute != null) {
+					traceRoute.addChild(toNode.getCoordinate());
 				}
 	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
 	            double newDist = minNode.getGCost() + edge.getDistance();

@@ -2,6 +2,7 @@ package com.shortestpath.shortestpath.common.converter;
 
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 
@@ -16,7 +17,7 @@ public class CoordinateConverter implements AttributeConverter<Coordinate, Point
             return null;
         }
         org.locationtech.jts.geom.Coordinate jtsCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
-        return new GeometryFactory().createPoint(jtsCoordinate);
+        return new GeometryFactory(new PrecisionModel(), 4326).createPoint(jtsCoordinate);
     }
 
     @Override

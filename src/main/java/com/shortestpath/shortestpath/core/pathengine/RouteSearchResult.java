@@ -7,7 +7,6 @@ public class RouteSearchResult {
     private RouteTracker routeTracker;
     private double searchTime;
     
-    
     public RouteSearchResult(ArrayList<Node> routeNode, double searchTime) {
         this.routeNode = routeNode;
         this.searchTime = searchTime;

@@ -15,7 +15,7 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
-import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTrackDto;
+import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
 
 import lombok.RequiredArgsConstructor;
@@ -64,17 +64,17 @@ public class MapServiceImpl implements MapService {
 	
 	
 	@Override
-	public ResponeseRouteSearchTrackDto searchRouteTrack(RequestFindPathDto searchRouteDto) throws EmptyGeometryListException, IOException {
+	public ResponeseRouteSearchTraceDto searchRouteTrack(RequestFindPathDto searchRouteDto) throws EmptyGeometryListException, IOException {
 		Coordinate startCoordinate = searchRouteDto.getStart();
 		Coordinate endCoordinate = searchRouteDto.getEnd();
 
 		RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, true);
 
-		return ResponeseRouteSearchTrackDto.builder()
+		return ResponeseRouteSearchTraceDto.builder()
 				.start(startCoordinate)
 				.end(endCoordinate)
 				.routeCoordinates(getNodeCoordinate(searchResult.getRouteNode()))
-				.visitedCoordinates(searchResult.getRouteTracker().getRouteCoordinates())
+				.traceRoutes(searchResult.getRouteTracker().getTrackRoutes())
 				.build();
 	}
 

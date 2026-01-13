@@ -1,9 +1,10 @@
 package com.shortestpath.shortestpath.dto.response;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.List;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,10 +15,10 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ResponeseRouteSearchTrackDto {
+public class ResponeseRouteSearchTraceDto {
     private Coordinate start;
     private Coordinate end;
     private ArrayList<Coordinate> routeCoordinates;
-    private LinkedHashSet<Coordinate> visitedCoordinates;
+    private List<TraceRoute> traceRoutes; 
     private double searchTime;
 }

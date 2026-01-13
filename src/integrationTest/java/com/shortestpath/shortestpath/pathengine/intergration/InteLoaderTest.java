@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,15 +22,22 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
-
-import jakarta.transaction.Transactional;
+import com.shortestpath.shortestpath.repository.NodeIndexRepository;
 
 @SpringBootTest
 @ActiveProfiles("inte")
-@Transactional
+// @Transactional
 public class InteLoaderTest {
     @Autowired
     private NodeProvider nodeIndexProvider;
+
+    @Autowired
+    private NodeIndexRepository repository;
+
+    @AfterEach
+    public void clear() {
+        repository.deleteAll();
+    }
 
     @Test
     @DisplayName("Loader 데이터 추출 통합 테스트 - 특정 노드에 이웃 노드를 제대로 연결이 되어있는지 확인")
