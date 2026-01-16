@@ -24,4 +24,12 @@ public class GeometryUtil {
         GeometryFactory geometryFactory = new GeometryFactory();
         return new WKTWriter().write(geometryFactory.toGeometry(envelope));
     }
+
+	public static long coordinateToLong(org.locationtech.jts.geom.Coordinate coordinate) {
+		long lon = (long)(coordinate.getX() * 10000000);
+		long lat = (long)(coordinate.getY() * 10000000);
+
+		// 비트 패킹
+		return (lon << 32) | (lat & 0xFFFFFFFFL);
+	}
 }

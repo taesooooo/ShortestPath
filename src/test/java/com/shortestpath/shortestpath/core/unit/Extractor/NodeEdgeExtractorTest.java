@@ -123,7 +123,7 @@ public class NodeEdgeExtractorTest  {
          ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
          ArgumentCaptor<Node> nodeCaptor2 = ArgumentCaptor.forClass(Node.class);
          verify(testStore, times(6)).saveNode(nodeCaptor.capture());
-         verify(testStore, times(12)).saveNode(nodeCaptor2.capture(), anyLong());
+         verify(testStore, times(6)).saveNode(nodeCaptor2.capture(), anyLong());
 
          assertThat(nodeCaptor.getAllValues()).isNotEmpty()
                  .extracting(Node::getId, node -> node.getCoordinate().getLatitude(),
