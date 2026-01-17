@@ -2,6 +2,7 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -11,8 +12,10 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeEdgeItem;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeEdgeTaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeCSVItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 public class NodeEdgeSave implements Runnable {
     private static Logger logger = LoggerFactory.getLogger(NodeEdgeSave.class);
@@ -21,30 +24,31 @@ public class NodeEdgeSave implements Runnable {
     long[] idArray;
     boolean[] nodeCreated;
     int[] lastEdgeOffsetArray;
-    private BlockingQueue<NodeEdgeTaskItem> nodeEdgeQueue;
+    private BlockingQueue<TaskItem> nodeEdgeQueue;
+    private BlockingQueue<TaskItem> csvQueue;
     private ProgressStatus progressStatus;
+    private AtomicBoolean shouldContinue;
 
-    public NodeEdgeSave(DataStore dataStore, long[] idArray, boolean[] nodeCreated, int[] lastEdgeOffsetArray, BlockingQueue<NodeEdgeTaskItem> nodeEdgeQueue, ProgressStatus progressStatus) {
+    public NodeEdgeSave(DataStore dataStore, long[] idArray, boolean[] nodeCreated, int[] lastEdgeOffsetArray, BlockingQueue<TaskItem> nodeEdgeQueue, BlockingQueue<TaskItem> csvQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
         this.dataStore = dataStore;
         this.idArray = idArray;
         this.nodeCreated = nodeCreated;
         this.lastEdgeOffsetArray = lastEdgeOffsetArray;
         this.nodeEdgeQueue = nodeEdgeQueue;
+        this.csvQueue = csvQueue;
         this.progressStatus = progressStatus;
+        this.shouldContinue = shouldContinue;
     }
 
     @Override
     public void run() {
         logger.info("노드/엣지 저장 시작");
         int saveCount = 0;
-        while(true) {
+        while(shouldContinue.get()) {
             try {
-                if(Thread.currentThread().isInterrupted()) {
-                    break;
-                }
-
-                NodeEdgeTaskItem item = nodeEdgeQueue.take();
+                TaskItem item = nodeEdgeQueue.take();
                 if(item instanceof EndItem) {
+                    csvQueue.put(new EndItem());
                     logger.info("노드 엣지 저장 완료");
                     break;
                 }
@@ -64,6 +68,14 @@ public class NodeEdgeSave implements Runnable {
                     updateNextEdgeOffset(nodeA, edgeA, edgeOffsetA);
                     updateNextEdgeOffset(nodeB, edgeB, edgeOffsetB);
                     
+                    // CSV 데이터 전달
+                    if (nodeA != null) {
+                        csvQueue.put(new NodeCSVItem(nodeA.getId(), idArray[nodeA.getId()], nodeOffsetA));
+                    }
+                    if (nodeB != null) {
+                        csvQueue.put(new NodeCSVItem(nodeB.getId(), idArray[nodeB.getId()], nodeOffsetB));
+                    }
+                    
                     // 진행률 업데이트
                     saveCount++;
                     if (progressStatus != null) {
@@ -72,14 +84,17 @@ public class NodeEdgeSave implements Runnable {
                 }
             }
             catch(InterruptedException e) {
-                logger.info("노드/엣지 저장 - 인터럽트 되어 종료되었습니다.");
+                logger.info("노드/엣지 저장 - 인터럽트 발생하여 종료합니다.");
                 Thread.currentThread().interrupt();
-                break;
+                shouldContinue.set(false);
             }
             catch(IOException e) {
-                logger.info("노드/엣지 저장 - 저장 중 문제가 발생하여 종료되었습니다.", e);
-                Thread.currentThread().interrupt();
-                break;
+                logger.error("노드/엣지 저장 - 저장 중 문제가 발생하여 종료되었습니다.", e);
+                shouldContinue.set(false);
+            }
+            catch(Exception e) {
+                logger.error("노드/엣지 저장 중 예외 발생", e);
+                shouldContinue.set(false);
             }
         }
     }

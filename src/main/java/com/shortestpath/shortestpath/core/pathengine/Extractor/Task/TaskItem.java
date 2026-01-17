@@ -1,5 +1,5 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor.Task;
 
-public interface FeatureTaskItem {
+public interface TaskItem extends Terminatable {
     
 }

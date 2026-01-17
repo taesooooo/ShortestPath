@@ -3,7 +3,7 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor.Task;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 
-public class NodeEdgeItem implements NodeEdgeTaskItem {
+public class NodeEdgeItem implements TaskItem {
     private Node nodeA;
     private Node nodeB;
     private Edge edgeA;

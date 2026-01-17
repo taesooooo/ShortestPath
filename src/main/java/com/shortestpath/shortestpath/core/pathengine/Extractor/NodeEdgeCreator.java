@@ -2,6 +2,7 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.geotools.api.feature.simple.SimpleFeature;
 import org.geotools.api.feature.simple.SimpleFeatureType;
@@ -16,7 +17,7 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeEdgeItem;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeEdgeTaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 public class NodeEdgeCreator implements Runnable {
@@ -25,30 +26,28 @@ public class NodeEdgeCreator implements Runnable {
     private long[] idArray;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
     private boolean[] nodeCreated;
-    private BlockingQueue<NodeEdgeTaskItem> nodeEdgeQueue;
+    private BlockingQueue<TaskItem> nodeEdgeQueue;
     private int nodeIndex = 0;
     private int edgeIndex = 0;
     private ProgressStatus progressStatus;
+    private AtomicBoolean shouldContinue;
 
     public NodeEdgeCreator(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, long[] idArray,
-            boolean[] nodeCreated, BlockingQueue<NodeEdgeTaskItem> nodeEdgeQueue, ProgressStatus progressStatus) {
+            boolean[] nodeCreated, BlockingQueue<TaskItem> nodeEdgeQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
         this.collection = collection;
         this.idArray = idArray;
         this.nodeCreated = nodeCreated;
         this.nodeEdgeQueue = nodeEdgeQueue;
         this.progressStatus = progressStatus;
+        this.shouldContinue = shouldContinue;
     }
 
     @Override
     public void run() {
         int creatorCount = 0;
         try (FeatureIterator<SimpleFeature> iterator = collection.features()) {
-            while (iterator.hasNext()) {
+            while (iterator.hasNext() && shouldContinue.get()) {
                 
-                if(Thread.currentThread().isInterrupted()) {
-                    break;
-                }
-
                 SimpleFeature feature = iterator.next();
                 Geometry geo = (Geometry) feature.getDefaultGeometry();
 
@@ -90,8 +89,13 @@ public class NodeEdgeCreator implements Runnable {
             logger.info("노드/엣지 생성 완료");
         } 
         catch (InterruptedException e) {
-            logger.info("노드/엣지 생성 - 생성 중 인터럽트가 발생하여 종료합니다.", e);
+            logger.info("노드/엣지 생성 - 인터럽트 발생하여 종료합니다.");
             Thread.currentThread().interrupt();
+            shouldContinue.set(false);
+        }
+        catch (Exception e) {
+            logger.error("노드/엣지 생성 중 예외 발생", e);
+            shouldContinue.set(false);
         }
 
     }
