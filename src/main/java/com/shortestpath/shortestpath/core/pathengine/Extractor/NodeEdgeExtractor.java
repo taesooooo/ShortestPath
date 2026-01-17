@@ -72,7 +72,7 @@ public class NodeEdgeExtractor implements Extractor {
 		List<Runnable> tasks = Arrays.asList(
 			new NodeEdgeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, progressStatus, shouldContinue),
 			new NodeEdgeSave(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, csvQueue, progressStatus, shouldContinue),
-			new NodeCSVWriter(csvQueue, file.toPath().getParent().toString(), progressStatus, idArray.length, shouldContinue)
+			new NodeCSVWriter(csvQueue, file.toPath().getParent().resolve("node_index.csv").toString(), progressStatus, idArray.length, shouldContinue)
 		);
 		List<Thread> workers = tasks.stream().map((task) -> {
 			return new Thread(task, task.getClass().getSimpleName());
