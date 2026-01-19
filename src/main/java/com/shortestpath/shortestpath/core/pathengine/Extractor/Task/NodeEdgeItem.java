@@ -1,19 +1,16 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor.Task;
 
-import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 
 public class NodeEdgeItem implements TaskItem {
     private Node nodeA;
     private Node nodeB;
-    private Edge edgeA;
-    private Edge EdgeB;
 
-    public NodeEdgeItem(Node nodeA, Node nodeB, Edge edgeA, Edge edgeB) {
+
+    public NodeEdgeItem(Node nodeA, Node nodeB) {
         this.nodeA = nodeA;
         this.nodeB = nodeB;
-        this.edgeA = edgeA;
-        EdgeB = edgeB;
     }
 
     public Node getNodeA() {
@@ -22,13 +19,5 @@ public class NodeEdgeItem implements TaskItem {
 
     public Node getNodeB() {
         return nodeB;
-    }
-
-    public Edge getEdgeA() {
-        return edgeA;
-    }
-
-    public Edge getEdgeB() {
-        return EdgeB;
     }
 }

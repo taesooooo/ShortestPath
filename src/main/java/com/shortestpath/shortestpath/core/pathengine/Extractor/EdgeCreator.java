@@ -1,6 +1,7 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
@@ -8,8 +9,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeEdgeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
@@ -17,25 +20,24 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeCSVItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
-public class NodeEdgeSave implements Runnable {
-    private static Logger logger = LoggerFactory.getLogger(NodeEdgeSave.class);
+public class EdgeCreator implements Runnable {
+    private static Logger logger = LoggerFactory.getLogger(EdgeCreator.class);
 
     private DataStore dataStore;
     long[] idArray;
     boolean[] nodeCreated;
     int[] lastEdgeOffsetArray;
     private BlockingQueue<TaskItem> nodeEdgeQueue;
-    private BlockingQueue<TaskItem> csvQueue;
     private ProgressStatus progressStatus;
     private AtomicBoolean shouldContinue;
+    private int edgeIndex = 0;
 
-    public NodeEdgeSave(DataStore dataStore, long[] idArray, boolean[] nodeCreated, int[] lastEdgeOffsetArray, BlockingQueue<TaskItem> nodeEdgeQueue, BlockingQueue<TaskItem> csvQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
+    public EdgeCreator(DataStore dataStore, long[] idArray, boolean[] nodeCreated, int[] lastEdgeOffsetArray, BlockingQueue<TaskItem> nodeEdgeQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
         this.dataStore = dataStore;
         this.idArray = idArray;
         this.nodeCreated = nodeCreated;
         this.lastEdgeOffsetArray = lastEdgeOffsetArray;
         this.nodeEdgeQueue = nodeEdgeQueue;
-        this.csvQueue = csvQueue;
         this.progressStatus = progressStatus;
         this.shouldContinue = shouldContinue;
     }
@@ -43,12 +45,10 @@ public class NodeEdgeSave implements Runnable {
     @Override
     public void run() {
         logger.info("노드/엣지 저장 시작");
-        int saveCount = 0;
         while(shouldContinue.get()) {
             try {
                 TaskItem item = nodeEdgeQueue.take();
                 if(item instanceof EndItem) {
-                    csvQueue.put(new EndItem());
                     logger.info("노드 엣지 저장 완료");
                     break;
                 }
@@ -56,31 +56,19 @@ public class NodeEdgeSave implements Runnable {
                     NodeEdgeItem saveTaskItem = (NodeEdgeItem) item;
                     Node nodeA = saveTaskItem.getNodeA();
                     Node nodeB = saveTaskItem.getNodeB();
-                    Edge edgeA = saveTaskItem.getEdgeA();
-                    Edge edgeB = saveTaskItem.getEdgeB();
-    
-                    long edgeOffsetA = dataStore.saveEdge(edgeA);
-                    long edgeOffsetB = dataStore.saveEdge(edgeB);
+
+                    long edgeOffsetA = createAndSaveEdge(nodeA, nodeB);
+                    long edgeOffsetB = createAndSaveEdge(nodeB, nodeA);
                     
-                    long nodeOffsetA = saveNode(nodeA, edgeOffsetA);
-                    long nodeOffsetB = saveNode(nodeB, edgeOffsetB);
+                    // 처음 생성된 노드라면 엣지 시작 오프셋 설정하고 다시 저장
+                    updateNodeStartEdgeIfNeeded(nodeA, edgeOffsetA);
+                    updateNodeStartEdgeIfNeeded(nodeB, edgeOffsetB);
                     
-                    updateNextEdgeOffset(nodeA, edgeA, edgeOffsetA);
-                    updateNextEdgeOffset(nodeB, edgeB, edgeOffsetB);
-                    
-                    // CSV 데이터 전달
-                    if (nodeA != null) {
-                        csvQueue.put(new NodeCSVItem(nodeA.getId(), idArray[nodeA.getId()], nodeOffsetA));
-                    }
-                    if (nodeB != null) {
-                        csvQueue.put(new NodeCSVItem(nodeB.getId(), idArray[nodeB.getId()], nodeOffsetB));
-                    }
-                    
+                    updateNextEdgeOffset(nodeA.getId(), edgeOffsetA);
+                    updateNextEdgeOffset(nodeB.getId(), edgeOffsetB);
+
                     // 진행률 업데이트
-                    saveCount++;
-                    if (progressStatus != null) {
-                        progressStatus.progress(TaskType.NODE_EDGE_SAVE, idArray.length, saveCount);
-                    }
+
                 }
             }
             catch(InterruptedException e) {
@@ -99,17 +87,14 @@ public class NodeEdgeSave implements Runnable {
         }
     }
 
-    private int saveNode(Node node, long edgeOffset) throws IOException {
-        if(node != null) {
+    private void updateNodeStartEdgeIfNeeded(Node node, long edgeOffset) throws IOException {
+        if (node != null && node.getStartEdgeOffset() == -1) {
             node.setStartEdgeOffset((int)edgeOffset);
-            return dataStore.saveNode(node);
+            dataStore.overwriteNode(node, node.getId());
         }
-
-        return 0;
     }
 
-    private void updateNextEdgeOffset(Node node, Edge edge, long edgeOffset) throws IOException {
-        int nodeId = node != null ? node.getId() : edge.getFrom();
+    private void updateNextEdgeOffset(int nodeId, long edgeOffset) throws IOException {
         int lastEdgeOffset = lastEdgeOffsetArray[nodeId];
 
         if(lastEdgeOffset != -1) {
@@ -118,5 +103,10 @@ public class NodeEdgeSave implements Runnable {
             dataStore.overwriteEdge(readEdge, lastEdgeOffset);
         }
         lastEdgeOffsetArray[nodeId] = (int)edgeOffset;
+    }
+
+    private long createAndSaveEdge(Node nodeA, Node nodeB) throws IOException {
+        Edge edge = new Edge(edgeIndex++, nodeA.getId(), nodeB.getId(), nodeA.getCoordinate().calculateDistanceToTarget(nodeB.getCoordinate()), -1);
+        return dataStore.saveEdge(edge);
     }
 }

@@ -1,16 +1,26 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
-
-@AllArgsConstructor
-@Getter
-@Setter
-@ToString
 public class IndexInfo {
-    public int id;
-    public int nodeIndex;
-    public int lastEdgeIndex;
+    public int nodeId;
+    public long coordinate;
+    public int offset;
+
+    public IndexInfo(int nodeId, long coordinate, int offset) {
+        this.nodeId = nodeId;
+        this.coordinate = coordinate;
+        this.offset = offset;
+    }
+
+    public int getNodeId() {
+        return nodeId;
+    }
+
+    public long getCoordinate() {
+        return coordinate;
+    }
+
+    public int getOffset() {
+        return offset;
+    }
+
 }

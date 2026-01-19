@@ -29,8 +29,8 @@ public class JpaNodeProvider implements NodeProvider{
     private final NodeIndexRepository nodeIndexRepository;
     
     @Override
-    public void insertNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) {
-        NodeIndexInsertRepository.insertNodeIndex(indexMap);
+    public void insertNodeIndex(List<IndexInfo> indexList) {
+        NodeIndexInsertRepository.insertNodeIndex(indexList);
     }
 
     @Override

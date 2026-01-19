@@ -8,9 +8,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
-
-import org.locationtech.jts.index.strtree.STRtree;
+import java.util.List;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
@@ -270,8 +268,8 @@ public class HybridDataStore implements DataStore {
     }
 
     @Override
-    public void saveNodeIndex(HashMap<Coordinate, IndexInfo> indexMap) throws IOException {
-        this.nodeIndexProvider.insertNodeIndex(indexMap);
+    public void saveNodeIndex(List<IndexInfo> indexList) throws IOException {
+        this.nodeIndexProvider.insertNodeIndex(indexList);
     }
 
     // @Override

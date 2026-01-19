@@ -2,14 +2,14 @@ package com.shortestpath.shortestpath.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.jdbc.DataJdbcTest;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -33,15 +33,14 @@ public class InterNodeIndexBatchRepositoryTest {
     @DisplayName("노드 인덱스 배치 저장 롤백 테스트")
     public void batchInsertNodeIndexRollbackTest() {
         // 좌표와 인덱스 정보를 저장할 해시맵 생성
-        HashMap<Coordinate, IndexInfo> indexMap = new HashMap<>();
+        List<IndexInfo> indexMap = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            Coordinate coordinate = new Coordinate(37.5 + (i * 0.001), 127.0 + (i * 0.001));
             IndexInfo indexInfo = new IndexInfo(i, i, i);
-            indexMap.put(coordinate, indexInfo);
+            indexMap.add(indexInfo);
         }
 
         // 강제로 예외를 발생시키기 위한 데이터 
-        indexMap.put(null, null);
+        indexMap.add(null);
         
 
         // 테스트 시작

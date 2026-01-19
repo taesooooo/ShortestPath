@@ -18,26 +18,29 @@ import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeEdgeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
-public class NodeEdgeCreator implements Runnable {
-    private static Logger logger = LoggerFactory.getLogger(NodeEdgeCreator.class);
+import java.io.IOException;
+
+public class NodeCreator implements Runnable {
+    private static Logger logger = LoggerFactory.getLogger(NodeCreator.class);
     
     private long[] idArray;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
     private boolean[] nodeCreated;
     private BlockingQueue<TaskItem> nodeEdgeQueue;
-    private int nodeIndex = 0;
-    private int edgeIndex = 0;
+    private DataStore dataStore;
     private ProgressStatus progressStatus;
     private AtomicBoolean shouldContinue;
 
-    public NodeEdgeCreator(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, long[] idArray,
-            boolean[] nodeCreated, BlockingQueue<TaskItem> nodeEdgeQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
+    public NodeCreator(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, long[] idArray,
+            boolean[] nodeCreated, BlockingQueue<TaskItem> nodeEdgeQueue, DataStore dataStore, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
         this.collection = collection;
         this.idArray = idArray;
         this.nodeCreated = nodeCreated;
         this.nodeEdgeQueue = nodeEdgeQueue;
+        this.dataStore = dataStore;
         this.progressStatus = progressStatus;
         this.shouldContinue = shouldContinue;
     }
@@ -51,8 +54,8 @@ public class NodeEdgeCreator implements Runnable {
                 SimpleFeature feature = iterator.next();
                 Geometry geo = (Geometry) feature.getDefaultGeometry();
 
+                // 연속된 두 좌표를 쌍으로 읽기 (0-1, 1-2, 2-3, ...)
                 for (int i = 0; i < geo.getNumPoints() - 1; i++) {
-                    // int id = Integer.parseInt(feature.getAttribute("id").toString());
                     double x = geo.getCoordinates()[i].x;
                     double y = geo.getCoordinates()[i].y;
                     double nextX = geo.getCoordinates()[i + 1].x;
@@ -68,13 +71,11 @@ public class NodeEdgeCreator implements Runnable {
                     int indexA = Arrays.binarySearch(idArray, coordIdA);
                     int indexB = Arrays.binarySearch(idArray, coordIdB);
 
-                    Node nodeA = createNode(coordinateA, indexA);
-                    Node nodeB = createNode(coordinateB, indexB);
+                    // 노드 생성 및 저장
+                    Node nodeA = saveNode(coordinateA, indexA);
+                    Node nodeB = saveNode(coordinateB, indexB);
 
-                    Edge edge = createEdge(indexA, indexB, coordinateA, coordinateB);
-                    Edge reverseEdge = createEdge(indexB, indexA, coordinateB, coordinateA);
-
-                    nodeEdgeQueue.put(new NodeEdgeItem(nodeA, nodeB, edge, reverseEdge));
+                    nodeEdgeQueue.put(new NodeEdgeItem(nodeA, nodeB));
                     
                     // 진행률 업데이트
                     creatorCount++;
@@ -100,19 +101,18 @@ public class NodeEdgeCreator implements Runnable {
 
     }
 
-    private Node createNode(Coordinate coordinate, int nodeId) {
-        if(nodeCreated[(int)nodeId]) {
-            return null;
+    private Node saveNode(Coordinate coordinate, int nodeId) throws IOException {
+        // 이미 생성된 노드는 null 반환
+        if(nodeCreated[nodeId]) {
+            return dataStore.readNode(nodeId);
         }
 
+        // 노드 생성 및 저장
         Node node = new Node(nodeId, coordinate, -1, 0, 0, 0);
         nodeCreated[nodeId] = true;
 
+        // DataStore에 노드 저장
+        dataStore.saveNode(node);
         return node;
-    }
-
-    private Edge createEdge(int nodeIdA, int nodeIdB, Coordinate coordinateA, Coordinate coordinateB) {
-        return new Edge(edgeIndex++, nodeIdA, nodeIdB,
-                coordinateA.calculateDistanceToTarget(coordinateB), -1);
     }
 }

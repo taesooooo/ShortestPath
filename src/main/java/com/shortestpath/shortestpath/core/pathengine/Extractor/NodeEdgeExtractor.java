@@ -2,11 +2,14 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import org.geotools.api.data.FeatureSource;
 import org.geotools.api.data.FileDataStore;
@@ -17,6 +20,7 @@ import org.geotools.feature.FeatureCollection;
 import org.geotools.feature.FeatureIterator;
 import org.locationtech.jts.geom.Geometry;
 
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
@@ -27,8 +31,13 @@ import lombok.extern.slf4j.Slf4j;
 public class NodeEdgeExtractor implements Extractor {
 	private File file;
 	private DataStore store;
+	private boolean saveToDb;
 
 	public NodeEdgeExtractor(String filePath, DataStore dataStore) throws IOException {
+		this(filePath, dataStore, false);
+	}
+
+	public NodeEdgeExtractor(String filePath, DataStore dataStore, boolean saveToDb) throws IOException {
 		this.file = new File(filePath);
 		if (!file.exists()) {
 			// logger.error(filePath + " 위치에 파일이 존재 하지 않습니다.");
@@ -40,6 +49,7 @@ public class NodeEdgeExtractor implements Extractor {
 			throw new IllegalArgumentException("DataStore 객체는 null 일 수 없습니다.");
 		}
 
+		this.saveToDb = saveToDb;
 	}
 
 	@Override
@@ -66,14 +76,12 @@ public class NodeEdgeExtractor implements Extractor {
 		Arrays.fill(lastEdgeOffsetArray, -1);
 
 		BlockingQueue<TaskItem> nodeEdgeQueue = new LinkedBlockingQueue<TaskItem>(2000);
-		BlockingQueue<TaskItem> csvQueue = new LinkedBlockingQueue<TaskItem>(2000);
 		AtomicBoolean shouldContinue = new AtomicBoolean(true);
 
-		List<Runnable> tasks = Arrays.asList(
-			new NodeEdgeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, progressStatus, shouldContinue),
-			new NodeEdgeSave(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, csvQueue, progressStatus, shouldContinue),
-			new NodeCSVWriter(csvQueue, file.toPath().getParent().resolve("node_index.csv").toString(), progressStatus, idArray.length, shouldContinue)
-		);
+		List<Runnable> tasks = new ArrayList<>();
+		tasks.add(new NodeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, store, progressStatus, shouldContinue));
+		tasks.add(new EdgeCreator(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, progressStatus, shouldContinue));
+
 		List<Thread> workers = tasks.stream().map((task) -> {
 			return new Thread(task, task.getClass().getSimpleName());
 		}).toList();
@@ -92,7 +100,31 @@ public class NodeEdgeExtractor implements Extractor {
 			}
 		});
 
-		log.info("노드 인덱스 CSV파일로 저장되었습니다.");
+		// 모든 워커 스레드가 종료되면 idArray를 이용해 indexList 생성
+		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+
+		// DB 저장 여부 판단
+		if (saveToDb) {
+			// DB에 저장하는 경우
+			saveIndex(indexList);
+			log.info("노드 인덱스 DB 저장 완료");
+		} else {
+			// CSV 파일로 저장하는 경우
+			String csvFilePath = file.getParentFile().toPath().resolve("node_index.csv").toString();
+			NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath, indexList);
+			csvWriter.write();
+			log.info("노드 CSV 저장 완료: {}", csvFilePath);
+		}
+	}
+
+	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
+		ArrayList<IndexInfo> indexList = new ArrayList<>();
+		for (int nodeId = 0; nodeId < idArray.length; nodeId++) {
+			long coordinate = idArray[nodeId];
+			int offset = nodeId * DataStructureSizes.NODE_SIZE;
+			indexList.add(new IndexInfo(nodeId, coordinate, offset));
+		}
+		return indexList;
 	}
 
 	private long[] createIdArray(FeatureCollection<SimpleFeatureType, SimpleFeature> collection) throws IOException {
@@ -105,7 +137,7 @@ public class NodeEdgeExtractor implements Extractor {
 		while (iterator.hasNext()) {
 			SimpleFeature feature = iterator.next();
 			Geometry geo = (Geometry) feature.getDefaultGeometry();
-
+			
 			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
 				long coordinateId = GeometryUtil.coordinateToLong(coordinate);
 				if(count == nodeIdArray.length) {
@@ -129,6 +161,10 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 
 		return Arrays.copyOf(nodeIdArray, tempIndex);
+	}
+
+	private void saveIndex(ArrayList<IndexInfo> indexList) throws IOException {
+		store.saveNodeIndex(indexList);
 	}
 
 	@Override
