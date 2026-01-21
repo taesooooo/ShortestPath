@@ -22,4 +22,7 @@ public interface DataStore {
     // HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws Exception;
     int getNodeOffset(Coordinate coordinate);
     boolean hasExtractedData();
+
+    void allocateNodeFileSpace(long size) throws IOException;
+    void allocateEdgeFileSpace(long size) throws IOException;
 }

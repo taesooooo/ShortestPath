@@ -28,6 +28,7 @@ import org.locationtech.jts.geom.LineString;
 import org.mockito.MockedStatic;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeCreator;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.ProgressStatus;
@@ -107,7 +108,7 @@ public class NodeCreatorTest {
             idArray[1] = 2L;
             idArray[2] = 3L;
 
-            when(dataStore.readNode(1)).thenReturn(new Node(1, new Coordinate(37.1, 127.1), -1, 0, 0, 0));
+            when(dataStore.readNode(1 * DataStructureSizes.NODE_SIZE)).thenReturn(new Node(1, new Coordinate(37.1, 127.1), -1, 0, 0, 0));
 
             NodeCreator creator = new NodeCreator(collection, idArray, nodeCreated, nodeEdgeQueue, dataStore, null, shouldContinue);
 
@@ -304,7 +305,7 @@ public class NodeCreatorTest {
         collection.add(feature);
 
         DataStore mockDataStore = mock(DataStore.class);
-        when(mockDataStore.saveNode(any(Node.class))).thenThrow(new IOException("Test IOException"));
+        when(mockDataStore.saveNode(any(Node.class), anyLong())).thenThrow(new IOException("Test IOException"));
 
         try (MockedStatic<GeometryUtil> mockedUtil = mockStatic(GeometryUtil.class)) {
             mockedUtil.when(() -> GeometryUtil.coordinateToLong(any()))

@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
@@ -102,17 +103,18 @@ public class NodeCreator implements Runnable {
     }
 
     private Node saveNode(Coordinate coordinate, int nodeId) throws IOException {
-        // 이미 생성된 노드는 null 반환
-        if(nodeCreated[nodeId]) {
-            return dataStore.readNode(nodeId);
-        }
-
         // 노드 생성 및 저장
         Node node = new Node(nodeId, coordinate, -1, 0, 0, 0);
+        
+        // 이미 생성된 노드가 있다면 그냥 노드 반환
+        if(nodeCreated[nodeId]) {
+            return node;
+        }
+        
+        // DataStore에 노드 저장
+        dataStore.saveNode(node, nodeId * DataStructureSizes.NODE_SIZE);
         nodeCreated[nodeId] = true;
 
-        // DataStore에 노드 저장
-        dataStore.saveNode(node);
         return node;
     }
 }

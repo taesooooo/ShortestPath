@@ -72,8 +72,8 @@ public class Engine {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
 			Node nearestNode = findNearestNode(startCoordinate);
 			Edge nearestEdge = findNearestEdge(nearestNode, startCoordinate);
-			Node fromNode = store.readNode(nearestEdge.getFrom());
-			Node toNode = store.readNode(nearestEdge.getTo());
+			Node fromNode = store.readNode(nearestEdge.getFrom() * DataStructureSizes.NODE_SIZE);
+			Node toNode = store.readNode(nearestEdge.getTo() * DataStructureSizes.NODE_SIZE);
 			startNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), startCoordinate);
 
 			startNode = nearestNode;
@@ -83,8 +83,8 @@ public class Engine {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
 			Node nearestNode = findNearestNode(endCoordinate);
 			Edge nearestEdge = findNearestEdge(nearestNode, endCoordinate);
-			Node fromNode = store.readNode(nearestEdge.getFrom());
-			Node toNode = store.readNode(nearestEdge.getTo());
+			Node fromNode = store.readNode(nearestEdge.getFrom() * DataStructureSizes.NODE_SIZE);
+			Node toNode = store.readNode(nearestEdge.getTo() * DataStructureSizes.NODE_SIZE);
 			endNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), endCoordinate); 
 			// endNode = findNearestNode(fromNode, toNode, endNearestPoint);
 			endNode = nearestNode;
@@ -164,7 +164,7 @@ public class Engine {
 			
 	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
 	        for(Edge edge : getConnectedEdges(edgeList, minNode)) {
-				Node storeNode = store.readNode(edge.getTo());
+				Node storeNode = store.readNode(edge.getTo() * DataStructureSizes.NODE_SIZE);
 				Node listNode = nodeList.get(storeNode.getId());
 				if(listNode == null) {
 					nodeList.put(storeNode.getId(), storeNode);
@@ -279,14 +279,15 @@ public class Engine {
 		Envelope envelope = createSearchEnvelope(coordinate, 100);
 		List<Integer> nodeIdList = dataProvider.findNearestNodeId(envelope, coordinate);
 		ArrayList<Node> nodeList = new ArrayList<Node>();
+		Node n = null;
 
 		if(nodeIdList.isEmpty()) {
 			throw new EmptyGeometryListException("해당 좌표에 가까운 노드 데이터를 찾을 수 없습니다. 좌표 : " + coordinate.toString());
 		}
 
 		for(Integer nodeId : nodeIdList) {
-			Node n = store.readNode(nodeId);
-			nodeList.add(n);
+			Node node = store.readNode(nodeId * DataStructureSizes.NODE_SIZE);
+			nodeList.add(node);
 		}
 
 		// 후보 노드 중 거리가 제일 가까운 라인 검색
@@ -300,12 +301,16 @@ public class Engine {
 					minNode = node;
 				}
 			}
-			return minNode;
+
+			n = minNode;
 		}
 		else {
-			Node node = nodeList.get(0);
-			return node;
+			n = nodeList.get(0);
 		}
+
+		log.debug("가장 가까운 노드 ID : " + (n != null ? n.getId() : "null") + " / 좌표 : " + (n != null ? n.getCoordinate().toString() : "null"));
+
+		return n;
 	}
 
 	private Envelope createSearchEnvelope(Coordinate coordinate, double distance) {
@@ -339,7 +344,9 @@ public class Engine {
 		
 		// 노드에서 각 엣지의 도착 노드까지의 거리를 확인하여 가까운 엣지를 선택
 		for(Edge edge : edgeList) {
-			Node toNode = store.readNode(edge.getTo());
+			log.debug("엣지 - {}, {}, {}, {}", edge.getId(), edge.getFrom(), edge.getTo(), edge.getDistance());
+
+			Node toNode = store.readNode(edge.getTo() * DataStructureSizes.NODE_SIZE);
 			double distance = coordinate.calculateDistanceToTarget(toNode.getCoordinate());
 			if(distance < minDistance) {
 				minDistance = distance;
@@ -347,6 +354,8 @@ public class Engine {
 			}
 		}
 
+		log.debug("이웃 엣지 - {}, {}, {}, {}", nearestEdge.getId(), nearestEdge.getFrom(), nearestEdge.getTo(), nearestEdge.getDistance());
+		
 		return nearestEdge;
 	}
 	

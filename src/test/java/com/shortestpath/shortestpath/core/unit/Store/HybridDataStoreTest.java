@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
@@ -265,16 +266,16 @@ public class HybridDataStoreTest {
         HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
         int testId = 1;
-        int testFromOffset = 10;
-        int testToOffset = 20;
+        int testFromOffset = 1;
+        int testToOffset = 2;
         double testDistance = 30.5;
         int testNextEdgeOffset = 40;
 
         Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
 
-        store.saveEdge(edge, 20L);
+        store.saveEdge(edge, 24L);
 
-        Edge readEdge = store.readEdge(20L);
+        Edge readEdge = store.readEdge(1 * DataStructureSizes.EDGE_SIZE);
 
         assertThat(readEdge.getId()).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
         assertThat(readEdge.getFrom()).as("읽어온 Edge의 From값이 일치하지 않습니다.").isEqualTo(testFromOffset);
@@ -294,7 +295,7 @@ public class HybridDataStoreTest {
         
         HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
-        Node readNode = store.readNode(20L);
+        Node readNode = store.readNode(testNode.getId() * DataStructureSizes.NODE_SIZE);
 
         assertThat(readNode.getId()).as("읽어온 Node의 Id값이 일치하지 않습니다.").isEqualTo(testNode.getId());
         assertThat(readNode.getStartEdgeOffset()).as("읽어온 Node의 startEdgeOffset값이 일치하지 않습니다.").isEqualTo(testNode.getStartEdgeOffset());
@@ -314,7 +315,7 @@ public class HybridDataStoreTest {
         HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
 
-        Edge readEdge = store.readEdge(20L);
+        Edge readEdge = store.readEdge(testEdge.getId());
 
         assertThat(readEdge.getFrom()).as("읽어온 Edge의 From값이 일치하지 않습니다.").isEqualTo(testEdge.getFrom());
         assertThat(readEdge.getTo()).as("읽어온 Edge의 To값이 일치하지 않습니다.").isEqualTo(testEdge.getTo());
@@ -327,13 +328,13 @@ public class HybridDataStoreTest {
     private Object[] testFileCreate(Path tempDir) throws IOException {
         HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
  
-        int testId = 123;
+        int testId = 2;
         int testStartEdgeOffset = 456;
         double testLon = 78.9;
         double testLat = 12.34;
 
         Node node = new Node(testId, new Coordinate(testLat, testLon), testStartEdgeOffset, 0, 0, 0);
-        store.saveNode(node, 20L);
+        store.saveNode(node, testId * DataStructureSizes.NODE_SIZE);
         
         int testEdgeId = 0;
         int testFromOffset = 0;
@@ -342,7 +343,7 @@ public class HybridDataStoreTest {
         int testNextEdgeOffset = 480;
 
         Edge edge = new Edge(testEdgeId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
-        store.saveEdge(edge, 20L);
+        store.saveEdge(edge, testEdgeId * DataStructureSizes.EDGE_SIZE);
         
         return new Object[] { tempDir, node, edge };
     }

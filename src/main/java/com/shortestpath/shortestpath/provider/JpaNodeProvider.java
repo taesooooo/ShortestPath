@@ -55,6 +55,6 @@ public class JpaNodeProvider implements NodeProvider{
    @Override
 	public List<Integer> findNearestNodeId(Envelope envelope, Coordinate coordinate) {
         String bbox = GeometryUtil.toWkt(envelope);
-		return nodeIndexRepository.findNearestNode(bbox, coordinate).stream().map(data -> data.getOffset()).toList();
+		return nodeIndexRepository.findNearestNode(bbox, coordinate).stream().map(data -> data.getId()).toList();
 	}
 }

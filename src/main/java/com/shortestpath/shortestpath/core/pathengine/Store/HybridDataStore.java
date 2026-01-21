@@ -11,6 +11,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
@@ -49,7 +50,7 @@ public class HybridDataStore implements DataStore {
         
         this.nodeFileChannel = FileChannel.open(nodeFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
         this.edgeFileChannel = FileChannel.open(edgeFilePath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
-        
+
         if (this.hasExtractedData()) {
             this.nodeMappedBuffer = nodeFileChannel.map(MapMode.READ_WRITE, 0, nodeFilePath.toFile().length());
             this.edgeMappedBuffer = edgeFileChannel.map(MapMode.READ_WRITE, 0, edgeFilePath.toFile().length());
@@ -168,8 +169,6 @@ public class HybridDataStore implements DataStore {
 
     @Override
     public Node readNode(long offset) throws IOException {
-        log.debug("오프셋 - " + offset);
-
         if(graphRead) {
             return readMappedNode(offset);
         }
@@ -194,8 +193,6 @@ public class HybridDataStore implements DataStore {
 
     @Override
 	public Edge readEdge(long offset) throws IOException {
-        log.debug("오프셋 - " + offset);
-
         if(graphRead) {
             return readMappedEdge(offset);
         }
@@ -266,46 +263,24 @@ public class HybridDataStore implements DataStore {
         return nodeFile.exists() && edgeFile.exists() && indexFile.exists() &&
             nodeFile.length() > 0 && edgeFile.length() > 0 && indexFile.length() > 0;
     }
-
+    
     @Override
     public void saveNodeIndex(List<IndexInfo> indexList) throws IOException {
         this.nodeIndexProvider.insertNodeIndex(indexList);
     }
-
-    // @Override
-    // public HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws IOException {
-    //     HashMap<Coordinate, Integer> nodeIndex = new HashMap<>();
-    //     // 4KB씩 읽기
-    //     ByteBuffer buffer = ByteBuffer.allocate(4096);
-    //     int read = 0;
-    //     while(nodeIndexFileChannel.position() < nodeIndexFileChannel.size()) {
-    //         buffer.clear();
-    //         read = nodeIndexFileChannel.read(buffer);
-
-    //         if(read == -1) {
-    //             break;
-    //         }
-
-    //         buffer.flip();
-            
-    //         // 버퍼에 20바이트까지 남아있을 때까지 읽기
-    //         while(buffer.remaining() >= 20) {
-    //             double x = buffer.getDouble();      // 8바이트
-    //             double y = buffer.getDouble();      // 8바이트
-    //             int nodeOffset = buffer.getInt();   // 4바이트
-                
-    //             Coordinate coord = new Coordinate(y, x);
-    //             nodeIndex.put(coord, nodeOffset);
-    //         }
-
-    //         // read = nodeIndexFileChannel.read(buffer);
-    //     }
-
-    //     return nodeIndex;
-    // }
-
+    
     @Override
     public int getNodeOffset(Coordinate coordinate) {
         return nodeIndexProvider.getNodeIndex(coordinate);
+    }
+    
+    @Override
+    public void allocateNodeFileSpace(long size) throws IOException {
+        this.nodeFileChannel.truncate(size);
+    }
+
+    @Override
+    public void allocateEdgeFileSpace(long size) throws IOException {
+        this.edgeFileChannel.truncate(size);
     }
 }

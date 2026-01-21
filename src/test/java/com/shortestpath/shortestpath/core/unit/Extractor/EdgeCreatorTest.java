@@ -151,6 +151,7 @@ public class EdgeCreatorTest {
         nodeEdgeQueue.put(new EndItem());
 
         when(dataStore.saveEdge(any(Edge.class))).thenReturn(0).thenReturn(1);
+        when(dataStore.readNode(anyLong())).thenReturn(nodeA, nodeB);
 
         EdgeCreator creator = new EdgeCreator(dataStore, idArray, nodeCreated, lastEdgeOffsetArray, nodeEdgeQueue, progressStatus, shouldContinue);
 

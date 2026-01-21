@@ -59,7 +59,7 @@ class InteMapControllerTest {
 		this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
 		String path = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
 		this.store = new HybridDataStore(new File(path).getParent(), nodeIndexProvider);
-		Extractor extractor = new NodeEdgeExtractor(path, this.store);
+		Extractor extractor = new NodeEdgeExtractor(path, this.store, true);
 		extractor.extract();
 	}
 

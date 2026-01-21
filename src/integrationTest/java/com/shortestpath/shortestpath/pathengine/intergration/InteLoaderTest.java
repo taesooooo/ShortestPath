@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
@@ -36,7 +37,7 @@ import jakarta.transaction.Transactional;
 
 @SpringBootTest
 @ActiveProfiles("inte")
-// @Transactional
+@Transactional
 public class InteLoaderTest {
     @Autowired
     private NodeProvider nodeIndexProvider;
@@ -46,12 +47,12 @@ public class InteLoaderTest {
 
     @BeforeEach
     public void init() {
-        repository.deleteAll();
+        // repository.deleteAll();
     }
 
     @AfterEach
     public void clear() {
-        repository.deleteAll();
+        // repository.deleteAll();
     }
 
     @Test
@@ -88,17 +89,13 @@ public class InteLoaderTest {
 
         Edge readEdge = dataStore.readEdge(node.getStartEdgeOffset());
         edgeList.add(readEdge);
-        while(readEdge != null) {
+        while(readEdge != null && readEdge.getNextEdgeOffset() != -1) {
             readEdge = dataStore.readEdge(readEdge.getNextEdgeOffset());
             edgeList.add(readEdge);
-
-            if(readEdge.getNextEdgeOffset() == -1) {
-                break;
-            }
         }
         
         for(Edge edge : edgeList) {
-            Node readNode = dataStore.readNode(edge.getTo());
+            Node readNode = dataStore.readNode(edge.getTo() * DataStructureSizes.NODE_SIZE);
             list.add(readNode);
         }
 

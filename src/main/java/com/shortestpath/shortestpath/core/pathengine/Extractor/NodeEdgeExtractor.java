@@ -23,6 +23,7 @@ import org.locationtech.jts.geom.Geometry;
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +82,8 @@ public class NodeEdgeExtractor implements Extractor {
 		List<Runnable> tasks = new ArrayList<>();
 		tasks.add(new NodeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, store, progressStatus, shouldContinue));
 		tasks.add(new EdgeCreator(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, progressStatus, shouldContinue));
+
+		store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
 
 		List<Thread> workers = tasks.stream().map((task) -> {
 			return new Thread(task, task.getClass().getSimpleName());

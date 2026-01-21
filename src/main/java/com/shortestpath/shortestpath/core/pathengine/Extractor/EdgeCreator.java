@@ -32,7 +32,8 @@ public class EdgeCreator implements Runnable {
     private AtomicBoolean shouldContinue;
     private int edgeIndex = 0;
 
-    public EdgeCreator(DataStore dataStore, long[] idArray, boolean[] nodeCreated, int[] lastEdgeOffsetArray, BlockingQueue<TaskItem> nodeEdgeQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
+    public EdgeCreator(DataStore dataStore, long[] idArray, boolean[] nodeCreated, int[] lastEdgeOffsetArray,
+            BlockingQueue<TaskItem> nodeEdgeQueue, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
         this.dataStore = dataStore;
         this.idArray = idArray;
         this.nodeCreated = nodeCreated;
@@ -45,42 +46,38 @@ public class EdgeCreator implements Runnable {
     @Override
     public void run() {
         logger.info("노드/엣지 저장 시작");
-        while(shouldContinue.get()) {
+        while (shouldContinue.get()) {
             try {
                 TaskItem item = nodeEdgeQueue.take();
-                if(item instanceof EndItem) {
+                if (item instanceof EndItem) {
                     logger.info("노드 엣지 저장 완료");
                     break;
-                }
-                else {
+                } else {
                     NodeEdgeItem saveTaskItem = (NodeEdgeItem) item;
                     Node nodeA = saveTaskItem.getNodeA();
                     Node nodeB = saveTaskItem.getNodeB();
 
                     long edgeOffsetA = createAndSaveEdge(nodeA, nodeB);
                     long edgeOffsetB = createAndSaveEdge(nodeB, nodeA);
-                    
+
                     // 처음 생성된 노드라면 엣지 시작 오프셋 설정하고 다시 저장
                     updateNodeStartEdgeIfNeeded(nodeA, edgeOffsetA);
                     updateNodeStartEdgeIfNeeded(nodeB, edgeOffsetB);
-                    
+
                     updateNextEdgeOffset(nodeA.getId(), edgeOffsetA);
                     updateNextEdgeOffset(nodeB.getId(), edgeOffsetB);
 
                     // 진행률 업데이트
 
                 }
-            }
-            catch(InterruptedException e) {
+            } catch (InterruptedException e) {
                 logger.info("노드/엣지 저장 - 인터럽트 발생하여 종료합니다.");
                 Thread.currentThread().interrupt();
                 shouldContinue.set(false);
-            }
-            catch(IOException e) {
+            } catch (IOException e) {
                 logger.error("노드/엣지 저장 - 저장 중 문제가 발생하여 종료되었습니다.", e);
                 shouldContinue.set(false);
-            }
-            catch(Exception e) {
+            } catch (Exception e) {
                 logger.error("노드/엣지 저장 중 예외 발생", e);
                 shouldContinue.set(false);
             }
@@ -88,25 +85,31 @@ public class EdgeCreator implements Runnable {
     }
 
     private void updateNodeStartEdgeIfNeeded(Node node, long edgeOffset) throws IOException {
-        if (node != null && node.getStartEdgeOffset() == -1) {
-            node.setStartEdgeOffset((int)edgeOffset);
-            dataStore.overwriteNode(node, node.getId());
+        if (node != null) {
+            Node storedNode = dataStore.readNode(node.getId() * DataStructureSizes.NODE_SIZE);
+            
+            if (storedNode != null && storedNode.getStartEdgeOffset() == -1) {
+                storedNode.setStartEdgeOffset((int) edgeOffset);
+                dataStore.overwriteNode(storedNode, node.getId() * DataStructureSizes.NODE_SIZE);
+            }
         }
     }
 
     private void updateNextEdgeOffset(int nodeId, long edgeOffset) throws IOException {
         int lastEdgeOffset = lastEdgeOffsetArray[nodeId];
 
-        if(lastEdgeOffset != -1) {
+        if (lastEdgeOffset != -1) {
             Edge readEdge = dataStore.readEdge(lastEdgeOffset);
-            readEdge.setNextEdgeOffset((int)edgeOffset);
+            readEdge.setNextEdgeOffset((int) edgeOffset);
             dataStore.overwriteEdge(readEdge, lastEdgeOffset);
         }
-        lastEdgeOffsetArray[nodeId] = (int)edgeOffset;
+
+        lastEdgeOffsetArray[nodeId] = (int) edgeOffset;
     }
 
     private long createAndSaveEdge(Node nodeA, Node nodeB) throws IOException {
-        Edge edge = new Edge(edgeIndex++, nodeA.getId(), nodeB.getId(), nodeA.getCoordinate().calculateDistanceToTarget(nodeB.getCoordinate()), -1);
+        Edge edge = new Edge(edgeIndex++, nodeA.getId(), nodeB.getId(),
+                nodeA.getCoordinate().calculateDistanceToTarget(nodeB.getCoordinate()), -1);
         return dataStore.saveEdge(edge);
     }
 }
