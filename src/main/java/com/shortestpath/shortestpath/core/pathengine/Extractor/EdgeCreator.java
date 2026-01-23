@@ -72,7 +72,7 @@ public class EdgeCreator implements Runnable {
 
                     // 진행률 업데이트
                     if (progressStatus != null) {
-                        progressStatus.progress(TaskType.EDGE_EXTRACT, idArray.length, edgeIndex);
+                        progressStatus.progress(TaskType.EDGE_EXTRACT, 0, edgeIndex);
                     }
                 }
             } catch (InterruptedException e) {

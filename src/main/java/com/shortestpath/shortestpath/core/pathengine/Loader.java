@@ -66,12 +66,10 @@ public class Loader {
 		int edgeCurrent = edgeExtractCount.get();
 
 		double nodeProgress = calcProgress(total, nodeCurrent);
-		double edgeProgress = calcProgress(total, edgeCurrent);
 
 		String nodeRemainingTime = calcETA(total, nodeCurrent);
-		String edgeRemainingTime = calcETA(total, edgeCurrent);
 
-		System.out.printf("노드 추출: %.2f%% (%s) / 엣지 추출: %.2f%% (%s) \r", nodeProgress, nodeRemainingTime, edgeProgress, edgeRemainingTime);
+		System.out.printf("노드 추출: %.2f%% (%s) / 엣지 추출: %d \r", nodeProgress, nodeRemainingTime, edgeCurrent);
 	}
 
 	private double calcProgress(int total, int current) {
