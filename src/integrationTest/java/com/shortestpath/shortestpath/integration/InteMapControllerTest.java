@@ -1,19 +1,20 @@
 package com.shortestpath.shortestpath.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
@@ -28,11 +29,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shortestpath.shortestpath.DBHelper;
+import com.shortestpath.shortestpath.IntegrationTestHelper;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 
@@ -41,27 +42,32 @@ import jakarta.transaction.Transactional;
 @ActiveProfiles("inte")
 @SpringBootTest
 @Transactional
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class InteMapControllerTest {
 	private static final Logger log = LoggerFactory.getLogger(InteMapControllerTest.class);
 
 	@Autowired
 	private WebApplicationContext context;
+	@Autowired
+	private Engine engine;
 
 	@Autowired
-	private NodeProvider nodeIndexProvider;
+	private DBHelper dbHelper;
 
 	private MockMvc mockMvc;
 	private ObjectMapper om = new ObjectMapper();
-	private HybridDataStore store;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
-		String path = getClass().getClassLoader().getResource("sample/sample_jeju.shp").getPath();
-		this.store = new HybridDataStore(new File(path).getParent(), nodeIndexProvider);
-		Extractor extractor = new NodeEdgeExtractor(path, this.store, true);
-		extractor.extract();
 	}
+
+	@AfterAll
+    public void destroy() throws IOException {
+		engine.getStore().close();
+        IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
+		dbHelper.turncate();
+    }
 
 	@Test
 	@DisplayName("경로 탐색 요청(리스트) - 정상")

@@ -19,10 +19,9 @@ public interface DataStore {
     Node readNode(long offset) throws IOException;
     Edge readEdge(long offset) throws IOException;
     void saveNodeIndex(List<IndexInfo> indexList) throws IOException;
-    // HashMap<Coordinate, Integer> loadNodeOffsetIndex() throws Exception;
     int getNodeOffset(Coordinate coordinate);
     boolean hasExtractedData();
-
+    void close() throws IOException;
     void allocateNodeFileSpace(long size) throws IOException;
     void allocateEdgeFileSpace(long size) throws IOException;
 }

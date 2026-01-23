@@ -46,6 +46,8 @@ public class EdgeCreator implements Runnable {
     @Override
     public void run() {
         logger.info("노드/엣지 저장 시작");
+        Node nodeA = null;
+        Node nodeB = null;
         while (shouldContinue.get()) {
             try {
                 TaskItem item = nodeEdgeQueue.take();
@@ -54,8 +56,8 @@ public class EdgeCreator implements Runnable {
                     break;
                 } else {
                     NodeEdgeItem saveTaskItem = (NodeEdgeItem) item;
-                    Node nodeA = saveTaskItem.getNodeA();
-                    Node nodeB = saveTaskItem.getNodeB();
+                    nodeA = saveTaskItem.getNodeA();
+                    nodeB = saveTaskItem.getNodeB();
 
                     long edgeOffsetA = createAndSaveEdge(nodeA, nodeB);
                     long edgeOffsetB = createAndSaveEdge(nodeB, nodeA);
@@ -78,13 +80,14 @@ public class EdgeCreator implements Runnable {
                 logger.error("노드/엣지 저장 - 저장 중 문제가 발생하여 종료되었습니다.", e);
                 shouldContinue.set(false);
             } catch (Exception e) {
+                logger.debug("노드/엣지 저장 - 엣지 정보 = " + nodeA.getId() + " " + nodeB.getId());
                 logger.error("노드/엣지 저장 중 예외 발생", e);
                 shouldContinue.set(false);
             }
         }
     }
 
-    private void updateNodeStartEdgeIfNeeded(Node node, long edgeOffset) throws IOException {
+    private void updateNodeStartEdgeIfNeeded(Node node, long edgeOffset) throws IOException, InterruptedException {
         if (node != null) {
             Node storedNode = dataStore.readNode(node.getId() * DataStructureSizes.NODE_SIZE);
             

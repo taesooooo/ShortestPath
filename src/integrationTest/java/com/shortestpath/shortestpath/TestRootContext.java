@@ -1,8 +1,9 @@
-package com.shortestpath.shortestpath.config;
+package com.shortestpath.shortestpath;
 
 import java.io.File;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,20 +17,17 @@ import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import lombok.extern.slf4j.Slf4j;
 
-@Configuration
+@TestConfiguration
 @Slf4j
-public class RootContext {
+public class TestRootContext {
 	
 	@Value("${findpath.shp-path}")
 	private String shpFilePath;
 
-	@Value("${findpath.node-db-save}")
-	private boolean isNodeDbSave;
-
 	@Bean
 	public Engine pathEngine(NodeProvider dataProvider, NodeProvider nodeIndexProvider) throws Exception {
 		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
-		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, isNodeDbSave);
+		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, false);
 		Loader loader = new Loader(extractor);
 
 		if(!loader.isDataExtracted()) {

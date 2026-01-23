@@ -16,11 +16,12 @@ public class Loader {
 	private AtomicInteger creatorCount = new AtomicInteger(0);
 	private AtomicInteger saveCount = new AtomicInteger(0);
 	long startTime = 0;
+
 	public Loader(Extractor extractor) throws IOException {
 		this.extractor = extractor;
 	}
 
-	public void extractData() throws Exception {
+	public void extractData() throws IOException {
 		try {
 			// 노드 및 엣지 추출
 			startTime = System.currentTimeMillis();

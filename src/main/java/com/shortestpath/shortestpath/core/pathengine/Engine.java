@@ -37,6 +37,10 @@ public class Engine {
 		log.info("엔진 초기화 완료");
 	}
 	
+	public DataStore getStore() {
+		return store;
+	}
+
 	/**
 	 * 저장소에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
 	 * @param startNode

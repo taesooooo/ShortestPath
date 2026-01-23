@@ -24,6 +24,7 @@ import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.MappableDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -118,6 +119,14 @@ public class NodeEdgeExtractor implements Extractor {
 			csvWriter.write();
 			log.info("노드 CSV 저장 완료: {}", csvFilePath);
 		}
+
+		log.info("노드 및 엣지 추출 작업 완료");
+
+		if(store instanceof MappableDataStore) {
+			((MappableDataStore)store).switchToMappingMode();
+		}
+
+		shpStore.dispose();
 	}
 
 	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
