@@ -69,7 +69,7 @@ public class Loader {
 
 		String nodeRemainingTime = calcETA(total, nodeCurrent);
 
-		System.out.printf("노드 추출: %.2f%% (%s) / 엣지 추출: %d \r", nodeProgress, nodeRemainingTime, edgeCurrent);
+		System.out.printf("노드 추출: %.2f%% (%s) / 엣지 추출: %d개 \r", nodeProgress, nodeRemainingTime, edgeCurrent);
 	}
 
 	private double calcProgress(int total, int current) {
