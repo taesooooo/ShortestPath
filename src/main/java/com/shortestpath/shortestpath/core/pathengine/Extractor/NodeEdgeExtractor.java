@@ -81,8 +81,10 @@ public class NodeEdgeExtractor implements Extractor {
 		AtomicBoolean shouldContinue = new AtomicBoolean(true);
 
 		List<Runnable> tasks = new ArrayList<>();
-		tasks.add(new NodeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, store, progressStatus, shouldContinue));
-		tasks.add(new EdgeCreator(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, progressStatus, shouldContinue));
+		tasks.add(new NodeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, store, progressStatus,
+				shouldContinue));
+		tasks.add(new EdgeCreator(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, progressStatus,
+				shouldContinue));
 
 		store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
 
@@ -104,29 +106,31 @@ public class NodeEdgeExtractor implements Extractor {
 			}
 		});
 
-		// 모든 워커 스레드가 종료되면 idArray를 이용해 indexList 생성
-		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+		if (shouldContinue.get()) {
+			// 모든 워커 스레드가 종료되면 idArray를 이용해 indexList 생성
+			ArrayList<IndexInfo> indexList = createIndexList(idArray);
 
-		// DB 저장 여부 판단
-		if (saveToDb) {
-			// DB에 저장하는 경우
-			saveIndex(indexList);
-			log.info("노드 인덱스 DB 저장 완료");
-		} else {
-			// CSV 파일로 저장하는 경우
-			String csvFilePath = file.getParentFile().toPath().resolve("node_index.csv").toString();
-			NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath, indexList);
-			csvWriter.write();
-			log.info("노드 CSV 저장 완료: {}", csvFilePath);
+			// DB 저장 여부 판단
+			if (saveToDb) {
+				// DB에 저장하는 경우
+				saveIndex(indexList);
+				log.info("노드 인덱스 DB 저장 완료");
+			} else {
+				// CSV 파일로 저장하는 경우
+				String csvFilePath = file.getParentFile().toPath().resolve("node_index.csv").toString();
+				NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath, indexList);
+				csvWriter.write();
+				log.info("노드 CSV 저장 완료: {}", csvFilePath);
+			}
+
+			log.info("노드 및 엣지 추출 작업 완료");
+
+			if (store instanceof MappableDataStore) {
+				((MappableDataStore) store).switchToMappingMode();
+			}
+
+			shpStore.dispose();
 		}
-
-		log.info("노드 및 엣지 추출 작업 완료");
-
-		if(store instanceof MappableDataStore) {
-			((MappableDataStore)store).switchToMappingMode();
-		}
-
-		shpStore.dispose();
 	}
 
 	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
@@ -149,15 +153,15 @@ public class NodeEdgeExtractor implements Extractor {
 		while (iterator.hasNext()) {
 			SimpleFeature feature = iterator.next();
 			Geometry geo = (Geometry) feature.getDefaultGeometry();
-			
+
 			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
 				long coordinateId = GeometryUtil.coordinateToLong(coordinate);
-				if(count == nodeIdArray.length) {
+				if (count == nodeIdArray.length) {
 					nodeIdArray = Arrays.copyOf(nodeIdArray, nodeIdArray.length * 2);
 				}
-				
+
 				nodeIdArray[count++] = coordinateId;
-				
+
 			}
 		}
 
@@ -165,8 +169,8 @@ public class NodeEdgeExtractor implements Extractor {
 
 		// 중복 제거
 		int tempIndex = 0;
-		for(int i=0; i<nodeIdArray.length; i++) {
-			if(i == 0 || nodeIdArray[i] != nodeIdArray[i - 1]) {
+		for (int i = 0; i < nodeIdArray.length; i++) {
+			if (i == 0 || nodeIdArray[i] != nodeIdArray[i - 1]) {
 				nodeIdArray[tempIndex] = nodeIdArray[i];
 				tempIndex++;
 			}
