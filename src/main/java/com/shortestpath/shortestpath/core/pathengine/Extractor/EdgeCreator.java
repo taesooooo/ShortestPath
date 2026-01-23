@@ -54,7 +54,8 @@ public class EdgeCreator implements Runnable {
                 if (item instanceof EndItem) {
                     logger.info("노드 엣지 저장 완료");
                     break;
-                } else {
+                } 
+                else {
                     NodeEdgeItem saveTaskItem = (NodeEdgeItem) item;
                     nodeA = saveTaskItem.getNodeA();
                     nodeB = saveTaskItem.getNodeB();
@@ -70,7 +71,9 @@ public class EdgeCreator implements Runnable {
                     updateNextEdgeOffset(nodeB.getId(), edgeOffsetB);
 
                     // 진행률 업데이트
-
+                    if (progressStatus != null) {
+                        progressStatus.progress(TaskType.EDGE_EXTRACT, idArray.length, edgeIndex);
+                    }
                 }
             } catch (InterruptedException e) {
                 logger.info("노드/엣지 저장 - 인터럽트 발생하여 종료합니다.");
@@ -90,7 +93,7 @@ public class EdgeCreator implements Runnable {
     private void updateNodeStartEdgeIfNeeded(Node node, long edgeOffset) throws IOException, InterruptedException {
         if (node != null) {
             Node storedNode = dataStore.readNode(node.getId() * DataStructureSizes.NODE_SIZE);
-            
+
             if (storedNode != null && storedNode.getStartEdgeOffset() == -1) {
                 storedNode.setStartEdgeOffset((int) edgeOffset);
                 dataStore.overwriteNode(storedNode, node.getId() * DataStructureSizes.NODE_SIZE);

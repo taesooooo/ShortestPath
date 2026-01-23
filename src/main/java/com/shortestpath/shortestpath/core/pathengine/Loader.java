@@ -13,8 +13,10 @@ public class Loader {
 	private Extractor extractor;
 	// @Getter
 	// private Graph mapGraph = new Graph();
-	private AtomicInteger creatorCount = new AtomicInteger(0);
-	private AtomicInteger saveCount = new AtomicInteger(0);
+	private AtomicInteger nodeExtractCount = new AtomicInteger(0);
+	private AtomicInteger edgeExtractCount = new AtomicInteger(0);
+	private boolean nodeCompleted = false;
+	private boolean edgeCompleted = false;
 	long startTime = 0;
 
 	public Loader(Extractor extractor) throws IOException {
@@ -40,25 +42,36 @@ public class Loader {
 	}
 
 	private void onPrgress(TaskType type, int total, int current) {
-		if(type == TaskType.NODE_EDGE_CREATOR) {
-			creatorCount.set(current);
+		if(type == TaskType.NODE_EXTRACT) {
+			nodeExtractCount.set(current);
+			if(current >= total) {
+				nodeCompleted = true;
+			}
 		}
 		else {
-			saveCount.set(current);
+			edgeExtractCount.set(current);
+			if(current >= total) {
+				edgeCompleted = true;
+			}
 		}
 
-		printProgress(total, type, current);
+		// 둘 다 완료되지 않았으면 진행 상황 출력
+		if(!nodeCompleted || !edgeCompleted) {
+			printProgress(total, type, current);
+		}
 	}
 
 	private void printProgress(int total, TaskType type, int current) {
-		int creatorCurrent = creatorCount.get();
-		int saveCurrent = saveCount.get();
-		double creatorPrgoress = calcProgress(total, creatorCurrent);
-		double saveProgress = calcProgress(total, saveCurrent);
-		String creatorRemainingTime = calcETA(total, creatorCurrent);
-		String saveRemainingTime = calcETA(total, saveCurrent);
+		int nodeCurrent = nodeExtractCount.get();
+		int edgeCurrent = edgeExtractCount.get();
 
-		System.out.printf("노드 엣지 생성: %.2f%% (%s) / 노드 엣지 저장: %.2f%% (%s) \r", creatorPrgoress, creatorRemainingTime, saveProgress, saveRemainingTime);
+		double nodeProgress = nodeCompleted ? 100.0 : calcProgress(total, nodeCurrent);
+		double edgeProgress = edgeCompleted ? 100.0 : calcProgress(total, edgeCurrent);
+
+		String nodeRemainingTime = calcETA(total, nodeCurrent);
+		String edgeRemainingTime = calcETA(total, edgeCurrent);
+
+		System.out.printf("노드 추출: %.2f%% (%s) / 엣지 추출: %.2f%% (%s) \r", nodeProgress, nodeRemainingTime, edgeProgress, edgeRemainingTime);
 	}
 
 	private double calcProgress(int total, int current) {
@@ -66,6 +79,10 @@ public class Loader {
 	}
 
 	private String calcETA(int total, int current) {
+		if(current >= total) {
+			return "00:00:00";
+		}
+
 		long elapsedTime = System.currentTimeMillis() - startTime;
 		double speed = current / (double)elapsedTime;
 		long remainingItems = total - current;

@@ -5,20 +5,14 @@ import java.io.File;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
-
-import lombok.extern.slf4j.Slf4j;
-
 @TestConfiguration
-@Slf4j
 public class TestRootContext {
 	
 	@Value("${findpath.shp-path}")
@@ -31,7 +25,6 @@ public class TestRootContext {
 		Loader loader = new Loader(extractor);
 
 		if(!loader.isDataExtracted()) {
-			log.info("추출된 노드 및 엣지 데이터가 없으므로 추출을 시작합니다.");
 
 			loader.extractData();
 			dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);

@@ -81,7 +81,7 @@ public class NodeCreator implements Runnable {
                     // 진행률 업데이트
                     creatorCount++;
                     if (progressStatus != null) {
-                        progressStatus.progress(TaskType.NODE_EDGE_CREATOR, idArray.length, creatorCount);
+                        progressStatus.progress(TaskType.NODE_EXTRACT, idArray.length, creatorCount);
                     }
                 }
                 
