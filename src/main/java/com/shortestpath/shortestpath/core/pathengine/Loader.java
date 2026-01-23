@@ -18,6 +18,8 @@ public class Loader {
 	private boolean nodeCompleted = false;
 	private boolean edgeCompleted = false;
 	long startTime = 0;
+	int totalNodes = 0;
+	int totalEdges = 0;
 
 	public Loader(Extractor extractor) throws IOException {
 		this.extractor = extractor;
@@ -44,12 +46,14 @@ public class Loader {
 	private void onPrgress(TaskType type, int total, int current) {
 		if(type == TaskType.NODE_EXTRACT) {
 			nodeExtractCount.set(current);
+			totalNodes = total;
 			if(current >= total) {
 				nodeCompleted = true;
 			}
 		}
 		else {
 			edgeExtractCount.set(current);
+			totalEdges = total;
 			if(current >= total) {
 				edgeCompleted = true;
 			}
@@ -65,11 +69,11 @@ public class Loader {
 		int nodeCurrent = nodeExtractCount.get();
 		int edgeCurrent = edgeExtractCount.get();
 
-		double nodeProgress = calcProgress(total, nodeCurrent);
+		double nodeProgress = calcProgress(totalNodes, nodeCurrent);
 
-		String nodeRemainingTime = calcETA(total, nodeCurrent);
+		String nodeRemainingTime = calcETA(totalNodes, nodeCurrent);
 
-		System.out.printf("노드 추출: %.2f%% (%s) / 엣지 추출: %d개 \r", nodeProgress, nodeRemainingTime, edgeCurrent);
+		System.out.printf("노드 추출: %3.2f%% (%s) / 엣지 추출: %7d개      \r", nodeProgress, nodeRemainingTime, edgeCurrent);
 	}
 
 	private double calcProgress(int total, int current) {
