@@ -34,6 +34,7 @@ public class NodeCreator implements Runnable {
     private DataStore dataStore;
     private ProgressStatus progressStatus;
     private AtomicBoolean shouldContinue;
+    int creatorCount = 0;
 
     public NodeCreator(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, long[] idArray,
             boolean[] nodeCreated, BlockingQueue<TaskItem> nodeEdgeQueue, DataStore dataStore, ProgressStatus progressStatus, AtomicBoolean shouldContinue) {
@@ -48,7 +49,6 @@ public class NodeCreator implements Runnable {
 
     @Override
     public void run() {
-        int creatorCount = 0;
         try (FeatureIterator<SimpleFeature> iterator = collection.features()) {
             while (iterator.hasNext() && shouldContinue.get()) {
                 
@@ -77,9 +77,8 @@ public class NodeCreator implements Runnable {
                     Node nodeB = saveNode(coordinateB, indexB);
 
                     nodeEdgeQueue.put(new NodeEdgeItem(nodeA, nodeB));
-                    
+
                     // 진행률 업데이트
-                    creatorCount++;
                     if (progressStatus != null) {
                         progressStatus.progress(TaskType.NODE_EXTRACT, idArray.length, creatorCount);
                     }
@@ -114,7 +113,8 @@ public class NodeCreator implements Runnable {
         // DataStore에 노드 저장
         dataStore.saveNode(node, nodeId * DataStructureSizes.NODE_SIZE);
         nodeCreated[nodeId] = true;
-
+        creatorCount++;
+        
         return node;
     }
 }

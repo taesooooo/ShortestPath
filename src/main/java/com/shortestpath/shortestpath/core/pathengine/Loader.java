@@ -65,8 +65,8 @@ public class Loader {
 		int nodeCurrent = nodeExtractCount.get();
 		int edgeCurrent = edgeExtractCount.get();
 
-		double nodeProgress = nodeCompleted ? 100.0 : calcProgress(total, nodeCurrent);
-		double edgeProgress = edgeCompleted ? 100.0 : calcProgress(total, edgeCurrent);
+		double nodeProgress = calcProgress(total, nodeCurrent);
+		double edgeProgress = calcProgress(total, edgeCurrent);
 
 		String nodeRemainingTime = calcETA(total, nodeCurrent);
 		String edgeRemainingTime = calcETA(total, edgeCurrent);
@@ -75,6 +75,10 @@ public class Loader {
 	}
 
 	private double calcProgress(int total, int current) {
+		if(current >= total) {
+			return 100.0;
+		}
+
 		return (current / (double)total) * 100;
 	}
 
