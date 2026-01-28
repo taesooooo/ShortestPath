@@ -12,6 +12,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
 import lombok.extern.slf4j.Slf4j;
@@ -27,8 +28,9 @@ public class RootContext {
 	private boolean isNodeDbSave;
 
 	@Bean
-	public Engine pathEngine(NodeProvider dataProvider, NodeProvider nodeIndexProvider) throws Exception {
-		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
+	public Engine pathEngine(NodeProvider dataProvider, DataPersistence dataPersistence, NodeProvider nodeIndexProvider) throws Exception {
+		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent());
+		dataStore.setPersistence(dataPersistence);
 		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, isNodeDbSave);
 		Loader loader = new Loader(extractor);
 
@@ -36,7 +38,8 @@ public class RootContext {
 			log.info("추출된 노드 및 엣지 데이터가 없으므로 추출을 시작합니다.");
 
 			loader.extractData();
-			dataStore = new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
+			dataStore.switchToMappingMode();
+			// dataStore = new HybridDataStore(new File(shpFilePath).getParent(), true); // 읽기 전용 모드로 재생성
 		}
 		
 		return new Engine(dataStore, dataProvider);

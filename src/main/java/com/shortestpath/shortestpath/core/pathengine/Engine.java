@@ -125,7 +125,7 @@ public class Engine {
 	 */
 	private ArrayList<Node> findPath(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
 	    // fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
-	    PriorityQueue<Node> openList = new PriorityQueue<Node>(Comparator.comparingDouble(c -> c.getFCost()));
+	    PriorityQueue<Node> openList = new PriorityQueue<Node>(Comparator.comparingDouble(c -> c.getfCost()));
 	    // 이미 방문한 노드 집합
 	    HashSet<Node> closeList = new HashSet<Node>();
 	    // 각 노드의 이전 노드를 저장(경로 역추적용)
@@ -139,9 +139,9 @@ public class Engine {
 	    double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate());
 
 		// 첫 시작 노드 gCost = 0 설정
-		startNode.setGCost(0);
-		startNode.setHCost(heuristic);
-		startNode.setFCost(heuristic);
+		startNode.setgCost(0);
+		startNode.sethCost(heuristic);
+		startNode.setfCost(heuristic);
 		nodeList.put(startNode.getId(), startNode);
 		// 첫 시작 노드를 추가
 	    openList.add(startNode);
@@ -185,15 +185,15 @@ public class Engine {
 					traceRoute.addChild(toNode.getCoordinate());
 				}
 	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
-	            double newDist = minNode.getGCost() + edge.getDistance();
+	            double newDist = minNode.getgCost() + edge.getDistance();
 	            // openList에 없고, 더 짧은 경로라면 갱신
-	            if(!openList.contains(toNode) && newDist < toNode.getGCost()) {
+	            if(!openList.contains(toNode) && newDist < toNode.getgCost()) {
 	                // hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
 	                double hCost = PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate());
 	                double fCost = newDist + hCost;
-					toNode.setHCost(hCost);
-					toNode.setGCost(newDist);
-					toNode.setFCost(fCost);
+					toNode.sethCost(hCost);
+					toNode.setgCost(newDist);
+					toNode.setfCost(fCost);
 
 	                openList.add(toNode);
 	                // 경로 역추적을 위해 이전 노드 저장

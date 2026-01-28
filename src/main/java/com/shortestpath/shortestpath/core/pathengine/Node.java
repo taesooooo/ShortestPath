@@ -14,10 +14,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class Node implements Comparable<Node> {
 	private int id;
 	// private String category;
@@ -27,7 +23,69 @@ public class Node implements Comparable<Node> {
 	private double gCost = Double.MAX_VALUE;
 	private double hCost;
 	private double fCost;
-	
+
+	public Node(int id, Coordinate coordinate) {
+		this.id = id;
+		this.coordinate = coordinate;
+	}
+
+	public Node(int id, Coordinate coordinate, int startEdgeOffset, double gCost, double hCost, double fCost) {
+		this.id = id;
+		this.coordinate = coordinate;
+		this.startEdgeOffset = startEdgeOffset;
+		this.gCost = gCost;
+		this.hCost = hCost;
+		this.fCost = fCost;
+	}
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
+	}
+
+	public Coordinate getCoordinate() {
+		return coordinate;
+	}
+
+	public void setCoordinate(Coordinate coordinate) {
+		this.coordinate = coordinate;
+	}
+
+	public int getStartEdgeOffset() {
+		return startEdgeOffset;
+	}
+
+	public void setStartEdgeOffset(int startEdgeOffset) {
+		this.startEdgeOffset = startEdgeOffset;
+	}
+
+	public double getgCost() {
+		return gCost;
+	}
+
+	public void setgCost(double gCost) {
+		this.gCost = gCost;
+	}
+
+	public double gethCost() {
+		return hCost;
+	}
+
+	public void sethCost(double hCost) {
+		this.hCost = hCost;
+	}
+
+	public double getfCost() {
+		return fCost;
+	}
+
+	public void setfCost(double fCost) {
+		this.fCost = fCost;
+	}
+
 	/**
 	 * 휴리스틱을 계산하면 fCost까지 모두 갱신됨
 	 **/
@@ -40,8 +98,8 @@ public class Node implements Comparable<Node> {
 //        double newDistance = dx + dy;
         
         // 하버사인 거리 공식
-        Coordinate startPoint = this.getCoordinate();
-        Coordinate endPoint = endNode.getCoordinate();
+        Coordinate startPoint = this.coordinate;
+        Coordinate endPoint = endNode.coordinate;
 
         double newDistance = PathUtil.haversineDistance(startPoint, endPoint);
         
@@ -61,7 +119,7 @@ public class Node implements Comparable<Node> {
 
 		return null;
 	}
-	
+
 	@Override
 	public int hashCode() {
 		return Objects.hash(coordinate);
@@ -78,8 +136,7 @@ public class Node implements Comparable<Node> {
 
 	@Override
 	public int compareTo(Node o) {
-		return Double.compare(fCost, o.getFCost());
+		return Double.compare(fCost, o.getfCost());
 	}
-	
 	
 }

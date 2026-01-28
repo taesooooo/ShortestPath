@@ -3,10 +3,9 @@ package com.shortestpath.shortestpath.core.pathengine.Store;
 import java.io.IOException;
 
 /**
- * 메모리 매핑을 지원하는 DataStore 확장 인터페이스
- * 기존 DataStore를 확장하여 메모리 매핑 모드 전환 기능 제공 
+ * 메모리 매핑 읽기를 지원하는 DataReader 확장 인터페이스
  */
-public interface MappableDataStore extends DataStore {
+public interface MappableDataReader extends DataReader {
     /**
      * 읽기 모드를 메모리 매핑 모드로 전환
      * 대량의 읽기가 필요할 때 성능 향상

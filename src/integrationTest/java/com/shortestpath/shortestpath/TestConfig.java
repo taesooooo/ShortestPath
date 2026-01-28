@@ -13,6 +13,7 @@ import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 
@@ -23,7 +24,7 @@ public class TestConfig {
 	private String shpFilePath;
     
     @Bean
-    public DataStore dataStore(NodeProvider nodeIndexProvider) throws Exception {
+    public DataStore dataStore(DataPersistence dataPersistence) throws Exception {
         File nodeFile = new File(new File(shpFilePath).getParent(), "node.bin");
         File edgeFile = new File(new File(shpFilePath).getParent(), "edge.bin");
         if (nodeFile.exists()) {
@@ -33,7 +34,10 @@ public class TestConfig {
             edgeFile.delete();
         }
 
-        return new HybridDataStore(new File(shpFilePath).getParent(), nodeIndexProvider);
+        HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent());
+        dataStore.setPersistence(dataPersistence);
+        
+        return dataStore;
     }
 
     @Bean

@@ -30,8 +30,10 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.provider.JpaDataPersistence;
 import com.shortestpath.shortestpath.provider.JpaNodeProvider;
 import com.shortestpath.shortestpath.repository.NodeIndexInsertRepository;
 
@@ -41,6 +43,7 @@ import jakarta.transaction.Transactional;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("inte")
 @Import({
+        JpaDataPersistence.class,
         JpaNodeProvider.class,
         NodeIndexInsertRepository.class,
         TestConfig.class,

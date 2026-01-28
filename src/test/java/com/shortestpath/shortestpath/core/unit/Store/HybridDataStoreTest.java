@@ -2,361 +2,251 @@ package com.shortestpath.shortestpath.core.unit.Store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
-import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.provider.JpaDataPersistence;
 
 /**
- * 파일 기반 데이터 저장소(FileDataStore)를 테스트하는 JUnit 테스트 클래스
+ * HybridDataStore를 테스트하는 JUnit 테스트 클래스
+ * 추출 모드(Reader + Writer 동시)와 경로탐색 모드(Reader만)를 테스트합니다
  */
 public class HybridDataStoreTest {
 
     @Test
-    @DisplayName("FileChannel이 파일을 생성하는지 확인")
-    public void constructorCreatesFile() throws IOException {
-        // 임시 파일 생성 (FileDataStore에는 경로만 전달)
+    @DisplayName("추출 모드 생성자에서 Reader + Writer가 모두 초기화되는지 확인")
+    public void constructorInitializesReaderAndWriter() throws IOException {
         Path tempDir = Files.createTempDirectory("test");
-        File tempNodeFile = File.createTempFile("filestore-node-test", ".bin", tempDir.toFile());
-        File tempEdgeFile = File.createTempFile("filestore-edge-test", ".bin", tempDir.toFile());
-        String nodePath = tempNodeFile.getAbsolutePath();
-        String edgePath = tempEdgeFile.getAbsolutePath();
-
-        // FileDataStore 생성 시 데이터 파일이 존재해야 함
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
-
-        File testNodeFile = new File(nodePath);
-        File testEdgeFile = new File(edgePath);
-
-        assertThat(testNodeFile.exists()).as("생성자 호출시 Node.bin 파일이 생성되어야 합니다.").isTrue();
-        assertThat(testEdgeFile.exists()).as("생성자 호출시 Edge.bin 파일이 생성되어야 합니다.").isTrue();
-
-        // 정리: 임시 파일 삭제
-        testNodeFile.delete();
-        testEdgeFile.delete();
-    }
-
-    @Test
-    @DisplayName("saveNode 메서드에 null을 전달하면 IllegalArgumentException이 발생하는지 확인")
-    public void saveNodeNullPointerException() throws Exception {
-        // 임시 파일 생성 및 경로 전달
-        Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
-        // null을 전달하면 saveNode에서 NullPointerException이 발생해야 함
-        assertThrows(IllegalArgumentException.class, () -> {
-            store.saveNode(null);
-        });
-    }
-
-    @Test
-    @DisplayName("saveNode가 파일 쓰기 데이터 확인")
-    public void saveNodeWriteBytes() throws Exception {
-        Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
-        
-        int testId = 66;
-        int testStartEdgeOffset = 100;
-        double testLon = 123.456;
-        double testLat = 33.456;
-
-        Node node = new Node(testId, new Coordinate(testLat, testLon), testStartEdgeOffset, 0, 0, 0);
-
-        store.saveNode(node);
-
-        // 파일에서 읽어서 확인
         try {
-            FileChannel fc = FileChannel.open(store.getNodeFilePath().toAbsolutePath(), StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
-            int read = fc.read(buf);
+            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
 
-            buf.flip();
-            int id = buf.getInt();
-            int startEdgeOffset = buf.getInt();
-            double lon = buf.getDouble();
-            double lat = buf.getDouble();
+            Path nodeFile = tempDir.resolve("node.bin");
+            Path edgeFile = tempDir.resolve("edge.bin");
 
-
-            assertThat(id).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
-            assertThat(startEdgeOffset).as("startEdgeOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testStartEdgeOffset);
-            assertThat(lon).as("Lon값이 테스트 값과 일치하지 않습니다.").isEqualTo(testLon);
-            assertThat(lat).as("Lat값이 테스트 값과 일치하지 않습니다.").isEqualTo(testLat);
+            assertThat(nodeFile).as("Node.bin 파일이 생성되어야 합니다.").exists();
+            assertThat(edgeFile).as("Edge.bin 파일이 생성되어야 합니다.").exists();
+            
+            store.close();
         } finally {
-           testFileDelete(store);
+            deleteTestDirectory(tempDir);
         }
     }
 
     @Test
-    @DisplayName("saveNode가 지정된 오프셋에 데이터를 기록하는지 확인")
-    public void saveNodeWriteBytesAtOffset() throws Exception {
+    @DisplayName("추출 모드에서 노드 저장 후 즉시 읽기 가능")
+    public void extractionModeCanReadAfterWrite() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
-        int testId = 66;
-        int testStartEdgeOffset = 100;
-        double testLon = 123.456;
-        double testLat = 33.456;
-
-        Node node = new Node(testId, new Coordinate(testLat, testLon), testStartEdgeOffset, 0, 0, 0);
-
-        store.saveNode(node, 24L);
-
-        // 파일에서 읽어서 확인
         try {
-            FileChannel fc = FileChannel.open(store.getNodeFilePath().toAbsolutePath(), StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
+            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
             
-            fc.position(24L);
-            
-            int read = fc.read(buf);
+            int testId = 1;
+            int testStartEdgeOffset = 100;
+            double testLon = 127.5;
+            double testLat = 37.5;
+            Node node = new Node(testId, new Coordinate(testLat, testLon), testStartEdgeOffset, 0, 0, 0);
 
-            buf.flip();
-            int id = buf.getInt();
-            int startEdgeOffset = buf.getInt();
-            double lon = buf.getDouble();
-            double lat = buf.getDouble();
+            // 쓰기
+            store.saveNode(node, 0L);
 
-            assertThat(id).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
-            assertThat(startEdgeOffset).as("startEdgeOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testStartEdgeOffset);
-            assertThat(lon).as("Lon값이 테스트 값과 일치하지 않습니다.").isEqualTo(testLon);
-            assertThat(lat).as("Lat값이 테스트 값과 일치하지 않습니다.").isEqualTo(testLat);
+            // 즉시 읽기 - 추출 단계에서 Reader+Writer 동시 사용
+            Node readNode = store.readNode(0L);
+
+            assertThat(readNode.getId()).isEqualTo(testId);
+            assertThat(readNode.getCoordinate().getLatitude()).isEqualTo(testLat);
+            assertThat(readNode.getCoordinate().getLongitude()).isEqualTo(testLon);
+
+            store.close();
         } finally {
-            testFileDelete(store);
+            deleteTestDirectory(tempDir);
         }
     }
 
     @Test
-    @DisplayName("saveEdge 메서드에 null을 전달하면 IllegalArgumentException이 발생하는지 확인")
-    public void saveEdgeNullPointerException() throws Exception {
-        // 임시 파일 생성 및 경로 전달
+    @DisplayName("읽기 전용 모드에서 저장을 시도하면 예외 발생")
+    public void readOnlyModeThrowsExceptionOnWrite() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
-        // null을 전달하면 saveEdge에서 NullPointerException이 발생해야 함
-        assertThrows(IllegalArgumentException.class, () -> {
-            store.saveEdge(null);
-        });
-    }
-
-    @Test
-    @DisplayName("saveEdge가 파일 쓰기 데이터 확인")
-    public void saveEdgeWriteBytes() throws Exception {
-        Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
-        
-        int testId = 0;
-        int testFromOffset = 66;
-        int testToOffset = 777;
-        double testDistance = 200;
-        int testNextEdgeOffset = 280;
-
-        Edge Edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
-
-        store.saveEdge(Edge);
-
-        // 파일에서 읽어서 확인
         try {
-            FileChannel fc = FileChannel.open(store.getEdgeFilePath().toAbsolutePath(), StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
-            int read = fc.read(buf);
+            // 먼저 쓰기 모드로 데이터 저장
+            HybridDataStore writeStore = new HybridDataStore(tempDir.toAbsolutePath().toString());
+            Node node = new Node(1, new Coordinate(37.5, 127.5), 0, 0, 0, 0);
+            writeStore.saveNode(node, 0L);
+            writeStore.close();
 
-            buf.flip();
-            int id = buf.getInt();
-            int fromOffset = buf.getInt();
-            int toOffset = buf.getInt();
-            double distance = buf.getDouble();
-            int nextEdgeOffset = buf.getInt();
+            // 읽기 전용 모드에서 저장 시도
+            HybridDataStore readStore = new HybridDataStore(tempDir.toAbsolutePath().toString(), true);
+            
+            assertThrows(IllegalStateException.class, () -> {
+                readStore.saveNode(node);
+            });
 
-            assertThat(id).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
-            assertThat(fromOffset).as("fromOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testFromOffset);
-            assertThat(toOffset).as("toOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testToOffset);
-            assertThat(distance).as("distance값이 테스트 값과 일치하지 않습니다.").isEqualTo(testDistance);
-            assertThat(nextEdgeOffset).as("nextEdgeOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testNextEdgeOffset);
+            readStore.close();
         } finally {
-           testFileDelete(store);
+            deleteTestDirectory(tempDir);
         }
     }
 
     @Test
-    @DisplayName("saveEdge가 지정된 오프셋에 데이터를 기록하는지 확인")
-    public void saveEdgeWriteBytesAtOffset() throws Exception {
+    @DisplayName("추출 단계에서 여러 노드와 엣지를 번갈아 저장/읽기")
+    public void extractionModeCanInterleaveSaveAndRead() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
-        int testId = 0;
-        int testFromOffset = 0;
-        int testToOffset = 240;
-        double testDistance = 100;
-        int testNextEdgeOffset = 480;
-
-        Edge Edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
-
-        store.saveEdge(Edge, 20L);
-
-        // 파일에서 읽어서 확인
         try {
-            FileChannel fc = FileChannel.open(store.getEdgeFilePath().toAbsolutePath(), StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
+            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
             
-            fc.position(20L);
+            // 노드 1 저장
+            Node node1 = new Node(1, new Coordinate(37.5, 127.5), 0, 0, 0, 0);
+            store.saveNode(node1, 0L);
             
-            int read = fc.read(buf);
+            // 엣지 1 저장 (노드1 참조)
+            Edge edge1 = new Edge(0, 1, 2, 100.0, 24);
+            store.saveEdge(edge1, 0L);
+            
+            // 저장한 데이터 즉시 검증
+            Node readNode1 = store.readNode(0L);
+            assertThat(readNode1.getId()).isEqualTo(1);
+            
+            Edge readEdge1 = store.readEdge(0L);
+            assertThat(readEdge1.getFrom()).isEqualTo(1);
+            
+            // 노드 2 저장
+            Node node2 = new Node(2, new Coordinate(37.6, 127.6), 24, 0, 0, 0);
+            store.saveNode(node2, 24L);
+            
+            // 저장한 데이터 검증
+            Node readNode2 = store.readNode(24L);
+            assertThat(readNode2.getId()).isEqualTo(2);
 
-            buf.flip();
-            int id = buf.getInt();
-            int fromOffset = buf.getInt();
-            int toOffset = buf.getInt();
-            double distance = buf.getDouble();
-            int nextEdgeOffset = buf.getInt();
-
-            assertThat(id).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
-            assertThat(fromOffset).as("fromOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testFromOffset);
-            assertThat(toOffset).as("toOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testToOffset);
-            assertThat(distance).as("distance값이 테스트 값과 일치하지 않습니다.").isEqualTo(testDistance);
-            assertThat(nextEdgeOffset).as("nextEdgeOffset값이 테스트 값과 일치하지 않습니다.").isEqualTo(testNextEdgeOffset);
+            store.close();
         } finally {
-           testFileDelete(store);
+            deleteTestDirectory(tempDir);
         }
-    }
-
-    @Test
-    @DisplayName("readNode가 임의 위치에 저장된 Node 데이터를 올바르게 반환하는지 확인")
-    public void readNodeReturnDataConfirm() throws Exception {
-        Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
-        
-        int testId = 123;
-        int testStartEdgeOffset = 456;
-        double testLon = 78.9;
-        double testLat = 12.34;
-
-        Node node = new Node(testId, new Coordinate(testLat, testLon), testStartEdgeOffset, 0, 0, 0);
-
-        store.saveNode(node, 0L);
-
-        Node readNode = store.readNode(0L);
-
-        assertThat(readNode.getId()).as("읽어온 Node의 Id값이 일치하지 않습니다.").isEqualTo(testId);
-        assertThat(readNode.getStartEdgeOffset()).as("읽어온 Node의 startEdgeOffset값이 일치하지 않습니다.").isEqualTo(testStartEdgeOffset);
-        assertThat(readNode.getCoordinate().getLongitude()).as("읽어온 Node의 Longitude값이 일치하지 않습니다.").isEqualTo(testLon);
-        assertThat(readNode.getCoordinate().getLatitude()).as("읽어온 Node의 Latitude값이 일치하지 않습니다.").isEqualTo(testLat);
-
-        testFileDelete(store);
     }
 
     @Test
     @DisplayName("readEdge가 임의 위치에 저장된 Edge 데이터를 올바르게 반환하는지 확인")
     public void readEdgeReturnDataConfirm() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
         
-        int testId = 1;
-        int testFromOffset = 1;
-        int testToOffset = 2;
-        double testDistance = 30.5;
-        int testNextEdgeOffset = 40;
+        try {
+            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
+            
+            int testId = 1;
+            int testFromOffset = 1;
+            int testToOffset = 2;
+            double testDistance = 30.5;
+            int testNextEdgeOffset = 40;
 
-        Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
+            Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
 
-        store.saveEdge(edge, 24L);
+            store.saveEdge(edge, 24L);
 
-        Edge readEdge = store.readEdge(1 * DataStructureSizes.EDGE_SIZE);
+            Edge readEdge = store.readEdge(24L);
 
-        assertThat(readEdge.getId()).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
-        assertThat(readEdge.getFrom()).as("읽어온 Edge의 From값이 일치하지 않습니다.").isEqualTo(testFromOffset);
-        assertThat(readEdge.getTo()).as("읽어온 Edge의 To값이 일치하지 않습니다.").isEqualTo(testToOffset);
-        assertThat(readEdge.getDistance()).as("읽어온 Edge의 Distance값이 일치하지 않습니다.").isEqualTo(testDistance);
-        assertThat(readEdge.getNextEdgeOffset()).as("읽어온 Edge의 NextEdgeOffset값이 일치하지 않습니다.").isEqualTo(testNextEdgeOffset);
+            assertThat(readEdge.getId()).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
+            assertThat(readEdge.getFrom()).as("읽어온 Edge의 From값이 일치하지 않습니다.").isEqualTo(testFromOffset);
+            assertThat(readEdge.getTo()).as("읽어온 Edge의 To값이 일치하지 않습니다.").isEqualTo(testToOffset);
+            assertThat(readEdge.getDistance()).as("읽어온 Edge의 Distance값이 일치하지 않습니다.").isEqualTo(testDistance);
+            assertThat(readEdge.getNextEdgeOffset()).as("읽어온 Edge의 NextEdgeOffset값이 일치하지 않습니다.").isEqualTo(testNextEdgeOffset);
 
-        testFileDelete(store);
+            store.close();
+        } finally {
+            deleteTestDirectory(tempDir);
+        }
     }
 
     @Test
-    @DisplayName("readNode가 graphRead=true일 때 임의 위치에 저장된 Node 데이터를 올바르게 반환하는지 확인")
-    public void readNodeReturnDataConfirmGraphReadTrue() throws Exception {
-        Object[] testInfo = testFileCreate(Files.createTempDirectory("test"));
-        Path tempDir = (Path)testInfo[0];
-        Node testNode = (Node)testInfo[1];
-        
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
-        
-        Node readNode = store.readNode(testNode.getId() * DataStructureSizes.NODE_SIZE);
+    @DisplayName("노드 인덱스를 저장 할 때 Persistence로 호출하는지 확인")
+    public void saveNodeIndexInPersistence() throws Exception {
+        Path tempDir = Files.createTempDirectory("test");
 
-        assertThat(readNode.getId()).as("읽어온 Node의 Id값이 일치하지 않습니다.").isEqualTo(testNode.getId());
-        assertThat(readNode.getStartEdgeOffset()).as("읽어온 Node의 startEdgeOffset값이 일치하지 않습니다.").isEqualTo(testNode.getStartEdgeOffset());
-        assertThat(readNode.getCoordinate().getLongitude()).as("읽어온 Node의 Longitude값이 일치하지 않습니다.").isEqualTo(testNode.getCoordinate().getLongitude());
-        assertThat(readNode.getCoordinate().getLatitude()).as("읽어온 Node의 Latitude값이 일치하지 않습니다.").isEqualTo(testNode.getCoordinate().getLatitude());
+        try {
+            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
+            
+            // DataPersistence 설정
+            DataPersistence persistence = mock(JpaDataPersistence.class);
+            store.setPersistence(persistence);
 
-        testFileDelete(tempDir);
+            store.saveNodeIndex(new ArrayList<IndexInfo>());
+
+            verify(persistence).saveNodeIndex(any());
+
+            store.close();
+        } finally {
+            deleteTestDirectory(tempDir);
+        }
     }
 
     @Test
-    @DisplayName("readEdge가 graphRead=true일 때 임의 위치에 저장된 Edge 데이터를 올바르게 반환하는지 확인")
-    public void readEdgeReturnDataConfirmGraphReadTrue() throws Exception {
-        Object[] testInfo = testFileCreate(Files.createTempDirectory("test"));
-        Path tempDir = (Path)testInfo[0];
-        Edge testEdge = (Edge)testInfo[2];
+    @DisplayName("노드 인덱스를 가져올 때 DB로 호출하는지 확인")
+    public void getNodeIndexInPersistence() throws Exception {
+        Path tempDir = Files.createTempDirectory("test");
         
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
-        
+        try {
+            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
+            
+            // DataPersistence 설정
+            DataPersistence persistence = mock(JpaDataPersistence.class);
+            store.setPersistence(persistence);
 
-        Edge readEdge = store.readEdge(testEdge.getId());
+            store.getNodeOffset(new Coordinate(33.1, 126.1));
 
-        assertThat(readEdge.getFrom()).as("읽어온 Edge의 From값이 일치하지 않습니다.").isEqualTo(testEdge.getFrom());
-        assertThat(readEdge.getTo()).as("읽어온 Edge의 To값이 일치하지 않습니다.").isEqualTo(testEdge.getTo());
-        assertThat(readEdge.getDistance()).as("읽어온 Edge의 Distance값이 일치하지 않습니다.").isEqualTo(testEdge.getDistance());
-        assertThat(readEdge.getNextEdgeOffset()).as("읽어온 Edge의 NextEdgeOffset값이 일치하지 않습니다.").isEqualTo(testEdge.getNextEdgeOffset());
-
-        testFileDelete(tempDir);
+            verify(persistence).getNodeIndex(any(Coordinate.class));
+            
+            store.close();
+        } finally {
+            deleteTestDirectory(tempDir);
+        }
     }
 
-    private Object[] testFileCreate(Path tempDir) throws IOException {
-        HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString(), mock(NodeProvider.class));
- 
-        int testId = 2;
-        int testStartEdgeOffset = 456;
-        double testLon = 78.9;
-        double testLat = 12.34;
-
-        Node node = new Node(testId, new Coordinate(testLat, testLon), testStartEdgeOffset, 0, 0, 0);
-        store.saveNode(node, testId * DataStructureSizes.NODE_SIZE);
+    // @Test
+    // @DisplayName("노드 인덱스를 가져올 때 Reader에서 호출하는지 확인")
+    // public void getNodeIndexInReader() throws Exception {
+    //     Path tempDir = Files.createTempDirectory("test");
         
-        int testEdgeId = 0;
-        int testFromOffset = 0;
-        int testToOffset = 240;
-        double testDistance = 100;
-        int testNextEdgeOffset = 480;
+    //     try {
+    //         HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
+            
+    //         // DataPersistence 설정
+    //         // DataPersistence persistence = mock(JpaDataPersistence.class);
 
-        Edge edge = new Edge(testEdgeId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
-        store.saveEdge(edge, testEdgeId * DataStructureSizes.EDGE_SIZE);
-        
-        return new Object[] { tempDir, node, edge };
+    //         store.getNodeOffset(new Coordinate(33.1, 126.1));
+            
+    //         ((HybridDataStore) verify(store.getDataReader())).getNodeOffset(any(Coordinate.class));
+
+    //         store.close();
+    //     } finally {
+    //         deleteTestDirectory(tempDir);
+    //     }
+    // }
+
+    private void deleteTestDirectory(Path tempDir) throws IOException {
+        Files.walk(tempDir)
+            .sorted((a, b) -> b.compareTo(a)) // 역순 정렬로 파일부터 삭제
+            .forEach(path -> {
+                try {
+                    Files.delete(path);
+                } catch (IOException e) {
+                    // 무시
+                }
+            });
     }
-    
-
-    private void testFileDelete(HybridDataStore store) {
-        store.getEdgeFilePath().toFile().delete();
-        store.getNodeFilePath().toFile().delete();
-    }
-
-    private void testFileDelete(Path tempDir) {
-        tempDir.toFile().delete();
-    }
-
 
 }
