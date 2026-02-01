@@ -1,15 +1,24 @@
-package com.shortestpath.shortestpath.core.pathengine.Store;
+package com.shortestpath.shortestpath.core.pathengine.Store.Reader;
 
 import java.io.IOException;
 
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 
 /**
  * 데이터 읽기 전담 인터페이스 (기본)
  * 파일 기반 데이터 스토어에서 Node와 Edge 데이터를 읽는 핵심 책임만 담당
  */
 public interface DataReader {
+    /**
+     * 지정된 오프셋에서 EdgeHeader(엣지 파일 정보)를 읽음
+     * @param offset 읽을 위치
+     * @return 읽어온 EdgeHeader 객체
+     * @throws IOException 파일 읽기 실패 시
+     */
+    EdgeHeader readEdgeHeader() throws IOException;
+    
     /**
      * 지정된 오프셋에서 Node 데이터를 읽음
      * @param offset 읽을 위치

@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
-import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataWriter;
+import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
+import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HybridDataWriter;
 
 /**
  * HybridDataWriter를 테스트하는 JUnit 테스트 클래스
@@ -116,8 +117,9 @@ public class HybridDataWriterTest {
             int testTo = 2;
             double testDistance = 150.5;
             int testNextEdgeOffset = 50;
+            RoadLevel testRoadLevel = RoadLevel.L0;
 
-            Edge edge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset);
+            Edge edge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset, testRoadLevel);
             int offset = writer.saveEdge(edge, 0L);
 
             // 파일에서 읽어서 검증
@@ -208,11 +210,11 @@ public class HybridDataWriterTest {
             HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
             
             // 첫 번째 엣지 저장
-            Edge edge1 = new Edge(1, 10, 20, 100.0, 50);
+            Edge edge1 = new Edge(1, 10, 20, 100.0, 50, RoadLevel.L0);
             writer.saveEdge(edge1, 0L);
             
             // 두 번째 엣지로 덮어쓰기
-            Edge edge2 = new Edge(2, 15, 25, 200.0, 75);
+            Edge edge2 = new Edge(2, 15, 25, 200.0, 75, RoadLevel.L1);
             writer.overwriteEdge(edge2, 0L);
 
             // 파일에서 읽어서 검증

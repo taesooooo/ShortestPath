@@ -16,6 +16,7 @@ import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
 @TestConfiguration
 @Profile("inte")
@@ -25,8 +26,9 @@ public class TestConfig {
     
     @Bean
     public DataStore dataStore(DataPersistence dataPersistence) throws Exception {
-        File nodeFile = new File(new File(shpFilePath).getParent(), "node.bin");
-        File edgeFile = new File(new File(shpFilePath).getParent(), "edge.bin");
+        String parentDir = new File(shpFilePath).getParent();
+        File nodeFile = new File(parentDir, "node.bin");
+        File edgeFile = new File(parentDir, "edge.bin");
         if (nodeFile.exists()) {
             nodeFile.delete();
         }
@@ -34,8 +36,9 @@ public class TestConfig {
             edgeFile.delete();
         }
 
-        HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent());
+        HybridDataStore dataStore = new HybridDataStore(parentDir);
         dataStore.setPersistence(dataPersistence);
+        dataStore.setEdgeIndex(new FileBasedEdgeIndex(parentDir));
         
         return dataStore;
     }

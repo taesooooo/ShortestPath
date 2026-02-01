@@ -11,20 +11,31 @@ import org.locationtech.jts.geom.Geometry;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
-public class NodeExtract implements Runnable{
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class NodeExtract implements Runnable {
+    private static Logger logger = LoggerFactory.getLogger(NodeExtract.class);
+    
+    private int taskId;
     private long[] idArrays;
     private BlockingQueue<TaskItem> nodeQueue;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
+    private AtomicBoolean taskContinue;
 
-
-    public NodeExtract(long[] idArrays, BlockingQueue<TaskItem> nodeQueue, FeatureCollection<SimpleFeatureType, SimpleFeature> collection) {
+    public NodeExtract(int taskId, long[] idArrays, BlockingQueue<TaskItem> nodeQueue,
+            FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue) {
+        this.taskId = taskId;
         this.idArrays = idArrays;
         this.nodeQueue = nodeQueue;
         this.collection = collection;
+        this.taskContinue = taskContinue;
     }
 
     @Override
@@ -34,14 +45,14 @@ public class NodeExtract implements Runnable{
 
     private void extractNodes() {
         FeatureIterator<SimpleFeature> iterator = collection.features();
-        while (iterator.hasNext() && !Thread.currentThread().isInterrupted()) {
-            SimpleFeature feature = iterator.next();
-            Node nodeA = null;
-            Node nodeB = null;
+        try {
+            while (iterator.hasNext() && !Thread.currentThread().isInterrupted() && taskContinue.get()) {
+                SimpleFeature feature = iterator.next();
+                Node nodeA = null;
+                Node nodeB = null;
 
-            try {
-                Geometry geometry = (Geometry)feature.getDefaultGeometry();
-                for(int i = 0; i<geometry.getNumPoints() - 1; i++) {
+                Geometry geometry = (Geometry) feature.getDefaultGeometry();
+                for (int i = 0; i < geometry.getNumPoints() - 1; i++) {
                     double x = geometry.getCoordinates()[i].x;
                     double y = geometry.getCoordinates()[i].y;
                     double nextX = geometry.getCoordinates()[i + 1].x;
@@ -60,21 +71,27 @@ public class NodeExtract implements Runnable{
                     nodeA = createNode(coordinateA, indexA);
                     nodeB = createNode(coordinateB, indexB);
 
-                    
                     nodeQueue.put(new NodeItem(nodeA, nodeB));
                 }
-            } 
-            catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
 
-        iterator.close();
+                nodeQueue.put(new EndItem(taskId));
+            }
+        } 
+        catch (InterruptedException e) {
+            logger.error("NodeExtract 인터럽트 발생", e);
+            Thread.currentThread().interrupt();
+        }
+        catch (Exception e) {
+            logger.error("NodeExtract 예외 발생", e);
+            taskContinue.set(false); // 예외 발생 시 모든 작업 중단 플래그 설정
+        }
+        finally {
+            iterator.close();
+        }
     }
 
     private Node createNode(Coordinate coordinate, int nodeId) {
         return new Node(nodeId, coordinate);
     }
-    
+
 }

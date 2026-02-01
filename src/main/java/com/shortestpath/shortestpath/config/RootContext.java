@@ -14,6 +14,7 @@ import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,8 +30,10 @@ public class RootContext {
 
 	@Bean
 	public Engine pathEngine(NodeProvider dataProvider, DataPersistence dataPersistence, NodeProvider nodeIndexProvider) throws Exception {
-		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent());
+		String shpFileParent = new File(shpFilePath).getParent();
+		HybridDataStore dataStore = new HybridDataStore(shpFileParent);
 		dataStore.setPersistence(dataPersistence);
+		dataStore.setEdgeIndex(new FileBasedEdgeIndex(shpFileParent));
 		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, isNodeDbSave);
 		Loader loader = new Loader(extractor);
 

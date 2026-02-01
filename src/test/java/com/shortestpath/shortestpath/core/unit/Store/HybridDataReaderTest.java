@@ -11,10 +11,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
-import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataReader;
-import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataWriter;
+import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
+import com.shortestpath.shortestpath.core.pathengine.Store.Reader.HybridDataReader;
+import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HybridDataWriter;
 
 /**
  * HybridDataReader를 테스트하는 JUnit 테스트 클래스
@@ -70,8 +72,9 @@ public class HybridDataReaderTest {
             int testTo = 15;
             double testDistance = 250.75;
             int testNextEdgeOffset = 100;
+            RoadLevel testRoadLevel = RoadLevel.L0;
 
-            Edge writeEdge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset);
+            Edge writeEdge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset, testRoadLevel);
             writer.saveEdge(writeEdge, 0L);
             writer.close();
 
@@ -87,7 +90,7 @@ public class HybridDataReaderTest {
             assertThat(readEdge.getTo()).isEqualTo(testTo);
             assertThat(readEdge.getDistance()).isEqualTo(testDistance);
             assertThat(readEdge.getNextEdgeOffset()).isEqualTo(testNextEdgeOffset);
-            
+            assertThat(readEdge.getRoadLevel()).isEqualTo(testRoadLevel);
             reader.close();
         } finally {
             deleteTestDirectory(tempDir);
@@ -145,35 +148,6 @@ public class HybridDataReaderTest {
             
             Node readNode = reader.readNode(0L);
             assertThat(readNode.getId()).isEqualTo(99);
-            
-            reader.close();
-        } finally {
-            deleteTestDirectory(tempDir);
-        }
-    }
-
-    @Test
-    @DisplayName("addCoordinateIndex와 getNodeOffset이 좌표 인덱싱 동작")
-    public void coordinateIndexing() throws IOException {
-        Path tempDir = Files.createTempDirectory("test");
-        
-        try {
-            Path nodeFile = tempDir.resolve("node.bin");
-            Path edgeFile = tempDir.resolve("edge.bin");
-            Files.createFile(nodeFile);
-            Files.createFile(edgeFile);
-            
-            HybridDataReader reader = new HybridDataReader(nodeFile, edgeFile);
-            
-            Coordinate coord1 = new Coordinate(37.5, 127.5);
-            Coordinate coord2 = new Coordinate(37.6, 127.6);
-            
-            reader.addCoordinateIndex(coord1, 0);
-            reader.addCoordinateIndex(coord2, 24);
-            
-            assertThat(reader.getNodeOffset(coord1)).isEqualTo(0);
-            assertThat(reader.getNodeOffset(coord2)).isEqualTo(24);
-            assertThat(reader.getNodeOffset(new Coordinate(99.9, 99.9))).isEqualTo(-1); // 존재하지 않는 좌표
             
             reader.close();
         } finally {
@@ -256,7 +230,7 @@ public class HybridDataReaderTest {
     }
 
     @Test
-    @DisplayName("hasExtractedData - 파일 크기가 24바이트 이상일 때 true 반환")
+    @DisplayName("hasExtractedData - 파일 크기가 각 객체 크기 이상일 때 true 반환")
     public void hasExtractedDataReturnsTrueWhenDataExists() throws IOException {
         Path tempDir = Files.createTempDirectory("test");
         
@@ -265,7 +239,7 @@ public class HybridDataReaderTest {
             HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
             
             Node node = new Node(1, new Coordinate(37.5, 127.5), 0, 0, 0, 0);
-            Edge edge = new Edge(1, 0, 1, 100.0, -1);
+            Edge edge = new Edge(1, 0, 1, 100.0, -1, RoadLevel.L0);
             
             writer.saveNode(node);
             writer.saveEdge(edge);
@@ -276,7 +250,6 @@ public class HybridDataReaderTest {
             Path edgeFile = tempDir.resolve("edge.bin");
             HybridDataReader reader = new HybridDataReader(nodeFile, edgeFile);
             
-            // 노드와 엣지 모두 24바이트 이상이므로 true
             assertThat(reader.hasExtractedData()).isTrue();
             
             reader.close();
@@ -286,7 +259,7 @@ public class HybridDataReaderTest {
     }
 
     @Test
-    @DisplayName("hasExtractedData - 파일 크기가 24바이트 미만일 때 false 반환")
+    @DisplayName("hasExtractedData - 파일 크기가 각 객체 크기 미만일 때 false 반환")
     public void hasExtractedDataReturnsFalseWhenFileSizeIsLessThan24Bytes() throws IOException {
         Path tempDir = Files.createTempDirectory("test");
         
@@ -310,21 +283,19 @@ public class HybridDataReaderTest {
     }
 
     @Test
-    @DisplayName("hasExtractedData - 정확히 24바이트일 때 true 반환")
+    @DisplayName("hasExtractedData - 헤더 포함 각 객체 크기인 경우 true 반환")
     public void hasExtractedDataReturnsTrueWhenFileSizeEquals24Bytes() throws IOException {
         Path tempDir = Files.createTempDirectory("test");
         
         try {
-            // 정확히 24바이트 파일 생성
             Path nodeFile = tempDir.resolve("node.bin");
             Path edgeFile = tempDir.resolve("edge.bin");
             
-            Files.write(nodeFile, new byte[24]); // 24바이트
-            Files.write(edgeFile, new byte[24]); // 24바이트
+            Files.write(nodeFile, new byte[DataStructureSizes.NODE_ENTRY_SIZE]);
+            Files.write(edgeFile, new byte[DataStructureSizes.EDGE_ENTRY_SIZE]);
             
             HybridDataReader reader = new HybridDataReader(nodeFile, edgeFile);
             
-            // 정확히 24바이트이므로 true
             assertThat(reader.hasExtractedData()).isTrue();
             
             reader.close();

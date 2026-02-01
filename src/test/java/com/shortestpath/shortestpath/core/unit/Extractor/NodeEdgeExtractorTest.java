@@ -14,6 +14,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.geotools.api.data.FeatureSource;
 import org.geotools.api.data.FileDataStore;
@@ -91,6 +93,7 @@ public class NodeEdgeExtractorTest  {
             when(fileDataStore.getTypeNames()).thenReturn(new String[] { "TestFeatureType" });
             when(fileDataStore.getFeatureSource(anyString())).thenReturn((SimpleFeatureSource) featureSource);
             when(featureSource.getFeatures()).thenReturn(collection);
+            when(featureSource.getCount(any())).thenReturn(0);
 
             NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toString(), dataStore);
             extractor.extract();
@@ -109,18 +112,25 @@ public class NodeEdgeExtractorTest  {
         FileDataStore fileDataStore = mock(FileDataStore.class);
         FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = mock(SimpleFeatureSource.class);
         DefaultFeatureCollection collection = new DefaultFeatureCollection();
-        DataStore dataStore = mock(HybridDataStore.class);
 
-        try (MockedStatic<FileDataStoreFinder> mockedStatic = mockStatic(FileDataStoreFinder.class)) {
+        DataStore dataStore = mock(HybridDataStore.class);
+        ExecutorService mockExecutorService = mock(ExecutorService.class);
+
+        try (MockedStatic<FileDataStoreFinder> mockedStatic = mockStatic(FileDataStoreFinder.class);
+             MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class)) {
+            
             mockedStatic.when(() -> FileDataStoreFinder.getDataStore(any(File.class))).thenReturn(fileDataStore);
-            when(fileDataStore.getTypeNames()).thenReturn(new String[] { "TestFeatureType" });
+            when(fileDataStore.getTypeNames()).thenReturn(new String[] { "test" });
             when(fileDataStore.getFeatureSource(anyString())).thenReturn((SimpleFeatureSource) featureSource);
             when(featureSource.getFeatures()).thenReturn(collection);
+            when(featureSource.getCount(any())).thenReturn(1);
+            
+            executorsMockedStatic.when(() -> Executors.newFixedThreadPool(any(int.class))).thenReturn(mockExecutorService);
+            when(mockExecutorService.submit(any(Runnable.class))).thenReturn(null);
+            when(mockExecutorService.awaitTermination(any(long.class), any())).thenReturn(true);
 
             NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toString(), dataStore, true);
             extractor.extract();
-
-            Thread.sleep(1500);
 
             // saveNodeIndex() 호출 확인
             verify(dataStore, times(1)).saveNodeIndex(any());
@@ -135,12 +145,19 @@ public class NodeEdgeExtractorTest  {
         FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = mock(SimpleFeatureSource.class);
         DefaultFeatureCollection collection = new DefaultFeatureCollection();
         DataStore dataStore = mock(HybridDataStore.class);
+        ExecutorService mockExecutorService = mock(ExecutorService.class);
 
-        try (MockedStatic<FileDataStoreFinder> mockedStatic = mockStatic(FileDataStoreFinder.class)) {
+        try (MockedStatic<FileDataStoreFinder> mockedStatic = mockStatic(FileDataStoreFinder.class);
+                MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class)) {
             mockedStatic.when(() -> FileDataStoreFinder.getDataStore(any(File.class))).thenReturn(fileDataStore);
-            when(fileDataStore.getTypeNames()).thenReturn(new String[] { "TestFeatureType" });
+            when(fileDataStore.getTypeNames()).thenReturn(new String[] { "test" });
             when(fileDataStore.getFeatureSource(anyString())).thenReturn((SimpleFeatureSource) featureSource);
             when(featureSource.getFeatures()).thenReturn(collection);
+            when(featureSource.getCount(any())).thenReturn(1);
+
+            executorsMockedStatic.when(() -> Executors.newFixedThreadPool(any(int.class))).thenReturn(mockExecutorService);
+            when(mockExecutorService.submit(any(Runnable.class))).thenReturn(null);
+            when(mockExecutorService.awaitTermination(any(long.class), any())).thenReturn(true);
 
             NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toString(), dataStore, false);
             extractor.extract();
@@ -149,7 +166,7 @@ public class NodeEdgeExtractorTest  {
 
             // CSV 파일 생성 확인 (saveNodeIndex 호출 안됨)
             verify(dataStore, times(0)).saveNodeIndex(any());
-            
+
             // CSV 파일이 생성되었는지 확인
             Path csvFilePath = tempDir.resolve("node_index.csv");
             assertThat(csvFilePath).exists();
@@ -168,9 +185,10 @@ public class NodeEdgeExtractorTest  {
 
         try (MockedStatic<FileDataStoreFinder> mockedStatic = mockStatic(FileDataStoreFinder.class)) {
             mockedStatic.when(() -> FileDataStoreFinder.getDataStore(any(File.class))).thenReturn(fileDataStore);
-            when(fileDataStore.getTypeNames()).thenReturn(new String[] { "TestFeatureType" });
+            when(fileDataStore.getTypeNames()).thenReturn(new String[] { "test" });
             when(fileDataStore.getFeatureSource(anyString())).thenReturn((SimpleFeatureSource) featureSource);
             when(featureSource.getFeatures()).thenReturn(collection);
+            when(featureSource.getCount(any())).thenReturn(0);
 
             NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toString(), dataStore);
             extractor.extract(progressStatus);

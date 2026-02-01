@@ -4,16 +4,17 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.LongStream;
-import java.util.stream.Stream;
 
 import org.geotools.api.data.FeatureSource;
 import org.geotools.api.data.FileDataStore;
 import org.geotools.api.data.FileDataStoreFinder;
+import org.geotools.api.data.Query;
 import org.geotools.api.feature.simple.SimpleFeature;
 import org.geotools.api.feature.simple.SimpleFeatureType;
 import org.geotools.feature.FeatureCollection;
@@ -21,9 +22,9 @@ import org.geotools.feature.FeatureIterator;
 import org.locationtech.jts.geom.Geometry;
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
-import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.MappableDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
@@ -77,37 +78,116 @@ public class NodeEdgeExtractor implements Extractor {
 		int[] lastEdgeOffsetArray = new int[idArray.length];
 		Arrays.fill(lastEdgeOffsetArray, -1);
 
-		BlockingQueue<TaskItem> nodeEdgeQueue = new LinkedBlockingQueue<TaskItem>(2000);
-		AtomicBoolean shouldContinue = new AtomicBoolean(true);
+		BlockingQueue<TaskItem> nodeQueue = new LinkedBlockingQueue<TaskItem>(2000);
+		BlockingQueue<TaskItem> edgeQueue = new LinkedBlockingQueue<TaskItem>(2000);
+		AtomicBoolean taskContinue = new AtomicBoolean(true); // 모든 작업 스레드가 공유하는 플래그
 
-		List<Runnable> tasks = new ArrayList<>();
-		tasks.add(new NodeCreator(collection, idArray, nodeCreatedArray, nodeEdgeQueue, store, progressStatus,
-				shouldContinue));
-		tasks.add(new EdgeCreator(store, idArray, nodeCreatedArray, lastEdgeOffsetArray, nodeEdgeQueue, progressStatus,
-				shouldContinue));
+		int threadCount = 4;
+		int featureCount = source.getCount(Query.ALL);
+		
+		// featureCount가 0이면 작업을 수행하지 않고 종료
+		if (featureCount == 0) {
+			log.warn("피쳐가 존재하지 않습니다. 작업을 수행하지 않습니다.");
+			shpStore.dispose();
+			return;
+		}
+		
+		int splitSize = featureCount / threadCount;
 
 		store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
 
-		List<Thread> workers = tasks.stream().map((task) -> {
-			return new Thread(task, task.getClass().getSimpleName());
-		}).toList();
-
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			workers.forEach(t -> t.interrupt());
-		}));
-
-		workers.forEach(Thread::start);
-		workers.forEach(t -> {
-			try {
-				t.join();
-			} catch (InterruptedException e) {
-				t.interrupt();
-				e.printStackTrace();
-			}
+		ExecutorService nodeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
+		
+		// Shutdown Hook 등록: Ctrl+C 시 ExecutorService 종료
+		Thread shutdownHook = new Thread(() -> {
+			log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
+			nodeExecutorService.shutdownNow();
 		});
+		Runtime.getRuntime().addShutdownHook(shutdownHook);
 
-		if (shouldContinue.get()) {
-			// 모든 워커 스레드가 종료되면 idArray를 이용해 indexList 생성
+		// 노드 작업
+		for(int i=0; i<threadCount; i++) {
+			Query query = new Query(shpStore.getTypeNames()[0]);
+			int startIndex = i * splitSize;
+			int maxFeatures = (i == threadCount - 1) ? (featureCount - startIndex) : splitSize;
+			query.setStartIndex(startIndex);
+			query.setMaxFeatures(maxFeatures);
+			FeatureCollection<SimpleFeatureType, SimpleFeature> data =  source.getFeatures(query);
+			nodeExecutorService.submit(new NodeExtract(i, idArray, nodeQueue, data, taskContinue));
+		}
+		nodeExecutorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, threadCount, progressStatus, taskContinue));
+
+		nodeExecutorService.shutdown();
+		try {
+			// 모든 작업이 완료될 때까지 대기
+			while(!nodeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
+			// 노드 작업 완료 후 Shutdown Hook 제거
+			Runtime.getRuntime().removeShutdownHook(shutdownHook);
+			
+			// 예외 발생으로 작업이 중단되었는지 확인
+			if (!taskContinue.get()) {
+				log.error("노드 추출 중 예외 발생으로 작업 중단");
+				return;
+			}
+		} catch (InterruptedException e) {
+			log.error("작업 대기 중 인터럽트 발생", e);
+			nodeExecutorService.shutdownNow();
+			Thread.currentThread().interrupt();
+			return; // 인터럽트 시 조기 종료
+		}
+
+		// 엣지 작업
+		ExecutorService edgeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
+		
+		// 엣지 작업용 Shutdown Hook 등록
+		Thread edgeShutdownHook = new Thread(() -> {
+			log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
+			edgeExecutorService.shutdownNow();
+		});
+		Runtime.getRuntime().addShutdownHook(edgeShutdownHook);
+
+		for(int i=0; i<threadCount; i++) {
+			Query query = new Query(shpStore.getTypeNames()[0]);
+			int startIndex = i * splitSize;
+			int maxFeatures = (i == threadCount - 1) ? (featureCount - startIndex) : splitSize;
+			query.setStartIndex(startIndex);
+			query.setMaxFeatures(maxFeatures);
+			FeatureCollection<SimpleFeatureType, SimpleFeature> data =  source.getFeatures(query);
+			edgeExecutorService.submit(new EdgeExtract(i, idArray, edgeQueue, data, taskContinue));
+		}
+		edgeExecutorService.submit(new EdgeSaver(edgeQueue, store, threadCount, progressStatus, taskContinue));
+
+		edgeExecutorService.shutdown();
+		try {
+			// 모든 작업이 완료될 때까지 대기
+			while(!edgeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
+			// 엣지 작업 완료 후 Shutdown Hook 제거
+			Runtime.getRuntime().removeShutdownHook(edgeShutdownHook);
+			
+			// 예외 발생으로 작업이 중단되었는지 확인
+			if (!taskContinue.get()) {
+				log.error("엣지 추출 중 예외 발생으로 작업 중단");
+				return;
+			}
+		} catch (InterruptedException e) {
+			log.error("작업 대기 중 인터럽트 발생", e);
+			edgeExecutorService.shutdownNow();
+			Thread.currentThread().interrupt();
+			return; // 인터럽트 시 조기 종료
+		}
+		
+		
+		// 모든 워커 스레드가 정상적으로 끝난 경우
+		if (taskContinue.get()) {
+			// 엣지 정렬
+			EdgeSort edgeSort = new EdgeSort(store);
+			edgeSort.sort();
+	
+			// 인덱스 생성 및 저장
+			EdgeIndexCreator edgeIndexCreator = new EdgeIndexCreator(store);
+			edgeIndexCreator.createEdgeIndex();
+			
+			// idArray를 이용해 노드 인덱스 생성
 			ArrayList<IndexInfo> indexList = createIndexList(idArray);
 
 			// DB 저장 여부 판단
@@ -153,6 +233,11 @@ public class NodeEdgeExtractor implements Extractor {
 		while (iterator.hasNext()) {
 			SimpleFeature feature = iterator.next();
 			Geometry geo = (Geometry) feature.getDefaultGeometry();
+			String a = (String)feature.getAttribute("osm_id");
+
+			if(a.equals("375861208")) {
+				int debug = 0;
+			}
 
 			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
 				long coordinateId = GeometryUtil.coordinateToLong(coordinate);

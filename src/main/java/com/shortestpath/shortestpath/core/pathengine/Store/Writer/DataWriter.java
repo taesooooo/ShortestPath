@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath.core.pathengine.Store;
+package com.shortestpath.shortestpath.core.pathengine.Store.Writer;
 
 import java.io.IOException;
 import java.util.List;

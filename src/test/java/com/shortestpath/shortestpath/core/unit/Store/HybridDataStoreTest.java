@@ -15,8 +15,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
@@ -104,43 +106,6 @@ public class HybridDataStoreTest {
     }
 
     @Test
-    @DisplayName("추출 단계에서 여러 노드와 엣지를 번갈아 저장/읽기")
-    public void extractionModeCanInterleaveSaveAndRead() throws Exception {
-        Path tempDir = Files.createTempDirectory("test");
-        
-        try {
-            HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
-            
-            // 노드 1 저장
-            Node node1 = new Node(1, new Coordinate(37.5, 127.5), 0, 0, 0, 0);
-            store.saveNode(node1, 0L);
-            
-            // 엣지 1 저장 (노드1 참조)
-            Edge edge1 = new Edge(0, 1, 2, 100.0, 24);
-            store.saveEdge(edge1, 0L);
-            
-            // 저장한 데이터 즉시 검증
-            Node readNode1 = store.readNode(0L);
-            assertThat(readNode1.getId()).isEqualTo(1);
-            
-            Edge readEdge1 = store.readEdge(0L);
-            assertThat(readEdge1.getFrom()).isEqualTo(1);
-            
-            // 노드 2 저장
-            Node node2 = new Node(2, new Coordinate(37.6, 127.6), 24, 0, 0, 0);
-            store.saveNode(node2, 24L);
-            
-            // 저장한 데이터 검증
-            Node readNode2 = store.readNode(24L);
-            assertThat(readNode2.getId()).isEqualTo(2);
-
-            store.close();
-        } finally {
-            deleteTestDirectory(tempDir);
-        }
-    }
-
-    @Test
     @DisplayName("readEdge가 임의 위치에 저장된 Edge 데이터를 올바르게 반환하는지 확인")
     public void readEdgeReturnDataConfirm() throws Exception {
         Path tempDir = Files.createTempDirectory("test");
@@ -153,12 +118,13 @@ public class HybridDataStoreTest {
             int testToOffset = 2;
             double testDistance = 30.5;
             int testNextEdgeOffset = 40;
+            RoadLevel testRoadLevel = RoadLevel.L0;
 
-            Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset);
+            Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset, testRoadLevel);
 
-            store.saveEdge(edge, 24L);
+            store.saveEdge(edge, 26L);
 
-            Edge readEdge = store.readEdge(24L);
+            Edge readEdge = store.readEdge(26L);
 
             assertThat(readEdge.getId()).as("Id값이 테스트 값과 일치하지 않습니다.").isEqualTo(testId);
             assertThat(readEdge.getFrom()).as("읽어온 Edge의 From값이 일치하지 않습니다.").isEqualTo(testFromOffset);

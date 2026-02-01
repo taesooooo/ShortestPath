@@ -16,5 +16,6 @@ public class IntegrationTestHelper {
         String dir = dataStore.getFileDirectory();
         Files.deleteIfExists(Paths.get(dir, "node.bin"));
         Files.deleteIfExists(Paths.get(dir, "edge.bin"));
+        Files.deleteIfExists(Paths.get(dir, "edge_index.bin"));
     }
 }

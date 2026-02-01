@@ -8,6 +8,15 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.InMemoryEdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Reader.DataReader;
+import com.shortestpath.shortestpath.core.pathengine.Store.Reader.HybridDataReader;
+import com.shortestpath.shortestpath.core.pathengine.Store.Reader.MappableDataReader;
+import com.shortestpath.shortestpath.core.pathengine.Store.Writer.AllocatableDataWriter;
+import com.shortestpath.shortestpath.core.pathengine.Store.Writer.DataWriter;
+import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HeaderWriter;
+import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HybridDataWriter;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,6 +38,7 @@ public class HybridDataStore implements MappableDataStore {
     private String fileDirectory;
     private boolean readOnlyMode;
     private DataPersistence dataPersistence;  // DB 모드 설정
+    private EdgeIndex edgeIndex;  // Edge 인덱스 관리
 
     /**
      * 추출 단계 생성자 - Reader + Writer 모두 초기화
@@ -38,6 +48,7 @@ public class HybridDataStore implements MappableDataStore {
         this.fileDirectory = fileDirectory;
         this.readOnlyMode = false;
         this.dataPersistence = null;
+        this.edgeIndex = new InMemoryEdgeIndex();  // 기본 인메모리 인덱스
 
         // 추출 단계: Writer 먼저 생성 (파일 생성)
         this.dataWriter = new HybridDataWriter(fileDirectory);
@@ -57,6 +68,7 @@ public class HybridDataStore implements MappableDataStore {
     public HybridDataStore(String fileDirectory, boolean readMode) throws IOException {
         this.fileDirectory = fileDirectory;
         this.readOnlyMode = readMode;
+        this.edgeIndex = new InMemoryEdgeIndex();  // 기본 인메모리 인덱스
 
         if (readMode) {
             // 경로탐색 단계: Reader만 초기화
@@ -70,6 +82,17 @@ public class HybridDataStore implements MappableDataStore {
         } else {
             throw new IllegalArgumentException("readMode가 false인 경우 기본 생성자를 사용하세요");
         }
+    }
+
+    @Override
+    public int getTotalEdges() throws IOException {
+        return dataReader.readEdgeHeader().getEdgeCount();
+    }
+
+    @Override
+    public int getTotalNodes() throws IOException {
+        // TODO Auto-generated method stub
+        return 0;
     }
 
     @Override
@@ -102,7 +125,10 @@ public class HybridDataStore implements MappableDataStore {
         if (dataWriter == null) {
             throw new IllegalStateException("Writer가 초기화되지 않았습니다.");
         }
-        return dataWriter.saveEdge(edge);
+        
+        int offset = dataWriter.saveEdge(edge);
+        
+        return offset;
     }
 
     @Override
@@ -113,7 +139,10 @@ public class HybridDataStore implements MappableDataStore {
         if (dataWriter == null) {
             throw new IllegalStateException("Writer가 초기화되지 않았습니다.");
         }
-        return dataWriter.saveEdge(edge, offset);
+        
+        int savedOffset = dataWriter.saveEdge(edge, offset);
+        
+        return savedOffset;
     }
 
     @Override
@@ -253,6 +282,7 @@ public class HybridDataStore implements MappableDataStore {
      * 메모리 매핑 모드로 전환
      * 경로탐색 단계에서 성능 최적화를 위해 호출
      * Reader가 MappableDataReader를 구현하는 경우만 사용 가능
+     * EdgeIndex도 매핑 모드를 지원하면 함께 전환
      */
     public void switchToMappingMode() throws IOException {
         if (!readOnlyMode) {
@@ -263,12 +293,19 @@ public class HybridDataStore implements MappableDataStore {
             throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
         }
 
+        // DataReader 매핑 모드 전환
         if (dataReader instanceof MappableDataReader) {
             ((MappableDataReader) dataReader).switchToMappingMode();
-            log.info("메모리 매핑 모드로 전환 완료");
+            log.info("DataReader 메모리 매핑 모드로 전환 완료");
         } else {
             throw new UnsupportedOperationException(
                     "현재 Reader는 메모리 매핑을 지원하지 않습니다: " + dataReader.getClass().getSimpleName());
+        }
+        
+        // EdgeIndex 매핑 모드 전환 (지원하는 경우)
+        if (edgeIndex != null && edgeIndex.supportsMappingMode()) {
+            edgeIndex.switchToMappingMode();
+            log.info("EdgeIndex 메모리 매핑 모드로 전환 완료");
         }
     }
 
@@ -280,7 +317,38 @@ public class HybridDataStore implements MappableDataStore {
         if (dataReader != null) {
             dataReader.close();
         }
+        if (edgeIndex != null) {
+            edgeIndex.close();
+        }
         log.info("HybridDataStore 리소스 해제 완료");
+    }
+
+    @Override
+    public void writeNodeHeader(NodeHeader header) throws IOException {
+        if (readOnlyMode) {
+            throw new IllegalStateException("읽기 전용 모드에서는 헤더를 작성할 수 없습니다.");
+        }
+        if (dataWriter == null) {
+            throw new IllegalStateException("Writer가 초기화되지 않았습니다.");
+        }
+        if (!(dataWriter instanceof HeaderWriter)) {
+            throw new UnsupportedOperationException("현재 Writer는 헤더 작성을 지원하지 않습니다.");
+        }
+        ((HeaderWriter) dataWriter).writeNodeHeader(header);
+    }
+
+    @Override
+    public void writeEdgeHeader(EdgeHeader header) throws IOException {
+        if (readOnlyMode) {
+            throw new IllegalStateException("읽기 전용 모드에서는 헤더를 작성할 수 없습니다.");
+        }
+        if (dataWriter == null) {
+            throw new IllegalStateException("Writer가 초기화되지 않았습니다.");
+        }
+        if (!(dataWriter instanceof HeaderWriter)) {
+            throw new UnsupportedOperationException("현재 Writer는 헤더 작성을 지원하지 않습니다.");
+        }
+        ((HeaderWriter) dataWriter).writeEdgeHeader(header);
     }
 
     public String getFileDirectory() {
@@ -309,5 +377,19 @@ public class HybridDataStore implements MappableDataStore {
 
     public DataReader getDataReader() {
         return dataReader;
+    }
+    
+    @Override
+    public void setEdgeIndex(EdgeIndex edgeIndex) {
+        if (edgeIndex == null) {
+            throw new IllegalArgumentException("EdgeIndex는 null일 수 없습니다.");
+        }
+        this.edgeIndex = edgeIndex;
+        log.info("EdgeIndex 설정 완료 - type: {}", edgeIndex.getClass().getSimpleName());
+    }
+    
+    @Override
+    public EdgeIndex getEdgeIndex() {
+        return edgeIndex;
     }
 }

@@ -6,6 +6,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import org.locationtech.jts.geom.Coordinate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +41,7 @@ public class NodeCSVWriter {
 
             // 각 노드 정보를 CSV 형식으로 작성
             for (IndexInfo indexInfo : indexList) {
-                org.locationtech.jts.geom.Coordinate coordinate = GeometryUtil
+                Coordinate coordinate = GeometryUtil
                         .longToCoordinate(indexInfo.getCoordinate());
                 String line = String.format("%d,%.7f,%.7f,%d",
                         indexInfo.getNodeId(),

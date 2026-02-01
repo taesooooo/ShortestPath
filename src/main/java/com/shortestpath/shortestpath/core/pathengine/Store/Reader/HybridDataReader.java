@@ -1,10 +1,12 @@
-package com.shortestpath.shortestpath.core.pathengine.Store;
+package com.shortestpath.shortestpath.core.pathengine.Store.Reader;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -14,6 +16,8 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
+import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * 초기에는 직렬 읽기, 데이터 준비 후 메모리 매핑 읽기로 전환
  */
 @Slf4j
-public class HybridDataReader implements MappableDataReader, IndexableDataReader {
+public class HybridDataReader implements MappableDataReader {
     private FileChannel nodeFileChannel = null;
     private FileChannel edgeFileChannel = null;
     private MappedByteBuffer nodeMappedBuffer = null;
@@ -36,13 +40,10 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
     @Getter
     private Path edgeFilePath;
 
-    // 좌표 -> Node 오프셋 맵핑
-    private HashMap<String, Integer> coordinateNodeIndexMap;
 
     public HybridDataReader(Path nodeFilePath, Path edgeFilePath) throws IOException {
         this.nodeFilePath = nodeFilePath;
         this.edgeFilePath = edgeFilePath;
-        this.coordinateNodeIndexMap = new HashMap<>();
 
         this.nodeFileChannel = FileChannel.open(nodeFilePath, StandardOpenOption.READ);
         this.edgeFileChannel = FileChannel.open(edgeFilePath, StandardOpenOption.READ);
@@ -51,12 +52,33 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
     }
 
     @Override
+    public EdgeHeader readEdgeHeader() throws IOException {
+        if(graphRead) {
+            edgeMappedBuffer.position(0);
+            int edgeCount = edgeMappedBuffer.getInt();
+            boolean sorted = edgeMappedBuffer.get() != 0;
+
+            return new EdgeHeader(edgeCount, sorted);
+        } 
+        else {
+            ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE); // int(4) + boolean(1)
+            edgeFileChannel.read(buffer, 0);
+            buffer.flip();
+
+            int edgeCount = buffer.getInt();
+            boolean sorted = buffer.get() != 0;
+
+            return new EdgeHeader(edgeCount, sorted);
+        }
+    }
+
+    @Override
     public Node readNode(long offset) throws IOException {
         if (graphRead) {
             return readMappedNode(offset);
         }
 
-        ByteBuffer buffer = ByteBuffer.allocate(24);
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.NODE_SIZE);
         nodeFileChannel.read(buffer, offset);
         buffer.flip();
 
@@ -75,7 +97,8 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
             return readMappedEdge(offset);
         }
 
-        ByteBuffer buffer = ByteBuffer.allocate(24);
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.EDGE_SIZE);
+        byte[] roadLevelBytes = new byte[2];
         edgeFileChannel.read(buffer, offset);
         buffer.flip();
 
@@ -84,15 +107,11 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
         int to = buffer.getInt();
         double distance = buffer.getDouble();
         int nextEdgeOffset = buffer.getInt();
+        buffer.get(roadLevelBytes);
+        String roadLevel = new String(roadLevelBytes, StandardCharsets.US_ASCII);
 
-        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset);
+        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, RoadLevel.fromString(roadLevel));
         return edge;
-    }
-
-    @Override
-    public int getNodeOffset(Coordinate coordinate) {
-        String coordinateKey = coordinate.getLatitude() + "," + coordinate.getLongitude();
-        return coordinateNodeIndexMap.getOrDefault(coordinateKey, -1);
     }
 
     @Override
@@ -106,8 +125,8 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
             long nodeSize = Files.size(nodeFilePath);
             long edgeSize = Files.size(edgeFilePath);
             
-            // 최소 1개 노드/엣지(24바이트)보다 커야 실제 데이터 있음
-            boolean hasData = nodeSize >= 24 && edgeSize >= 24;
+            // 최소 1개 노드/엣지보다 커야 실제 데이터 있음
+            boolean hasData = nodeSize >= DataStructureSizes.NODE_SIZE && edgeSize >= DataStructureSizes.EDGE_SIZE;
             log.debug("데이터 추출 여부 확인 - nodeSize: {}, edgeSize: {}, hasData: {}", 
                       nodeSize, edgeSize, hasData);
             
@@ -157,14 +176,17 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
         }
 
         edgeMappedBuffer.position((int) offset);
+        byte[] roadLevelBytes = new byte[2];
 
         int id = edgeMappedBuffer.getInt();
         int from = edgeMappedBuffer.getInt();
         int to = edgeMappedBuffer.getInt();
         double distance = edgeMappedBuffer.getDouble();
         int nextEdgeOffset = edgeMappedBuffer.getInt();
+        edgeMappedBuffer.get(roadLevelBytes);
+        String roadLevel = new String(roadLevelBytes, StandardCharsets.US_ASCII);
 
-        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset);
+        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, RoadLevel.fromString(roadLevel));
         return edge;
     }
 
@@ -177,13 +199,5 @@ public class HybridDataReader implements MappableDataReader, IndexableDataReader
             edgeFileChannel.close();
         }
         log.info("HybridDataReader 리소스 해제 완료");
-    }
-
-    /**
-     * 좌표 인덱스 추가 (Writer에서 호출)
-     */
-    public void addCoordinateIndex(Coordinate coordinate, int offset) {
-        String coordinateKey = coordinate.getLatitude() + "," + coordinate.getLongitude();
-        coordinateNodeIndexMap.put(coordinateKey, offset);
     }
 }

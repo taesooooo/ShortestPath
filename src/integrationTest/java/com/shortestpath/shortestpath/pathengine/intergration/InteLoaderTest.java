@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
+import org.assertj.core.util.Arrays;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -30,9 +30,10 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
-import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
 import com.shortestpath.shortestpath.provider.JpaDataPersistence;
 import com.shortestpath.shortestpath.provider.JpaNodeProvider;
 import com.shortestpath.shortestpath.repository.NodeIndexInsertRepository;
@@ -99,24 +100,38 @@ public class InteLoaderTest {
     private ArrayList<Node> getNeighborNode(DataStore dataStore, Node node) throws IOException {
         ArrayList<Node> list = new ArrayList<Node>();
         ArrayList<Edge> edgeList = new ArrayList<Edge>();
+        EdgeIndex index = dataStore.getEdgeIndex();
 
-        Edge readEdge = dataStore.readEdge(node.getStartEdgeOffset());
-        if (readEdge != null) {
-            edgeList.add(readEdge);
-            while (readEdge.getNextEdgeOffset() != -1) {
-                readEdge = dataStore.readEdge(readEdge.getNextEdgeOffset());
-                if (readEdge == null) {
-                    break;
-                }
-                edgeList.add(readEdge);
+        EdgeIndexEntry entry = index.get(node.getId());
+        int edgeCount = entry.getLevel0EdgeIndex().getEdgeCount() + entry.getLevel1EdgeIndex().getEdgeCount()
+                + entry.getLevel2EdgeIndex().getEdgeCount();
+
+        long startOffset = getStartOffset(entry);
+        for(int i = 0; i<edgeCount; i++) {
+            Edge edge = dataStore.readEdge(startOffset + i * DataStructureSizes.EDGE_SIZE);
+            edgeList.add(edge);
+        }
+        Node preivouseNode = null;
+        for (Edge edge : edgeList) {
+            Node neighborNode = dataStore.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
+            if(preivouseNode == null || neighborNode.getId() != preivouseNode.getId()) {
+                preivouseNode = neighborNode;
+                list.add(neighborNode);
             }
         }
 
-        for (Edge edge : edgeList) {
-            Node readNode = dataStore.readNode(edge.getTo() * DataStructureSizes.NODE_SIZE);
-            list.add(readNode);
-        }
-
         return list;
+    }
+
+    private long getStartOffset(EdgeIndexEntry entry) {
+        if (entry.getLevel0EdgeIndex().getEdgeCount() > 0) {
+            return entry.getLevel0EdgeIndex().getStartOffset();
+        } 
+        else if (entry.getLevel1EdgeIndex().getEdgeCount() > 0) {
+            return entry.getLevel1EdgeIndex().getStartOffset();
+        } 
+        else {
+            return entry.getLevel2EdgeIndex().getStartOffset();
+        }
     }
 }

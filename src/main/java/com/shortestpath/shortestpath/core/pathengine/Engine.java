@@ -13,6 +13,8 @@ import org.locationtech.jts.geom.Envelope;
 
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
 import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -76,8 +78,8 @@ public class Engine {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
 			Node nearestNode = findNearestNode(startCoordinate);
 			Edge nearestEdge = findNearestEdge(nearestNode, startCoordinate);
-			Node fromNode = store.readNode(nearestEdge.getFrom() * DataStructureSizes.NODE_SIZE);
-			Node toNode = store.readNode(nearestEdge.getTo() * DataStructureSizes.NODE_SIZE);
+			Node fromNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getFrom()));
+			Node toNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getTo()));
 			startNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), startCoordinate);
 
 			startNode = nearestNode;
@@ -87,8 +89,8 @@ public class Engine {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
 			Node nearestNode = findNearestNode(endCoordinate);
 			Edge nearestEdge = findNearestEdge(nearestNode, endCoordinate);
-			Node fromNode = store.readNode(nearestEdge.getFrom() * DataStructureSizes.NODE_SIZE);
-			Node toNode = store.readNode(nearestEdge.getTo() * DataStructureSizes.NODE_SIZE);
+			Node fromNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getFrom()));
+			Node toNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getTo()));
 			endNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), endCoordinate); 
 			// endNode = findNearestNode(fromNode, toNode, endNearestPoint);
 			endNode = nearestNode;
@@ -133,7 +135,7 @@ public class Engine {
 
 		// 노드와 엣지 캐싱 맵
 		HashMap<Integer, Node> nodeList = new HashMap<>();
-		HashMap<Integer, Edge> edgeList = new HashMap<>();
+		HashMap<Long, Edge> edgeList = new HashMap<>();
 
 	    // 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
 	    double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate());
@@ -168,7 +170,7 @@ public class Engine {
 			
 	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
 	        for(Edge edge : getConnectedEdges(edgeList, minNode)) {
-				Node storeNode = store.readNode(edge.getTo() * DataStructureSizes.NODE_SIZE);
+				Node storeNode = store.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
 				Node listNode = nodeList.get(storeNode.getId());
 				if(listNode == null) {
 					nodeList.put(storeNode.getId(), storeNode);
@@ -180,14 +182,19 @@ public class Engine {
 	            if(closeList.contains(toNode)) {
 					continue;
 	            }
-				
+
 				if(routeTracker != null && traceRoute != null) {
 					traceRoute.addChild(toNode.getCoordinate());
 				}
+
 	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
 	            double newDist = minNode.getgCost() + edge.getDistance();
-	            // openList에 없고, 더 짧은 경로라면 갱신
-	            if(!openList.contains(toNode) && newDist < toNode.getgCost()) {
+	            
+	            // 더 짧은 경로를 발견한 경우
+	            if(newDist < toNode.getgCost()) {
+	                // 처음 발견한 노드인지 확인
+	                boolean isNewNode = !openList.contains(toNode);
+	                
 	                // hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
 	                double hCost = PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate());
 	                double fCost = newDist + hCost;
@@ -195,6 +202,11 @@ public class Engine {
 					toNode.setgCost(newDist);
 					toNode.setfCost(fCost);
 
+	                if(!isNewNode) {
+	                    // 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
+	                    openList.remove(toNode);
+	                }
+	                
 	                openList.add(toNode);
 	                // 경로 역추적을 위해 이전 노드 저장
 	                location.put(toNode, minNode);
@@ -230,24 +242,29 @@ public class Engine {
 	 * @return List<Edge>
 	 * @throws IOException 
 	 */
-	private List<Edge> getConnectedEdges(HashMap<Integer,Edge> edgeList, Node node) throws IOException {
+	private List<Edge> getConnectedEdges(HashMap<Long,Edge> edgeList, Node node) throws IOException {
 		ArrayList<Edge> edges = new ArrayList<Edge>();
-		
-		Edge storeEdge = store.readEdge(node.getStartEdgeOffset());
-		Edge listEdge = edgeList.get(storeEdge.getId());
-		if(listEdge == null) {
-			edgeList.put(storeEdge.getId(), storeEdge);
-		}
-		edges.add(storeEdge);
 
-		while(edges.get(edges.size() - 1).getNextEdgeOffset() != -1) {
-			storeEdge = store.readEdge(edges.get(edges.size() - 1).getNextEdgeOffset());
-			listEdge = edgeList.get(storeEdge.getId());
-			if(listEdge == null) {
-				edgeList.put(storeEdge.getId(), storeEdge);
-			}
-			edges.add(storeEdge);
-		}
+		EdgeIndex index = store.getEdgeIndex();
+
+        EdgeIndexEntry entry = index.get(node.getId());
+        int edgeCount = entry.getLevel0EdgeIndex().getEdgeCount() + entry.getLevel1EdgeIndex().getEdgeCount()
+                + entry.getLevel2EdgeIndex().getEdgeCount();
+
+        long startOffset = getStartOffset(entry);
+        for(int i = 0; i<edgeCount; i++) {
+            long edgeOffset = startOffset + i * DataStructureSizes.EDGE_SIZE;
+            
+            // 캐시에서 먼저 확인
+            Edge cachedEdge = edgeList.get(edgeOffset);
+            if(cachedEdge != null) {
+                edges.add(cachedEdge);
+            } else {
+                Edge edge = store.readEdge(edgeOffset);
+                edgeList.put(edgeOffset, edge);
+                edges.add(edge);
+            }
+        }
 		
 		return edges;
 	}
@@ -261,15 +278,31 @@ public class Engine {
 	private ArrayList<Edge> getConnectedEdges(Node node) throws IOException {
 		ArrayList<Edge> edges = new ArrayList<Edge>();
 		
-		Edge edge = store.readEdge(node.getStartEdgeOffset());
-		edges.add(edge);
+		EdgeIndex index = store.getEdgeIndex();
 
-		while(edges.get(edges.size() - 1).getNextEdgeOffset() != -1) {
-			edge = store.readEdge(edges.get(edges.size() - 1).getNextEdgeOffset());
-			edges.add(edge);
-		}
+        EdgeIndexEntry entry = index.get(node.getId());
+        int edgeCount = entry.getLevel0EdgeIndex().getEdgeCount() + entry.getLevel1EdgeIndex().getEdgeCount()
+                + entry.getLevel2EdgeIndex().getEdgeCount();
+
+        long startOffset = getStartOffset(entry);
+        for(int i = 0; i<edgeCount; i++) {
+            Edge edge = store.readEdge(startOffset + i * DataStructureSizes.EDGE_SIZE);
+            edges.add(edge);
+        }
 		
 		return edges;
+	}
+
+	private long getStartOffset(EdgeIndexEntry entry) {
+		if (entry.getLevel0EdgeIndex().getEdgeCount() > 0) {
+			return entry.getLevel0EdgeIndex().getStartOffset();
+		}
+		 else if (entry.getLevel1EdgeIndex().getEdgeCount() > 0) {
+			return entry.getLevel1EdgeIndex().getStartOffset();
+		} 
+		else {
+			return entry.getLevel2EdgeIndex().getStartOffset();
+		}
 	}
 
 	/**
@@ -290,7 +323,7 @@ public class Engine {
 		}
 
 		for(Integer nodeId : nodeIdList) {
-			Node node = store.readNode(nodeId * DataStructureSizes.NODE_SIZE);
+			Node node = store.readNode(DataStructureSizes.calculateNodeOffset(nodeId));
 			nodeList.add(node);
 		}
 
@@ -350,7 +383,7 @@ public class Engine {
 		for(Edge edge : edgeList) {
 			log.debug("엣지 - {}, {}, {}, {}", edge.getId(), edge.getFrom(), edge.getTo(), edge.getDistance());
 
-			Node toNode = store.readNode(edge.getTo() * DataStructureSizes.NODE_SIZE);
+			Node toNode = store.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
 			double distance = coordinate.calculateDistanceToTarget(toNode.getCoordinate());
 			if(distance < minDistance) {
 				minDistance = distance;

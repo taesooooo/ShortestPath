@@ -1,4 +1,4 @@
-package com.shortestpath.shortestpath.core.pathengine.Store;
+package com.shortestpath.shortestpath.core.pathengine.Store.Writer;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +12,8 @@ import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
+import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  * 추출 단계에서 Node와 Edge를 파일에 기록
  */
 @Slf4j
-public class HybridDataWriter implements AllocatableDataWriter {
+public class HybridDataWriter implements AllocatableDataWriter, HeaderWriter {
     private String fileDirectory;
     private FileChannel nodeFileChannel = null;
     private FileChannel edgeFileChannel = null;
@@ -64,9 +66,7 @@ public class HybridDataWriter implements AllocatableDataWriter {
             throw new IllegalArgumentException("Node 객체가 Null 입니다.");
         }
 
-        // Node의 id(int, 4바이트), startEdgeOffset(int, 4바이트), x(double, 8바이트), y(double, 8바이트) 저장
-        // 총 24바이트
-        ByteBuffer buffer = ByteBuffer.allocate(24);
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.NODE_SIZE);
         buffer.putInt(node.getId());
         buffer.putInt(node.getStartEdgeOffset());
         buffer.putDouble(node.getCoordinate().getLongitude());
@@ -81,7 +81,7 @@ public class HybridDataWriter implements AllocatableDataWriter {
     @Override
     public int saveEdge(Edge edge) throws IOException {
         long writeOffset = edgeFileChannel.position();
-        saveEdge(edge, writeOffset);
+        saveEdge(edge, DataStructureSizes.HEADER_SIZE +writeOffset);
         edgeFileChannel.position(writeOffset + DataStructureSizes.EDGE_SIZE);
 
         return (int) writeOffset;
@@ -93,15 +93,13 @@ public class HybridDataWriter implements AllocatableDataWriter {
             throw new IllegalArgumentException("Edge 객체가 Null 입니다.");
         }
 
-        // Edge id(int, 4바이트), from(int, 4바이트), to(int, 4바이트), distance(double, 8바이트),
-        // nextEdgeOffset(int, 4바이트) 저장
-        // 총 24바이트
-        ByteBuffer buffer = ByteBuffer.allocate(24);
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.EDGE_SIZE);
         buffer.putInt(edge.getId());
         buffer.putInt(edge.getFrom());
         buffer.putInt(edge.getTo());
         buffer.putDouble(edge.getDistance());
         buffer.putInt(edge.getNextEdgeOffset());
+        buffer.put(edge.getRoadLevel().toString().getBytes());
         buffer.flip();
 
         edgeFileChannel.write(buffer, offset);
@@ -149,6 +147,36 @@ public class HybridDataWriter implements AllocatableDataWriter {
         ByteBuffer buffer = ByteBuffer.allocate((int) size);
         edgeFileChannel.write(buffer, 0);
         log.info("Edge 파일 공간 할당 완료 - 크기: {} bytes", size);
+    }
+
+    @Override
+    public void writeNodeHeader(NodeHeader header) throws IOException {
+        if (nodeFileChannel == null || !nodeFileChannel.isOpen()) {
+            throw new IOException("Node 파일 채널이 초기화되지 않았습니다.");
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
+        buffer.putInt(header.getNodeCount());
+        buffer.put((byte) (header.isIndexed() ? 1 : 0));
+        buffer.flip();
+
+        nodeFileChannel.write(buffer, 0);
+        log.info("Node 헤더 작성 완료 - nodeCount: {}, indexed: {}", header.getNodeCount(), header.isIndexed());
+    }
+
+    @Override
+    public void writeEdgeHeader(EdgeHeader header) throws IOException {
+        if (edgeFileChannel == null || !edgeFileChannel.isOpen()) {
+            throw new IOException("Edge 파일 채널이 초기화되지 않았습니다.");
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
+        buffer.putInt(header.getEdgeCount());
+        buffer.put((byte) (header.isSorted() ? 1 : 0));
+        buffer.flip();
+
+        edgeFileChannel.write(buffer, 0);
+        log.info("Edge 헤더 작성 완료 - edgeCount: {}, sorted: {}", header.getEdgeCount(), header.isSorted());
     }
 
     @Override
