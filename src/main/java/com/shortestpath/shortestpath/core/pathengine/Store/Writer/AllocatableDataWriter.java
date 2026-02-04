@@ -20,4 +20,18 @@ public interface AllocatableDataWriter extends DataWriter {
      * @throws IOException 할당 실패 시
      */
     void allocateEdgeFileSpace(long size) throws IOException;
+
+    /**
+     * Node 파일을 지정된 크기로 축소
+     * @param actualSize 실제 필요한 크기
+     * @throws IOException 축소 실패 시
+     */
+    void truncateNodeFile(long actualSize) throws IOException;
+
+    /**
+     * Edge 파일을 지정된 크기로 축소
+     * @param actualSize 실제 필요한 크기
+     * @throws IOException 축소 실패 시
+     */
+    void truncateEdgeFile(long actualSize) throws IOException;
 }

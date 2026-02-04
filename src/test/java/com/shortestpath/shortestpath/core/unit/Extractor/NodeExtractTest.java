@@ -2,7 +2,6 @@ package com.shortestpath.shortestpath.core.unit.Extractor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -33,11 +32,12 @@ public class NodeExtractTest {
     
     private NodeExtract nodeExtract;
     private long[] idArrays;
-    private BlockingQueue<TaskItem> nodeQueue;
+    private BlockingQueue<List<TaskItem>> nodeQueue;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
     private SimpleFeatureType featureType;
     private GeometryFactory geometryFactory;
     private AtomicBoolean taskContinue = new AtomicBoolean(true);
+    private AtomicBoolean taskError = new AtomicBoolean(false);
     
     @BeforeEach
     public void setUp() {
@@ -78,21 +78,13 @@ public class NodeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        nodeExtract = new NodeExtract(0, idArrays, nodeQueue, collection, taskContinue);
+        nodeExtract = new NodeExtract(idArrays, nodeQueue, collection, taskContinue, taskError, null, 1);
         
         nodeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        nodeQueue.drainTo(items);
+        List<TaskItem> items = nodeQueue.take();
         
-        List<NodeItem> nodeItems = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof NodeItem) {
-                nodeItems.add((NodeItem) item);
-            }
-        }
-        
-        assertThat(nodeItems).hasSize(2);
+        assertThat(items).hasSize(2);
     }
     
     @Test
@@ -111,22 +103,14 @@ public class NodeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        nodeExtract = new NodeExtract(0, idArrays, nodeQueue, collection, taskContinue);
+        nodeExtract = new NodeExtract(idArrays, nodeQueue, collection, taskContinue, taskError, null, 1);
         
         nodeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        nodeQueue.drainTo(items);
+        List<TaskItem> items = nodeQueue.take();
         
-        List<NodeItem> nodeItems = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof NodeItem) {
-                nodeItems.add((NodeItem) item);
-            }
-        }
-        
-        assertThat(nodeItems).hasSize(1);
-        NodeItem nodeItem = nodeItems.get(0);
+        assertThat(items).hasSize(1);
+        NodeItem nodeItem = (NodeItem) items.get(0);
         
         Node nodeA = nodeItem.getNodeA();
         Node nodeB = nodeItem.getNodeB();
@@ -151,21 +135,13 @@ public class NodeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        nodeExtract = new NodeExtract(0, idArrays, nodeQueue, collection, taskContinue);
+        nodeExtract = new NodeExtract(idArrays, nodeQueue, collection, taskContinue, taskError, null, 1);
         
         nodeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        nodeQueue.drainTo(items);
-        
-        List<NodeItem> nodeItems = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof NodeItem) {
-                nodeItems.add((NodeItem) item);
-            }
-        }
+        List<TaskItem> items = nodeQueue.take();
 
-        NodeItem nodeItem = nodeItems.get(0);
+        NodeItem nodeItem = (NodeItem) items.get(0);
         
         Node nodeA = nodeItem.getNodeA();
         Node nodeB = nodeItem.getNodeB();
@@ -200,20 +176,12 @@ public class NodeExtractTest {
         SimpleFeature feature2 = featureBuilder.buildFeature(null);
         ((DefaultFeatureCollection) collection).add(feature2);
         
-        nodeExtract = new NodeExtract(0, idArrays, nodeQueue, collection, taskContinue);
+        nodeExtract = new NodeExtract(idArrays, nodeQueue, collection, taskContinue, taskError, null, 1);
         
         nodeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        nodeQueue.drainTo(items);
-        
-        List<NodeItem> nodeItems = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof NodeItem) {
-                nodeItems.add((NodeItem) item);
-            }
-        }
-        
-        assertThat(nodeItems).hasSize(2);
+        List<TaskItem> items = nodeQueue.take();
+
+        assertThat(items).hasSize(2);
     }
 }

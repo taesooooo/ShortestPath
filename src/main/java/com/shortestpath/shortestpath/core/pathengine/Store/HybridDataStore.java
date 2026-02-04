@@ -222,6 +222,48 @@ public class HybridDataStore implements MappableDataStore {
         }
     }
 
+    /**
+     * 노드 파일을 지정된 크기로 축소
+     * 모든 데이터 저장 후 실제 필요한 크기만큼만 유지하려면 호출
+     */
+    public void truncateNodeFile(long actualSize) throws IOException {
+        if (readOnlyMode) {
+            throw new IllegalStateException("읽기 전용 모드에서는 파일을 수정할 수 없습니다.");
+        }
+        if (dataWriter == null) {
+            throw new IllegalStateException("Writer가 초기화되지 않았습니다.");
+        }
+
+        if (dataWriter instanceof AllocatableDataWriter) {
+            ((AllocatableDataWriter) dataWriter).truncateNodeFile(actualSize);
+            log.info("노드 파일 축소 완료 - 축소된 크기: {} bytes", actualSize);
+        } else {
+            throw new UnsupportedOperationException(
+                    "현재 Writer는 파일 축소를 지원하지 않습니다: " + dataWriter.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 엣지 파일을 지정된 크기로 축소
+     * 모든 데이터 저장 후 실제 필요한 크기만큼만 유지하려면 호출
+     */
+    public void truncateEdgeFile(long actualSize) throws IOException {
+        if (readOnlyMode) {
+            throw new IllegalStateException("읽기 전용 모드에서는 파일을 수정할 수 없습니다.");
+        }
+        if (dataWriter == null) {
+            throw new IllegalStateException("Writer가 초기화되지 않았습니다.");
+        }
+
+        if (dataWriter instanceof AllocatableDataWriter) {
+            ((AllocatableDataWriter) dataWriter).truncateEdgeFile(actualSize);
+            log.info("엣지 파일 축소 완료 - 축소된 크기: {} bytes", actualSize);
+        } else {
+            throw new UnsupportedOperationException(
+                    "현재 Writer는 파일 축소를 지원하지 않습니다: " + dataWriter.getClass().getSimpleName());
+        }
+    }
+
     // ===== Read 메서드 =====
 
     @Override

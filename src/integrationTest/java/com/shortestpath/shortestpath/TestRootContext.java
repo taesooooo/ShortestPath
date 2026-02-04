@@ -28,7 +28,7 @@ public class TestRootContext {
 
 		if(!loader.isDataExtracted()) {
 
-			loader.extractData();
+			loader.extractData(true);
 			dataStore = new HybridDataStore(new File(shpFilePath).getParent(), true); // 읽기 전용 모드로 재생성
 			dataStore.setPersistence(dataPersistence);
 		}

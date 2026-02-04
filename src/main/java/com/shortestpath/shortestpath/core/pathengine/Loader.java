@@ -14,9 +14,13 @@ public class Loader {
 	// @Getter
 	// private Graph mapGraph = new Graph();
 	private AtomicInteger nodeExtractCount = new AtomicInteger(0);
+	private AtomicInteger nodeSaveCount = new AtomicInteger(0);
 	private AtomicInteger edgeExtractCount = new AtomicInteger(0);
-	private boolean nodeCompleted = false;
-	private boolean edgeCompleted = false;
+	private AtomicInteger edgeSaveCount = new AtomicInteger(0);
+	private boolean nodeExtractCompleted = false;
+	private boolean nodeSaveCompleted = false;
+	private boolean edgeExtractCompleted = false;
+	private boolean edgeSaveCompleted = false;
 	long startTime = 0;
 	int totalNodes = 0;
 	int totalEdges = 0;
@@ -25,11 +29,16 @@ public class Loader {
 		this.extractor = extractor;
 	}
 
-	public void extractData() throws IOException {
+	public void extractData(boolean progress) throws IOException {
 		try {
 			// 노드 및 엣지 추출
 			startTime = System.currentTimeMillis();
-			extractor.extract((taskType, total, current) -> onPrgress(taskType, total, current));
+			if(progress) {
+				extractor.extract((taskType, total, current) -> onPrgress(taskType, total, current));
+			}
+			else {
+				extractor.extract();
+			}
 			long endTime = System.currentTimeMillis();
 
 			log.info("종료 시간 - " + formatDuration(endTime - startTime));
@@ -44,36 +53,61 @@ public class Loader {
 	}
 
 	private void onPrgress(TaskType type, int total, int current) {
-		if(type == TaskType.NODE_EXTRACT) {
-			nodeExtractCount.set(current);
-			totalNodes = total;
-			if(current >= total) {
-				nodeCompleted = true;
-			}
-		}
-		else {
-			edgeExtractCount.set(current);
-			totalEdges = total;
-			if(current >= total) {
-				edgeCompleted = true;
-			}
+		switch(type) {
+			case NODE_EXTRACT:
+				nodeExtractCount.set(current);
+				totalNodes = total;
+				if(current >= total) {
+					nodeExtractCompleted = true;
+				}
+				break;
+			case NODE_SAVE:
+				nodeSaveCount.set(current);
+				if(current >= total) {
+					nodeSaveCompleted = true;
+				}
+				break;
+			case EDGE_EXTRACT:
+				edgeExtractCount.set(current);
+				totalEdges = total;
+				if(total > 0 && current >= total) {
+					edgeExtractCompleted = true;
+				}
+				break;
+			case EDGE_SAVE:
+				edgeSaveCount.set(current);
+				if(current >= totalEdges && totalEdges > 0) {
+					edgeSaveCompleted = true;
+				}
+				break;
+			default:
+				break;
 		}
 
-		// 둘 다 완료되지 않았으면 진행 상황 출력
-		if(!nodeCompleted || !edgeCompleted) {
-			printProgress(total, type, current);
-		}
+		// 진행 상황 표시
+		printProgress();
 	}
 
-	private void printProgress(int total, TaskType type, int current) {
-		int nodeCurrent = nodeExtractCount.get();
-		int edgeCurrent = edgeExtractCount.get();
+	private void printProgress() {
+		// 노드 추출 개수
+		int nodeExtracted = nodeExtractCount.get();
+		
+		// 노드 저장 개수
+		int nodeSaved = nodeSaveCount.get();
 
-		double nodeProgress = calcProgress(totalNodes, nodeCurrent);
+		// 엣지 추출 개수
+		int edgeExtracted = edgeExtractCount.get();
 
-		String nodeRemainingTime = calcETA(totalNodes, nodeCurrent);
+		// 엣지 저장 개수
+		int edgeSaved = edgeSaveCount.get();
 
-		System.out.printf("노드 추출: %3.2f%% (%s) / 엣지 추출: %7d개      \r", nodeProgress, nodeRemainingTime, edgeCurrent);
+		// 모든 진행 상황을 한 줄에 표시 (개수 기준)
+		System.out.printf("[노드 추출] %10d개 | [노드 저장] %10d개 | [엣지 추출] %10d개 | [엣지 저장] %10d개        \r",
+				nodeExtracted,
+				nodeSaved,
+				edgeExtracted,
+				edgeSaved);
+
 	}
 
 	private double calcProgress(int total, int current) {

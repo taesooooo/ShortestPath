@@ -4,12 +4,14 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.geotools.api.data.FeatureSource;
 import org.geotools.api.data.FileDataStore;
@@ -23,8 +25,11 @@ import org.locationtech.jts.geom.Geometry;
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Store.MappableDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
@@ -78,9 +83,10 @@ public class NodeEdgeExtractor implements Extractor {
 		int[] lastEdgeOffsetArray = new int[idArray.length];
 		Arrays.fill(lastEdgeOffsetArray, -1);
 
-		BlockingQueue<TaskItem> nodeQueue = new LinkedBlockingQueue<TaskItem>(2000);
-		BlockingQueue<TaskItem> edgeQueue = new LinkedBlockingQueue<TaskItem>(2000);
+		BlockingQueue<List<TaskItem>> nodeQueue = new LinkedBlockingQueue<List<TaskItem>>(2000);
+		BlockingQueue<List<TaskItem>> edgeQueue = new LinkedBlockingQueue<List<TaskItem>>(2000);
 		AtomicBoolean taskContinue = new AtomicBoolean(true); // 모든 작업 스레드가 공유하는 플래그
+		AtomicBoolean taskError = new AtomicBoolean(false); // 작업 중 예외 발생 여부 플래그
 
 		int threadCount = 4;
 		int featureCount = source.getCount(Query.ALL);
@@ -91,12 +97,11 @@ public class NodeEdgeExtractor implements Extractor {
 			shpStore.dispose();
 			return;
 		}
-		
-		int splitSize = featureCount / threadCount;
 
 		store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
 
 		ExecutorService nodeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
+		AtomicInteger totalSavedNodeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 노드 개수 집계
 		
 		// Shutdown Hook 등록: Ctrl+C 시 ExecutorService 종료
 		Thread shutdownHook = new Thread(() -> {
@@ -104,18 +109,12 @@ public class NodeEdgeExtractor implements Extractor {
 			nodeExecutorService.shutdownNow();
 		});
 		Runtime.getRuntime().addShutdownHook(shutdownHook);
-
+		
+		nodeExecutorService.submit(new NodeExtract(idArray, nodeQueue, collection, taskContinue, taskError, progressStatus, threadCount));
 		// 노드 작업
 		for(int i=0; i<threadCount; i++) {
-			Query query = new Query(shpStore.getTypeNames()[0]);
-			int startIndex = i * splitSize;
-			int maxFeatures = (i == threadCount - 1) ? (featureCount - startIndex) : splitSize;
-			query.setStartIndex(startIndex);
-			query.setMaxFeatures(maxFeatures);
-			FeatureCollection<SimpleFeatureType, SimpleFeature> data =  source.getFeatures(query);
-			nodeExecutorService.submit(new NodeExtract(i, idArray, nodeQueue, data, taskContinue));
+			nodeExecutorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, progressStatus, taskContinue, taskError, totalSavedNodeCount));
 		}
-		nodeExecutorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, threadCount, progressStatus, taskContinue));
 
 		nodeExecutorService.shutdown();
 		try {
@@ -123,9 +122,12 @@ public class NodeEdgeExtractor implements Extractor {
 			while(!nodeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
 			// 노드 작업 완료 후 Shutdown Hook 제거
 			Runtime.getRuntime().removeShutdownHook(shutdownHook);
+
+			// 작업 완료 후 다시 복구
+			taskContinue.set(true);
 			
 			// 예외 발생으로 작업이 중단되었는지 확인
-			if (!taskContinue.get()) {
+			if (taskError.get()) {
 				log.error("노드 추출 중 예외 발생으로 작업 중단");
 				return;
 			}
@@ -137,7 +139,12 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 
 		// 엣지 작업
+		store.allocateEdgeFileSpace(idArray.length * 6 * DataStructureSizes.EDGE_ENTRY_SIZE);
+		store.writeEdgeHeader(new EdgeHeader(0, false));
+		taskContinue.set(true);
+		AtomicInteger edgeIndexCounter = new AtomicInteger(0);
 		ExecutorService edgeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
+		AtomicInteger totalSavedEdgeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 엣지 개수 집계
 		
 		// 엣지 작업용 Shutdown Hook 등록
 		Thread edgeShutdownHook = new Thread(() -> {
@@ -146,16 +153,10 @@ public class NodeEdgeExtractor implements Extractor {
 		});
 		Runtime.getRuntime().addShutdownHook(edgeShutdownHook);
 
+		edgeExecutorService.submit(new EdgeExtract(idArray, edgeQueue, store, collection, taskContinue, taskError, progressStatus, threadCount));
 		for(int i=0; i<threadCount; i++) {
-			Query query = new Query(shpStore.getTypeNames()[0]);
-			int startIndex = i * splitSize;
-			int maxFeatures = (i == threadCount - 1) ? (featureCount - startIndex) : splitSize;
-			query.setStartIndex(startIndex);
-			query.setMaxFeatures(maxFeatures);
-			FeatureCollection<SimpleFeatureType, SimpleFeature> data =  source.getFeatures(query);
-			edgeExecutorService.submit(new EdgeExtract(i, idArray, edgeQueue, data, taskContinue));
+			edgeExecutorService.submit(new EdgeSaver(edgeQueue, store, progressStatus, taskContinue, taskError, totalSavedEdgeCount));
 		}
-		edgeExecutorService.submit(new EdgeSaver(edgeQueue, store, threadCount, progressStatus, taskContinue));
 
 		edgeExecutorService.shutdown();
 		try {
@@ -163,9 +164,14 @@ public class NodeEdgeExtractor implements Extractor {
 			while(!edgeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
 			// 엣지 작업 완료 후 Shutdown Hook 제거
 			Runtime.getRuntime().removeShutdownHook(edgeShutdownHook);
+
+			store.truncateEdgeFile(store.getTotalEdges() * DataStructureSizes.EDGE_ENTRY_SIZE);
+
+			// 작업 완료 후 다시 복구
+			taskContinue.set(true);
 			
 			// 예외 발생으로 작업이 중단되었는지 확인
-			if (!taskContinue.get()) {
+			if (taskError.get()) {
 				log.error("엣지 추출 중 예외 발생으로 작업 중단");
 				return;
 			}
@@ -178,7 +184,7 @@ public class NodeEdgeExtractor implements Extractor {
 		
 		
 		// 모든 워커 스레드가 정상적으로 끝난 경우
-		if (taskContinue.get()) {
+		if (taskContinue.get() && !taskError.get()) {
 			// 엣지 정렬
 			EdgeSort edgeSort = new EdgeSort(store);
 			edgeSort.sort();
@@ -233,11 +239,6 @@ public class NodeEdgeExtractor implements Extractor {
 		while (iterator.hasNext()) {
 			SimpleFeature feature = iterator.next();
 			Geometry geo = (Geometry) feature.getDefaultGeometry();
-			String a = (String)feature.getAttribute("osm_id");
-
-			if(a.equals("375861208")) {
-				int debug = 0;
-			}
 
 			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
 				long coordinateId = GeometryUtil.coordinateToLong(coordinate);

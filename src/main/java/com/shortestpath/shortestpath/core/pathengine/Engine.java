@@ -103,7 +103,17 @@ public class Engine {
 			routeTracker = new RouteTracker();
 		}
 
-		ArrayList<Node> resultPath = findPath(startNode, endNode, routeTracker);
+		double searchDistance = PathUtil.haversineDistance(startCoordinate, endCoordinate);
+		ArrayList<Node> resultPath = null;
+		
+		if(searchDistance >= 50) {
+			log.info("계층 경로 탐색 모드로 전환 - 탐색 거리 : " + searchDistance);
+			
+			resultPath = findhierarchyPath(startNode, endNode, routeTracker);
+		}
+		else {
+			resultPath = findPath(startNode, endNode, routeTracker);
+		}
 		
 		long et = System.currentTimeMillis();
 		double searchTime = (et - st) / 1000.0;
@@ -235,6 +245,132 @@ public class Engine {
 	    return path;
 	}
 
+	private ArrayList<Node> findhierarchyPath(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
+		// fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
+		PriorityQueue<SearchRoute> openList = new PriorityQueue<SearchRoute>(Comparator.comparingDouble(c -> c.getNode().getfCost()));
+		// 이미 방문한 노드 집합
+		HashSet<Node> closeList = new HashSet<Node>();
+		// 각 노드의 이전 노드를 저장(경로 역추적용)
+		HashMap<Node, Node> location = new HashMap<Node, Node>();
+
+		// 노드와 엣지 캐싱 맵
+		HashMap<Integer, Node> nodeList = new HashMap<>();
+		HashMap<Long, Edge> edgeList = new HashMap<>();
+
+		EdgeIndex edgeIndex = store.getEdgeIndex();
+
+		// 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
+		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate());
+
+		// 첫 노드 설정
+		startNode.setgCost(0);
+		startNode.sethCost(heuristic);
+		startNode.setfCost(heuristic);
+		nodeList.put(startNode.getId(), startNode);;
+
+		openList.add(new SearchRoute(startNode, null));
+
+		while(!openList.isEmpty()) {
+			SearchRoute minRoute = openList.poll();
+
+			TraceRoute traceRoute = null;
+			if(routeTracker != null) {
+				traceRoute = new TraceRoute(minRoute.getNode().getCoordinate());
+				routeTracker.addTraceRoute(traceRoute);
+			}
+
+			if(minRoute.getNode().equals(endNode)) {
+				break;
+			}
+
+			closeList.add(minRoute.getNode());
+
+			double distToTarget = PathUtil.haversineDistance(minRoute.getNode().getCoordinate(), endNode.getCoordinate());
+			
+			EdgeIndexEntry entry = edgeIndex.get(minRoute.getNode().getId());
+			ArrayList<Edge> connectedEdges = new ArrayList<>();
+
+			// 거리가 50키로 미터 이상인 경우
+			if(distToTarget >= 50) {
+				// 현재 계층이 L0이라면 L0 엣지들만 조회 하여 탐색하도록 설정
+				connectedEdges = getConnectedLevelEdge(edgeList, minRoute.getNode(), minRoute.getEdge().getRoadLevel());
+
+				if(minRoute.getEdge().getRoadLevel() != RoadLevel.L0) {
+					connectedEdges = getConnectedLevelEdge(edgeList, minRoute.getNode(), RoadLevel.L0);
+				}
+			}
+			else {
+				connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+			}
+			
+			for(Edge edge : connectedEdges) {
+				Node toNode = nodeList.get(edge.getTo());
+				if(toNode == null) {
+					toNode = store.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
+					nodeList.put(toNode.getId(), toNode);
+				}
+
+				// 이미 방문한 노드는 건너뜀
+				if(closeList.contains(toNode)) {
+					continue;
+				}
+
+				if(routeTracker != null && traceRoute != null) {
+					traceRoute.addChild(toNode.getCoordinate());
+				}
+
+				// 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
+				double newDist = minRoute.getNode().getgCost() + edge.getDistance();
+
+				// 더 짧은 경로를 발견한 경우
+				if(newDist < toNode.getgCost()) {
+					// 처음 발견한 노드인지 확인
+					boolean isNewNode = !openList.contains(toNode);
+
+					// hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
+					double hCost = PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate());
+					double fCost = newDist + hCost;
+					toNode.sethCost(hCost);
+					toNode.setgCost(newDist);
+					toNode.setfCost(fCost);
+
+					if(!isNewNode) {
+						// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
+						openList.remove(toNode);
+					}
+
+					openList.add(new SearchRoute(toNode, edge));
+					// 경로 역추적을 위해 이전 노드 저장
+					location.put(toNode, minRoute.getNode());
+				}
+			}
+		}
+
+		// 탐색 결과를 역추적하여 경로 리스트 생성
+	    ArrayList<Node> path = new ArrayList<Node>();
+	    Node node = location.get(endNode);
+	    while(node != null) {
+	        path.add(node);
+	        node = location.get(node);
+	    }
+
+	    // 경로를 올바른 순서로 뒤집음
+	    Collections.reverse(path);
+
+		path.add(endNode);
+
+		if(path.isEmpty() || path.get(0) != startNode) {
+			// 연결된 노드가 없는 경우
+			return null;
+		}
+
+	    return path;
+	}
+
+	private ArrayList<Edge> getConnectedLevelEdge(HashMap<Long,Edge> edgeList, Node node, RoadLevel l1) {
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException("Unimplemented method 'getConnectedLevelEdge'");
+	}
 
 	/**
 	 * 노드와 연결된 엣지를 모두 반환합니다. edgeList에 없는 엣지는 store에서 읽어와 추가합니다.
@@ -242,7 +378,7 @@ public class Engine {
 	 * @return List<Edge>
 	 * @throws IOException 
 	 */
-	private List<Edge> getConnectedEdges(HashMap<Long,Edge> edgeList, Node node) throws IOException {
+	private ArrayList<Edge> getConnectedEdges(HashMap<Long,Edge> edgeList, Node node) throws IOException {
 		ArrayList<Edge> edges = new ArrayList<Edge>();
 
 		EdgeIndex index = store.getEdgeIndex();
@@ -253,7 +389,7 @@ public class Engine {
 
         long startOffset = getStartOffset(entry);
         for(int i = 0; i<edgeCount; i++) {
-            long edgeOffset = startOffset + i * DataStructureSizes.EDGE_SIZE;
+            long edgeOffset = startOffset + (i * DataStructureSizes.EDGE_SIZE);
             
             // 캐시에서 먼저 확인
             Edge cachedEdge = edgeList.get(edgeOffset);
@@ -286,7 +422,7 @@ public class Engine {
 
         long startOffset = getStartOffset(entry);
         for(int i = 0; i<edgeCount; i++) {
-            Edge edge = store.readEdge(startOffset + i * DataStructureSizes.EDGE_SIZE);
+            Edge edge = store.readEdge(startOffset + (i * DataStructureSizes.EDGE_SIZE));
             edges.add(edge);
         }
 		

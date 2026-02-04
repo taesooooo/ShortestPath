@@ -47,4 +47,29 @@ public class EdgeIndexEntry {
         this.level2EdgeIndex = level2EdgeIndex;
     }
 
+    public boolean hasLevelEdgeIndex(RoadLevel roadLevel) {
+        switch (roadLevel) {
+            case L0:
+                return level0EdgeIndex.getStartOffset() != -1;
+            case L1:
+                return level1EdgeIndex.getStartOffset() != -1;
+            case L2:
+                return level2EdgeIndex.getStartOffset() != -1;
+            default:
+                return false;
+        }
+    }
+    public LevelEdgeIndex getLevelEdgeIndex(RoadLevel roadLevel) {
+        switch (roadLevel) {
+            case L0:
+                return level0EdgeIndex;
+            case L1:
+                return level1EdgeIndex;
+            case L2:
+                return level2EdgeIndex;
+            default:
+                return null;
+        }
+    }
+
 }

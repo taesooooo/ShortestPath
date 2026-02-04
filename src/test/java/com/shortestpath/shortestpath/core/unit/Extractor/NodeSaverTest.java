@@ -1,16 +1,16 @@
 package com.shortestpath.shortestpath.core.unit.Extractor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,10 +34,12 @@ public class NodeSaverTest {
     
     private NodeSaver nodeSaver;
     private DataStore dataStore;
-    private BlockingQueue<TaskItem> nodeQueue;
+    private BlockingQueue<List<TaskItem>> nodeQueue;
     private boolean[] nodeCreated;
     private ProgressStatus progressStatus;
     private AtomicBoolean taskContinue;
+    private AtomicBoolean taskError;
+
     @BeforeEach
     public void setUp() {
         dataStore = mock(DataStore.class);
@@ -45,7 +47,8 @@ public class NodeSaverTest {
         nodeCreated = new boolean[10];
         progressStatus = mock(ProgressStatus.class);
         taskContinue = new AtomicBoolean(true);
-        nodeSaver = new NodeSaver(nodeQueue, nodeCreated, dataStore, 1, progressStatus, taskContinue);
+        taskError = new AtomicBoolean(false);
+        nodeSaver = new NodeSaver(nodeQueue, nodeCreated, dataStore, progressStatus, taskContinue, taskError);
     }
     
     @Test
@@ -54,18 +57,21 @@ public class NodeSaverTest {
         Node nodeA = new Node(0, new Coordinate(37.0, 127.0));
         Node nodeB = new Node(1, new Coordinate(37.1, 127.1));
         Node nodeC = new Node(2, new Coordinate(37.2, 127.2));
+        ArrayList<TaskItem> nodeItems = new ArrayList<>();
+        nodeItems.add(new NodeItem(nodeA, nodeB));
+        nodeItems.add(new NodeItem(nodeB, nodeC));
+
+        nodeQueue.put(nodeItems);
         
-        nodeQueue.put(new NodeItem(nodeA, nodeB));
-        nodeQueue.put(new NodeItem(nodeB, nodeC));
-        nodeQueue.put(new EndItem(0));
+        taskContinue.set(false);
+
+        nodeQueue.put(Arrays.asList(new EndItem(0)));
         
         nodeSaver.run();
         
         verify(dataStore).saveNode(nodeA, 0 * DataStructureSizes.NODE_SIZE);
         verify(dataStore).saveNode(nodeB, 1 * DataStructureSizes.NODE_SIZE);
         verify(dataStore).saveNode(nodeC, 2 * DataStructureSizes.NODE_SIZE);
-        
-        assertThat(nodeSaver.getSavedNodeCount()).isEqualTo(3);
     }
     
     @Test
@@ -73,30 +79,20 @@ public class NodeSaverTest {
     public void testDuplicateNodeNotSaved() throws InterruptedException, IOException {
         Node nodeA = new Node(0, new Coordinate(37.0, 127.0));
         Node nodeB = new Node(1, new Coordinate(37.1, 127.1));
-        
+        ArrayList<TaskItem> nodeItems = new ArrayList<>();
+
         nodeCreated[0] = true;
-        nodeQueue.put(new NodeItem(nodeA, nodeB));
-        nodeQueue.put(new NodeItem(nodeA, nodeB));
-        nodeQueue.put(new EndItem(0));
+        nodeItems.add(new NodeItem(nodeA, nodeB));
+        nodeItems.add(new NodeItem(nodeA, nodeB));
+
+        nodeQueue.put(nodeItems);
+
+        taskContinue.set(false);
+
+        nodeQueue.put(Arrays.asList(new EndItem(0)));
         
         nodeSaver.run();
-        
+
         verify(dataStore, times(1)).saveNode(any(Node.class), anyLong());
-    }
-    
-    @Test
-    @DisplayName("EndItem 수신 후 정상 종료")
-    public void testNormalTermination() throws InterruptedException {
-        Node nodeA = new Node(0, new Coordinate(37.0, 127.0));
-        Node nodeB = new Node(1, new Coordinate(37.1, 127.1));
-        
-        nodeQueue.put(new NodeItem(nodeA, nodeB));
-        nodeQueue.put(new EndItem(0));
-        
-        Thread thread = new Thread(nodeSaver);
-        thread.start();
-        thread.join(1000);
-        
-        assertThat(thread.isAlive()).isFalse();
     }
 }

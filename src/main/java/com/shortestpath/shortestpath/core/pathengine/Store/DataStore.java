@@ -27,6 +27,8 @@ public interface DataStore {
     void close() throws IOException;
     void allocateNodeFileSpace(long size) throws IOException;
     void allocateEdgeFileSpace(long size) throws IOException;
+    void truncateNodeFile(long actualSize) throws IOException;
+    void truncateEdgeFile(long actualSize) throws IOException;
     void writeNodeHeader(NodeHeader header) throws IOException;
     void writeEdgeHeader(EdgeHeader header) throws IOException;
     

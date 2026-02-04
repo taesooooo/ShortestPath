@@ -1,8 +1,8 @@
 package com.shortestpath.shortestpath.core.unit.Extractor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -24,20 +24,21 @@ import org.locationtech.jts.geom.LineString;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.EdgeExtract;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 @DisplayName("EdgeExtract 단위 테스트")
 public class EdgeExtractTest {
-    
     private EdgeExtract edgeExtract;
     private long[] idArrays;
-    private BlockingQueue<TaskItem> edgeQueue;
+    private BlockingQueue<List<TaskItem>> edgeQueue;
+    private DataStore dataStore;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
     private SimpleFeatureType featureType;
     private GeometryFactory geometryFactory;
     private AtomicBoolean taskContinue = new AtomicBoolean(true);
+    private AtomicBoolean taskError = new AtomicBoolean(false);
     
     @BeforeEach
     public void setUp() {
@@ -49,6 +50,7 @@ public class EdgeExtractTest {
         java.util.Arrays.sort(idArrays);
         
         edgeQueue = new LinkedBlockingQueue<>();
+        dataStore = mock(DataStore.class);
         geometryFactory = new GeometryFactory();
         
         SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
@@ -76,22 +78,13 @@ public class EdgeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(2);
-        assertThat(items.get(items.size() - 1)).isInstanceOf(EndItem.class);
+        assertThat(items).hasSize(2);
     }
     
     @Test
@@ -110,21 +103,13 @@ public class EdgeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(2);
+        assertThat(items).hasSize(2);
     }
     
     @Test
@@ -143,21 +128,13 @@ public class EdgeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(2);
+        assertThat(items).hasSize(2);
     }
     
     @Test
@@ -177,21 +154,13 @@ public class EdgeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(4);
+        assertThat(items).hasSize(4);
     }
     
     @Test
@@ -210,49 +179,16 @@ public class EdgeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null,1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(2);
-        assertThat(edges).allMatch(edgeItem -> edgeItem.getEdge().getRoadLevel() == RoadLevel.L2);
+        assertThat(items).hasSize(2);
+        assertThat(items).allMatch(edgeItem -> ((EdgeItem)edgeItem).getEdge().getRoadLevel() == RoadLevel.L2);
     }
     
-    @Test
-    @DisplayName("EndItem이 마지막에 추가되는지 확인")
-    public void testEndItemAddedAtEnd() throws InterruptedException {
-        Coordinate[] coords = {
-            new Coordinate(127.0, 37.0),
-            new Coordinate(127.1, 37.1)
-        };
-        LineString geometry = geometryFactory.createLineString(coords);
-        
-        SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
-        featureBuilder.set("geometry", geometry);
-        featureBuilder.set("fclass", "motorway");
-        SimpleFeature feature = featureBuilder.buildFeature(null);
-        
-        ((DefaultFeatureCollection) collection).add(feature);
-        
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
-        
-        edgeExtract.run();
-        
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
-        
-        assertThat(items.get(items.size() - 1)).isInstanceOf(EndItem.class);
-    }
     
     @Test
     @DisplayName("여러 도로 피처에서 엣지 추출 테스트")
@@ -278,21 +214,13 @@ public class EdgeExtractTest {
         SimpleFeature feature2 = featureBuilder.buildFeature(null);
         ((DefaultFeatureCollection) collection).add(feature2);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(4);
+        assertThat(items).hasSize(4);
     }
     
     @Test
@@ -311,21 +239,13 @@ public class EdgeExtractTest {
         
         ((DefaultFeatureCollection) collection).add(feature);
         
-        edgeExtract = new EdgeExtract(0,idArrays, edgeQueue, collection, taskContinue);
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null,1);
         
         edgeExtract.run();
         
-        List<TaskItem> items = new ArrayList<>();
-        edgeQueue.drainTo(items);
+        List<TaskItem> items = edgeQueue.take();
         
-        List<EdgeItem> edges = new ArrayList<>();
-        for (TaskItem item : items) {
-            if (item instanceof EdgeItem) {
-                edges.add((EdgeItem) item);
-            }
-        }
-        
-        assertThat(edges).hasSize(2);
-        assertThat(edges).allMatch(edgeItem -> edgeItem.getEdge().getRoadLevel() == RoadLevel.L2);
+        assertThat(items).hasSize(2);
+        assertThat(items).allMatch(edgeItem -> ((EdgeItem)edgeItem).getEdge().getRoadLevel() == RoadLevel.L2);
     }
 }

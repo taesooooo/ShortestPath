@@ -8,9 +8,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,14 +33,19 @@ public class EdgeSaverTest {
     
     private EdgeSaver edgeSaver;
     private DataStore dataStore;
-    private BlockingQueue<TaskItem> edgeQueue;
-    private AtomicBoolean taskContinue = new AtomicBoolean(true);
+    private BlockingQueue<List<TaskItem>> edgeQueue;
+    private AtomicBoolean taskContinue;
+    private AtomicBoolean taskError;
+    private AtomicInteger totalSavedEdgeCount;
     
     @BeforeEach
     public void setUp() {
         dataStore = mock(DataStore.class);
         edgeQueue = new LinkedBlockingQueue<>();
-        edgeSaver = new EdgeSaver(edgeQueue, dataStore, 1, null, taskContinue);
+        taskContinue = new AtomicBoolean(true);
+        taskError = new AtomicBoolean(false);
+        totalSavedEdgeCount = new AtomicInteger(0);
+        edgeSaver = new EdgeSaver(edgeQueue, dataStore, null, taskContinue, taskError, totalSavedEdgeCount);
     }
     
     @Test
@@ -46,37 +55,38 @@ public class EdgeSaverTest {
         Edge edge2 = new Edge(2, 1, 2, 150, 48, RoadLevel.L1);
         Edge edge3 = new Edge(3, 2, 3, 200, 72, RoadLevel.L2);
         
-        edgeQueue.put(new EdgeItem(edge1));
-        edgeQueue.put(new EdgeItem(edge2));
-        edgeQueue.put(new EdgeItem(edge3));
-        edgeQueue.put(new EndItem(0));
+        ArrayList<TaskItem> edgeItems = new ArrayList<>();
+        edgeItems.add(new EdgeItem(edge1));
+        edgeItems.add(new EdgeItem(edge2));
+        edgeItems.add(new EdgeItem(edge3));
+
+        edgeQueue.put(edgeItems);
+
+        taskContinue.set(false);
+
+        edgeQueue.put(Arrays.asList(new EndItem(0)));
         
         edgeSaver.run();
-        
+
         verify(dataStore, times(3)).saveEdge(any(Edge.class));
-    }
-    
-    @Test
-    @DisplayName("빈 큐(엣지 없음)에서 EndItem만 있는 테스트")
-    public void testEmptyQueueWithEndItem() throws InterruptedException, IOException {
-        edgeQueue.put(new EndItem(0));
-        
-        edgeSaver.run();
-        
-        verify(dataStore, times(0)).saveEdge(any(Edge.class));
     }
     
     @Test
     @DisplayName("다중 엣지 저장 테스트")
     public void testMultipleEdgeSave() throws InterruptedException, IOException {
+        ArrayList<TaskItem> edgeItems = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             Edge edge = new Edge(i, i, i + 1, 100 * i, 24 * i, RoadLevel.L0);
-            edgeQueue.put(new EdgeItem(edge));
+            edgeItems.add(new EdgeItem(edge));
         }
-        edgeQueue.put(new EndItem(0));
+        edgeQueue.put(edgeItems);
+
+        taskContinue.set(false);
+        
+        edgeQueue.put(Arrays.asList(new EndItem(0)));
         
         edgeSaver.run();
-        
+
         verify(dataStore, times(5)).saveEdge(any(Edge.class));
     }
     
@@ -86,10 +96,10 @@ public class EdgeSaverTest {
         Edge edge1 = new Edge(1, 0, 1, 100, 24, RoadLevel.L0);
         Edge edge2 = new Edge(2, 1, 2, 150, 48, RoadLevel.L1);
         
-        BlockingQueue<TaskItem> slowQueue = new LinkedBlockingQueue<>();
-        slowQueue.put(new EdgeItem(edge1));
+        BlockingQueue<List<TaskItem>> slowQueue = new LinkedBlockingQueue<>();
+        slowQueue.put(new ArrayList<TaskItem>(List.of(new EdgeItem(edge1), new EdgeItem(edge2))));
         
-        EdgeSaver saver = new EdgeSaver(slowQueue, dataStore, 1, null, taskContinue);
+        EdgeSaver saver = new EdgeSaver(slowQueue, dataStore, null, taskContinue, taskError, totalSavedEdgeCount);
         
         Thread thread = new Thread(saver);
         thread.start();
@@ -109,29 +119,12 @@ public class EdgeSaverTest {
         DataStore failingStore = mock(DataStore.class);
         doThrow(new IOException("Save failed")).when(failingStore).saveEdge(any(Edge.class));
         
-        BlockingQueue<TaskItem> queue = new LinkedBlockingQueue<>();
-        queue.put(new EdgeItem(edge));
-        queue.put(new EndItem(0));
+        BlockingQueue<List<TaskItem>> queue = new LinkedBlockingQueue<>();
+        queue.put(new ArrayList<TaskItem>(List.of(new EdgeItem(edge))));
         
-        EdgeSaver saver = new EdgeSaver(queue, failingStore, 1, null, taskContinue);
+        EdgeSaver saver = new EdgeSaver(queue, failingStore, null, taskContinue, taskError, totalSavedEdgeCount);
         saver.run();
         
         verify(failingStore).saveEdge(edge);
-    }
-
-    
-    @Test
-    @DisplayName("EndItem 수신 후 정상 종료 테스트")
-    public void testNormalTermination() throws InterruptedException {
-        Edge edge = new Edge(1, 0, 1, 100, 24, RoadLevel.L0);
-        
-        edgeQueue.put(new EdgeItem(edge));
-        edgeQueue.put(new EndItem(0));
-        
-        Thread thread = new Thread(edgeSaver);
-        thread.start();
-        thread.join(1000);
-        
-        assertThat(thread.isAlive()).isFalse();
     }
 }

@@ -1,17 +1,19 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
-import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 
@@ -22,59 +24,58 @@ import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 public class EdgeSaver implements Runnable {
     private static Logger logger = LoggerFactory.getLogger(EdgeSaver.class);
 
-    private BlockingQueue<TaskItem> edgeQueue;
+    private BlockingQueue<List<TaskItem>> edgeQueue;
     private DataStore dataStore;
-    private boolean[] taskArray;
     private ProgressStatus progressStatus;
     private AtomicBoolean taskContinue;
+    private AtomicBoolean taskError;
+    private AtomicInteger totalSavedEdgeCount;  // 멀티스레드 안전한 총 저장 개수
 
-    public EdgeSaver(BlockingQueue<TaskItem> edgeQueue, DataStore dataStore, int extractTaskCount,
-            ProgressStatus progressStatus, AtomicBoolean taskContinue) {
+    public EdgeSaver(BlockingQueue<List<TaskItem>> edgeQueue, DataStore dataStore,
+            ProgressStatus progressStatus, AtomicBoolean taskContinue, AtomicBoolean taskError, AtomicInteger totalSavedEdgeCount) {
         this.edgeQueue = edgeQueue;
         this.dataStore = dataStore;
-        this.taskArray = new boolean[extractTaskCount];
         this.progressStatus = progressStatus;
         this.taskContinue = taskContinue;
+        this.taskError = taskError;
+        this.totalSavedEdgeCount = totalSavedEdgeCount;
     }
 
     @Override
     public void run() {
         logger.info("엣지 저장 시작");
-        int edgeCount = 0;
+        int localEdgeCount = 0;  // 스레드 로컬 카운트
 
         try {
-            dataStore.writeEdgeHeader(new EdgeHeader(0, false));
-            
-            while (!Thread.currentThread().isInterrupted() && taskContinue.get()) {
-                TaskItem item = edgeQueue.take();
-
-                if (item instanceof EndItem) {
-                    int taskId = ((EndItem) item).getTaskId();
-                    taskArray[taskId] = true;
-                }
+            while (!Thread.currentThread().isInterrupted() && !taskError.get()) {
+                List<TaskItem> taskList = edgeQueue.take();
                 
-                if (item instanceof EdgeItem) {
-                    Edge edge = ((EdgeItem) item).getEdge();
-                    
-                    // 엣지 ID를 저장 순서대로 설정
-                    edge.setId(edgeCount);
-                    
-                    // DataStore에 저장
-                    dataStore.saveEdge(edge);
-                    edgeCount++;
-                }
-                
-                // 진행률 업데이트
-                if (progressStatus != null) {
-                    progressStatus.progress(TaskType.EDGE_EXTRACT, -1, edgeCount);
-                }
-                
-                if (allTasksCompleted() && edgeQueue.isEmpty()) {
-                    dataStore.writeEdgeHeader(new EdgeHeader(edgeCount, false));
-                    logger.info("엣지 저장 완료. 총 {} 개의 엣지 저장", edgeCount);
+                // EndItem 확인 - 종료 신호 수신
+                if (taskList != null && taskList.size() > 0 && taskList.get(0) instanceof EndItem) {
+                    logger.debug("스레드 {} - 종료 신호 수신", Thread.currentThread().getName());
                     break;
                 }
+
+                for (TaskItem task : taskList) {
+                    if (task instanceof EdgeItem) {
+                        EdgeItem edgeItem = (EdgeItem) task;
+                        Edge edge = edgeItem.getEdge();
+                        
+                        // DataStore에 저장
+                        dataStore.saveEdge(edge);
+                        localEdgeCount++;
+                    }
+                }
+                
+                // 진행률 업데이트 (멀티스레드 안전하게 집계된 개수 표시)
+                if (progressStatus != null && totalSavedEdgeCount != null) {
+                    int totalCount = totalSavedEdgeCount.addAndGet(localEdgeCount);
+                    progressStatus.progress(TaskType.EDGE_SAVE, -1, totalCount);
+                    localEdgeCount = 0;  // 로컬 카운트 초기화
+                }
             }
+            
+            logger.info("엣지 저장 완료. 저장된 엣지 개수: {}", localEdgeCount);
         } 
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -82,16 +83,7 @@ public class EdgeSaver implements Runnable {
         } 
         catch (Exception e) {
             logger.error("엣지 저장 중 예외 발생", e);
-            taskContinue.set(false); // 예외 발생 시 모든 작업 중단 플래그 설정
+            taskError.set(true); // 예외 발생 시 모든 작업 중단 플래그 설정
         }
-    }
-
-    private boolean allTasksCompleted() {
-        for (boolean completed : taskArray) {
-            if (!completed) {
-                return false;
-            }
-        }
-        return true;
     }
 }

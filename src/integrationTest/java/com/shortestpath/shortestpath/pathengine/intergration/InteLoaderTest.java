@@ -66,7 +66,7 @@ public class InteLoaderTest {
 
     @BeforeAll
     public void init() throws IOException {
-        loader.extractData();
+        loader.extractData(true);
         ((HybridDataStore) dataStore).switchToMappingMode();
     }
 

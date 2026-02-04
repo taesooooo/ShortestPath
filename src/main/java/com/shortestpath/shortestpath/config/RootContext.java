@@ -40,7 +40,7 @@ public class RootContext {
 		if(!loader.isDataExtracted()) {
 			log.info("추출된 노드 및 엣지 데이터가 없으므로 추출을 시작합니다.");
 
-			loader.extractData();
+			loader.extractData(true);
 			dataStore.switchToMappingMode();
 			// dataStore = new HybridDataStore(new File(shpFilePath).getParent(), true); // 읽기 전용 모드로 재생성
 		}

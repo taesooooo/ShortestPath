@@ -24,6 +24,7 @@ import com.shortestpath.shortestpath.DBHelper;
 import com.shortestpath.shortestpath.IntegrationTestHelper;
 import com.shortestpath.shortestpath.TestConfig;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
@@ -64,7 +65,7 @@ public class InteEngineTest {
     
     @BeforeAll
     public void setUp() throws IOException {
-        loader.extractData();
+        loader.extractData(false);
         ((HybridDataStore) dataStore).switchToMappingMode();
     }
 
@@ -116,5 +117,24 @@ public class InteEngineTest {
 
         assertThat(searchResult.getRouteNode()).isNull();
     }
+
+    // @Test
+    // @DisplayName("계층 경로 탐색 - 정상 탐색")
+    // public void findHierarchyPathTest() throws EmptyGeometryListException, IOException {
+    //     ArrayList<Coordinate> coordinateList = new ArrayList<Coordinate>();
+    //     // 36.8010399, 127.1259318
+    //     // 35.8278131, 128.5237598
+    //     Coordinate startCoordinate = new Coordinate(36.8010399, 127.1259318);
+    //     Coordinate endCoordinate = new Coordinate(35.8278131, 128.5237598);
+
+    //     RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+    //     ArrayList<Node> findPath = searchResult.getRouteNode();
+
+    //     findPath.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
+
+    //     assertThat(findPath).extracting(Node::getCoordinate)
+    //             .usingRecursiveComparison()
+    //             .isEqualTo(coordinateList);
+    // }
 
 }

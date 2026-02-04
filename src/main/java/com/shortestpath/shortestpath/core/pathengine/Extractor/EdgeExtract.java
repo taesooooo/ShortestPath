@@ -1,6 +1,8 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -16,8 +18,10 @@ import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
@@ -28,11 +32,14 @@ import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 public class EdgeExtract implements Runnable {
     private static Logger logger = LoggerFactory.getLogger(EdgeExtract.class);
     
-    private int taskId;
     private long[] idArrays;
-    private BlockingQueue<TaskItem> edgeQueue;
+    private BlockingQueue<List<TaskItem>> edgeQueue;
+    private DataStore dataStore;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
     private AtomicBoolean taskContinue;
+    private AtomicBoolean taskError;
+    private ProgressStatus progressStatus;
+    private int threadCount;
     
     // 도로 유형 속성 이름 (SHP 파일의 표준 속성)
     private static final String ROAD_TYPE_ATTRIBUTE = "fclass";
@@ -42,13 +49,16 @@ public class EdgeExtract implements Runnable {
     private static final String[] L1_TYPES = {"primary", "primary_link", "secondary", "secondary_link", "tertiary", "tertiary_link"};
     private static final String[] L2_TYPES = {"residential", "unclassified", "service", "track", "living_street"};
     
-    public EdgeExtract(int taskId, long[] idArrays, BlockingQueue<TaskItem> edgeQueue, 
-                      FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue) {
-        this.taskId = taskId;
+    public EdgeExtract(long[] idArrays, BlockingQueue<List<TaskItem>> edgeQueue, 
+                      DataStore dataStore, FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue, AtomicBoolean taskError, ProgressStatus progressStatus, int threadCount) {
         this.idArrays = idArrays;
         this.edgeQueue = edgeQueue;
+        this.dataStore = dataStore;
         this.collection = collection;
         this.taskContinue = taskContinue;
+        this.taskError = taskError;
+        this.progressStatus = progressStatus;
+        this.threadCount = threadCount;
     }
     
     @Override
@@ -61,10 +71,16 @@ public class EdgeExtract implements Runnable {
      */
     private void extractEdges() {
         FeatureIterator<SimpleFeature> iterator = collection.features();
-        int edgeId = 0;
+        ArrayList<TaskItem> edgeList = new ArrayList<>(1000);
+        int extractedEdgeCount = 0;
         
         try {
-            while (iterator.hasNext() && !Thread.currentThread().isInterrupted() && taskContinue.get()) {
+            while (iterator.hasNext() && !Thread.currentThread().isInterrupted() && !taskError.get()) {
+                if(edgeList.size() >= 1000) {
+                    edgeQueue.put(edgeList);
+                    edgeList = new ArrayList<>(1000);
+                }
+
                 SimpleFeature feature = iterator.next();
                 Geometry geometry = (Geometry) feature.getDefaultGeometry();
                 
@@ -93,18 +109,38 @@ public class EdgeExtract implements Runnable {
                     double distance = PathUtil.haversineDistance(coordinateFrom, coordinateTo);
                     
                     // 양방향 엣지 생성 (ID는 0으로 고정)
-                    Edge forwardEdge = createEdge(0, fromNodeId, toNodeId, distance, roadLevel);
-                    Edge backwardEdge = createEdge(0, toNodeId, fromNodeId, distance, roadLevel);
+                    Edge forwardEdge = createEdge(extractedEdgeCount++, fromNodeId, toNodeId, distance, roadLevel);
+                    Edge backwardEdge = createEdge(extractedEdgeCount++, toNodeId, fromNodeId, distance, roadLevel);
                     
                     // 엣지를 큐에 추가
-                    edgeQueue.put(new EdgeItem(forwardEdge));
-                    edgeQueue.put(new EdgeItem(backwardEdge));
+                    edgeList.add(new EdgeItem(forwardEdge));
+                    edgeList.add(new EdgeItem(backwardEdge));
                 }
+                
+                // 진행률 업데이트
+                if(progressStatus != null) {
+                    progressStatus.progress(TaskType.EDGE_EXTRACT, collection.size(), extractedEdgeCount);
+                }
+            }
+
+            // 나머지 데이터 큐에 추가
+            if(edgeList.size() > 0) {
+                edgeQueue.put(edgeList);
+            }
+            
+            // 종료 신호: 각 워커 스레드마다 EndItem 넣기
+            for(int i = 0; i < threadCount; i++) {
+                List<TaskItem> endList = new ArrayList<>();
+                endList.add(new EndItem(0));
+                edgeQueue.put(endList);
             }
             
             // 작업 완료 신호 전송
-            edgeQueue.put(new EndItem(taskId));
-            logger.info("엣지 추출 완료. 총 {} 개의 엣지 생성 (양방향 포함)", edgeId);
+            taskContinue.set(false);
+
+            dataStore.writeEdgeHeader(new EdgeHeader(extractedEdgeCount, false));
+
+            logger.info("엣지 추출 완료. 총 {} 개의 엣지 추출 (양방향 포함)", extractedEdgeCount);
         } 
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -112,7 +148,7 @@ public class EdgeExtract implements Runnable {
         }
         catch (Exception e) {
             logger.error("엣지 추출 중 예외 발생", e);
-            taskContinue.set(false); // 예외 발생 시 모든 작업 중단 플래그 설정
+            taskError.set(true); // 예외 발생 시 모든 작업 중단 플래그 설정
         }
         finally {
             iterator.close();
