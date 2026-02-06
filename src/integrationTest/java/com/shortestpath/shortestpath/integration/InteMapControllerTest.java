@@ -65,8 +65,8 @@ class InteMapControllerTest {
 	@AfterAll
     public void destroy() throws IOException {
 		engine.getStore().close();
-        // IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
-		// dbHelper.turncate();
+        IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
+		dbHelper.turncate();
     }
 
 	@Test

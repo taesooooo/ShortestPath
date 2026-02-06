@@ -66,15 +66,15 @@ public class InteLoaderTest {
 
     @BeforeAll
     public void init() throws IOException {
-        // loader.extractData(true);
+        loader.extractData(true);
         ((HybridDataStore) dataStore).switchToMappingMode();
     }
 
     @AfterAll
     public void destroy() throws IOException {
         dataStore.close();
-        // IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
-        // dbHelper.turncate();
+        IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
+        dbHelper.turncate();
     }
 
     @Test
