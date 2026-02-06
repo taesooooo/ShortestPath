@@ -245,8 +245,8 @@ public class Engine {
 					traceRoute.addChild(toNode.getCoordinate());
 				}
 
-	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산 - roadLevel 가중치 적용
-	            double newDist = minNode.getgCost() + getWeightedDistance(edge);
+	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
+	            double newDist = minNode.getgCost() + edge.getDistance();
 	            
 	            // 더 짧은 경로를 발견한 경우
 	            if(newDist < toNode.getgCost()) {
