@@ -154,9 +154,16 @@ public class HybridDataReader implements MappableDataReader {
         log.info("메모리 매핑 모드로 전환 완료 - nodeSize: {}, edgeSize: {}", nodeFileSize, edgeFileSize);
     }
 
-    private Node readMappedNode(long offset) throws IOException {
+    private synchronized Node readMappedNode(long offset) throws IOException {
         if (nodeMappedBuffer == null) {
             throw new IOException("Node 메모리 매핑 버퍼가 초기화되지 않았습니다.");
+        }
+
+        if (offset < 0 || offset > Integer.MAX_VALUE) {
+            throw new IOException("유효하지 않은 노드 오프셋: " + offset + " (int 범위: 0 ~ " + Integer.MAX_VALUE + ")");
+        }
+        if (offset >= nodeMappedBuffer.capacity()) {
+            throw new IOException("노드 오프셋이 버퍼 크기를 초과함: offset=" + offset + ", capacity=" + nodeMappedBuffer.capacity());
         }
 
         nodeMappedBuffer.position((int) offset);
@@ -175,19 +182,28 @@ public class HybridDataReader implements MappableDataReader {
             throw new IOException("Edge 메모리 매핑 버퍼가 초기화되지 않았습니다.");
         }
 
-        edgeMappedBuffer.position((int) offset);
-        byte[] roadLevelBytes = new byte[2];
+        if (offset < 0 || offset > Integer.MAX_VALUE) {
+            throw new IOException("유효하지 않은 엣지 오프셋: " + offset + " (int 범위: 0 ~ " + Integer.MAX_VALUE + ")");
+        }
+        if (offset >= edgeMappedBuffer.capacity()) {
+            throw new IOException("엣지 오프셋이 버퍼 크기를 초과함: offset=" + offset + ", capacity=" + edgeMappedBuffer.capacity());
+        }
 
-        int id = edgeMappedBuffer.getInt();
-        int from = edgeMappedBuffer.getInt();
-        int to = edgeMappedBuffer.getInt();
-        double distance = edgeMappedBuffer.getDouble();
-        int nextEdgeOffset = edgeMappedBuffer.getInt();
-        edgeMappedBuffer.get(roadLevelBytes);
-        String roadLevel = new String(roadLevelBytes, StandardCharsets.US_ASCII);
-
-        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, RoadLevel.fromString(roadLevel));
-        return edge;
+        synchronized (edgeMappedBuffer) {
+            edgeMappedBuffer.position((int) offset);
+            byte[] roadLevelBytes = new byte[2];
+    
+            int id = edgeMappedBuffer.getInt();
+            int from = edgeMappedBuffer.getInt();
+            int to = edgeMappedBuffer.getInt();
+            double distance = edgeMappedBuffer.getDouble();
+            int nextEdgeOffset = edgeMappedBuffer.getInt();
+            edgeMappedBuffer.get(roadLevelBytes);
+            String roadLevel = new String(roadLevelBytes, StandardCharsets.US_ASCII);
+    
+            Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, RoadLevel.fromString(roadLevel));
+            return edge;
+        }
     }
 
     @Override

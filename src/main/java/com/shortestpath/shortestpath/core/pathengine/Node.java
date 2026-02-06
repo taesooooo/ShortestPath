@@ -20,8 +20,11 @@ public class Node implements Comparable<Node> {
 	private Coordinate coordinate;
 	private int startEdgeOffset;
 	// private Map<Integer, Edge> edge = new HashMap<Integer, Edge>();
+	// 지금까지 온 비용
 	private double gCost = Double.MAX_VALUE;
+	// 앞으로 갈 비용
 	private double hCost;
+	// 총 비용
 	private double fCost;
 
 	public Node(int id, Coordinate coordinate) {

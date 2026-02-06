@@ -117,10 +117,10 @@ public class FileBasedEdgeIndex implements EdgeIndex {
         return entry;
     }
     
-    private EdgeIndexEntry readMapped(int nodeId) {
+    private synchronized EdgeIndexEntry readMapped(int nodeId) {
         mappedBuffer.position((int) DataStructureSizes.calculateEdgeIndexOffset(nodeId));
         byte[] levelBytes = new byte[2];
-
+        
         EdgeIndexEntry entry = new EdgeIndexEntry(mappedBuffer.getInt());
         mappedBuffer.get(levelBytes);
         entry.setLevel0EdgeIndex(new LevelEdgeIndex(RoadLevel.fromString(new String(levelBytes, StandardCharsets.US_ASCII)), mappedBuffer.getLong(), mappedBuffer.getInt()));

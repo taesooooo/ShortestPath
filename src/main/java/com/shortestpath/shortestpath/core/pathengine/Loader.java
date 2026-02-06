@@ -48,6 +48,10 @@ public class Loader {
 		}
 	}
 
+	public void createIndex() throws IOException {
+		extractor.createIndex();
+	}
+
 	public boolean isDataExtracted() {
 		return extractor.getStore().hasExtractedData();
 	}

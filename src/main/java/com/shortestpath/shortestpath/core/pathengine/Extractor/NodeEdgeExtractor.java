@@ -39,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 public class NodeEdgeExtractor implements Extractor {
 	private File file;
 	private DataStore store;
+	private FileDataStore shpStore = null;
 	private boolean saveToDb;
 
 	public NodeEdgeExtractor(String filePath, DataStore dataStore) throws IOException {
@@ -57,6 +58,8 @@ public class NodeEdgeExtractor implements Extractor {
 			throw new IllegalArgumentException("DataStore 객체는 null 일 수 없습니다.");
 		}
 
+		this.shpStore = FileDataStoreFinder.getDataStore(file);
+
 		this.saveToDb = saveToDb;
 	}
 
@@ -72,8 +75,6 @@ public class NodeEdgeExtractor implements Extractor {
 
 	private void doExtract(ProgressStatus progressStatus) throws IOException {
 		log.info("노드 및 엣지 추출 및 저장 시작");
-		FileDataStore shpStore = null;
-		shpStore = FileDataStoreFinder.getDataStore(file);
 		FeatureSource<SimpleFeatureType, SimpleFeature> source = shpStore.getFeatureSource(shpStore.getTypeNames()[0]);
 		// Filter filter = CQL
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
@@ -219,6 +220,16 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 	}
 
+	@Override
+	public void createIndex() throws IOException {
+		FeatureSource<SimpleFeatureType, SimpleFeature> source = shpStore.getFeatureSource(shpStore.getTypeNames()[0]);
+		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
+		long[] idArray = createIdArray(collection);
+		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+
+		saveIndex(indexList);
+	}
+
 	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
 		ArrayList<IndexInfo> indexList = new ArrayList<>();
 		for (int nodeId = 0; nodeId < idArray.length; nodeId++) {
@@ -265,7 +276,7 @@ public class NodeEdgeExtractor implements Extractor {
 		return Arrays.copyOf(nodeIdArray, tempIndex);
 	}
 
-	private void saveIndex(ArrayList<IndexInfo> indexList) throws IOException {
+	public void saveIndex(ArrayList<IndexInfo> indexList) throws IOException {
 		store.saveNodeIndex(indexList);
 	}
 

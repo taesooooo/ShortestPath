@@ -65,15 +65,16 @@ public class InteEngineTest {
     
     @BeforeAll
     public void setUp() throws IOException {
-        loader.extractData(false);
+        // loader.extractData(false);
+        // loader.createIndex();
         ((HybridDataStore) dataStore).switchToMappingMode();
     }
 
     @AfterAll
     public void destroy() throws IOException {
         dataStore.close();
-        IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
-        dbHelper.turncate();
+        // IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
+        // dbHelper.turncate();
     }
 
     @Test
@@ -127,7 +128,7 @@ public class InteEngineTest {
     //     Coordinate startCoordinate = new Coordinate(36.8010399, 127.1259318);
     //     Coordinate endCoordinate = new Coordinate(35.8278131, 128.5237598);
 
-    //     RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+    //     RouteSearchResult searchResult = engine.shortestPathFind(endCoordinate, startCoordinate, false);
     //     ArrayList<Node> findPath = searchResult.getRouteNode();
 
     //     findPath.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
