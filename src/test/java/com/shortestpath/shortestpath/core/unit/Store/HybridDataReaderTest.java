@@ -72,9 +72,10 @@ public class HybridDataReaderTest {
             int testTo = 15;
             double testDistance = 250.75;
             int testNextEdgeOffset = 100;
+            int testSpeed = 100;
             RoadLevel testRoadLevel = RoadLevel.L0;
 
-            Edge writeEdge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset, testRoadLevel);
+            Edge writeEdge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset, testSpeed, testRoadLevel);
             writer.saveEdge(writeEdge, 0L);
             writer.close();
 
@@ -90,7 +91,9 @@ public class HybridDataReaderTest {
             assertThat(readEdge.getTo()).isEqualTo(testTo);
             assertThat(readEdge.getDistance()).isEqualTo(testDistance);
             assertThat(readEdge.getNextEdgeOffset()).isEqualTo(testNextEdgeOffset);
+            assertThat(readEdge.getSpeed()).isEqualTo(testSpeed);
             assertThat(readEdge.getRoadLevel()).isEqualTo(testRoadLevel);
+
             reader.close();
         } finally {
             deleteTestDirectory(tempDir);
@@ -239,7 +242,7 @@ public class HybridDataReaderTest {
             HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
             
             Node node = new Node(1, new Coordinate(37.5, 127.5), 0, 0, 0, 0);
-            Edge edge = new Edge(1, 0, 1, 100.0, -1, RoadLevel.L0);
+            Edge edge = new Edge(1, 0, 1, 100.0, -1, 100, RoadLevel.L0);
             
             writer.saveNode(node);
             writer.saveEdge(edge);

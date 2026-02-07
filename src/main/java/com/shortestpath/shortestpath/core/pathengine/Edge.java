@@ -17,6 +17,7 @@ public class Edge{
 	private int to;
 	private double distance;
 	private int nextEdgeOffset;
+	private int speed;
 	private RoadLevel roadLevel;  // L0, L1, L2
 	// private Geometry geometry;
 	

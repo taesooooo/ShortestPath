@@ -41,7 +41,7 @@ public class EdgeIndexCreatorTest {
     @DisplayName("엣지 인덱스 저장 및 확인")
     public void testCreateEdgeIndexSave() throws IOException {
         EdgeIndex testEdgeIndex = mock(EdgeIndex.class);
-        Edge testEdge = new Edge(0, 11, 22, 0, -1, RoadLevel.L0);
+        Edge testEdge = new Edge(0, 11, 22, 0, -1, 100, RoadLevel.L0);
 
         when(mockDataStore.getTotalEdges()).thenReturn(1);
         when(mockDataStore.getEdgeIndex()).thenReturn(testEdgeIndex);
@@ -61,10 +61,10 @@ public class EdgeIndexCreatorTest {
     @DisplayName("여러 엣지 인덱스 저장 및 확인")
     public void testCreateEdgeIndexMultipleSave() throws IOException {
         EdgeIndex testEdgeIndex = mock(EdgeIndex.class);
-        Edge testEdge1 = new Edge(0, 11, 22, 0, -1, RoadLevel.L0);
-        Edge testEdge2 = new Edge(1, 11, 33, 0, -1, RoadLevel.L1);
-        Edge testEdge3 = new Edge(2, 11, 55, 0, -1, RoadLevel.L1);
-        Edge testEdge4 = new Edge(3, 44, 55, 0, -1, RoadLevel.L2);
+        Edge testEdge1 = new Edge(0, 11, 22, 0, -1, 100, RoadLevel.L0);
+        Edge testEdge2 = new Edge(1, 11, 33, 0, -1, 60, RoadLevel.L1);
+        Edge testEdge3 = new Edge(2, 11, 55, 0, -1, 60, RoadLevel.L1);
+        Edge testEdge4 = new Edge(3, 44, 55, 0, -1, 40, RoadLevel.L2);
 
         when(mockDataStore.getTotalEdges()).thenReturn(4);
         when(mockDataStore.getEdgeIndex()).thenReturn(testEdgeIndex);

@@ -51,9 +51,9 @@ public class EdgeSaverTest {
     @Test
     @DisplayName("엣지 저장이 정상적으로 동작하는지 확인")
     public void testEdgeSaveAndRead() throws InterruptedException, IOException {
-        Edge edge1 = new Edge(1, 0, 1, 100, 24, RoadLevel.L0);
-        Edge edge2 = new Edge(2, 1, 2, 150, 48, RoadLevel.L1);
-        Edge edge3 = new Edge(3, 2, 3, 200, 72, RoadLevel.L2);
+        Edge edge1 = new Edge(1, 0, 1, 100, 24, 100, RoadLevel.L0);
+        Edge edge2 = new Edge(2, 1, 2, 150, 48, 60, RoadLevel.L1);
+        Edge edge3 = new Edge(3, 2, 3, 200, 72, 40, RoadLevel.L2);
         
         ArrayList<TaskItem> edgeItems = new ArrayList<>();
         edgeItems.add(new EdgeItem(edge1));
@@ -76,7 +76,7 @@ public class EdgeSaverTest {
     public void testMultipleEdgeSave() throws InterruptedException, IOException {
         ArrayList<TaskItem> edgeItems = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            Edge edge = new Edge(i, i, i + 1, 100 * i, 24 * i, RoadLevel.L0);
+            Edge edge = new Edge(i, i, i + 1, 100 * i, 24 * i, 100, RoadLevel.L0);
             edgeItems.add(new EdgeItem(edge));
         }
         edgeQueue.put(edgeItems);
@@ -93,8 +93,8 @@ public class EdgeSaverTest {
     @Test
     @DisplayName("인터럽트 발생 테스트")
     public void testInterruptionHandling() throws InterruptedException {
-        Edge edge1 = new Edge(1, 0, 1, 100, 24, RoadLevel.L0);
-        Edge edge2 = new Edge(2, 1, 2, 150, 48, RoadLevel.L1);
+        Edge edge1 = new Edge(1, 0, 1, 100, 24, 100, RoadLevel.L0);
+        Edge edge2 = new Edge(2, 1, 2, 150, 48, 60, RoadLevel.L1);
         
         BlockingQueue<List<TaskItem>> slowQueue = new LinkedBlockingQueue<>();
         slowQueue.put(new ArrayList<TaskItem>(List.of(new EdgeItem(edge1), new EdgeItem(edge2))));
@@ -114,7 +114,7 @@ public class EdgeSaverTest {
     @Test
     @DisplayName("IOException 발생 시 처리 테스트")
     public void testIOExceptionHandling() throws InterruptedException, IOException {
-        Edge edge = new Edge(1, 0, 1, 100, 24, RoadLevel.L0);
+        Edge edge = new Edge(1, 0, 1, 100, 24, 100, RoadLevel.L0);
         
         DataStore failingStore = mock(DataStore.class);
         doThrow(new IOException("Save failed")).when(failingStore).saveEdge(any(Edge.class));

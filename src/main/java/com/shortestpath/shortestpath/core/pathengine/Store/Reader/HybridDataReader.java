@@ -107,10 +107,11 @@ public class HybridDataReader implements MappableDataReader {
         int to = buffer.getInt();
         double distance = buffer.getDouble();
         int nextEdgeOffset = buffer.getInt();
+        int speed = buffer.getInt();
         buffer.get(roadLevelBytes);
         String roadLevel = new String(roadLevelBytes, StandardCharsets.US_ASCII);
 
-        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, RoadLevel.fromString(roadLevel));
+        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, speed, RoadLevel.fromString(roadLevel));
         return edge;
     }
 
@@ -183,10 +184,11 @@ public class HybridDataReader implements MappableDataReader {
         int to = edgeMappedBuffer.getInt();
         double distance = edgeMappedBuffer.getDouble();
         int nextEdgeOffset = edgeMappedBuffer.getInt();
+        int speed = edgeMappedBuffer.getInt();
         edgeMappedBuffer.get(roadLevelBytes);
         String roadLevel = new String(roadLevelBytes, StandardCharsets.US_ASCII);
 
-        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, RoadLevel.fromString(roadLevel));
+        Edge edge = new Edge(id, from, to, distance, nextEdgeOffset, speed, RoadLevel.fromString(roadLevel));
         return edge;
     }
 

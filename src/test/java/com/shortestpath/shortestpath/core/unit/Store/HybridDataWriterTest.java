@@ -10,10 +10,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import org.geotools.data.shapefile.index.Data;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
@@ -117,15 +119,16 @@ public class HybridDataWriterTest {
             int testTo = 2;
             double testDistance = 150.5;
             int testNextEdgeOffset = 50;
+            int testSpeed = 60;
             RoadLevel testRoadLevel = RoadLevel.L0;
 
-            Edge edge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset, testRoadLevel);
+            Edge edge = new Edge(testId, testFrom, testTo, testDistance, testNextEdgeOffset, testSpeed, testRoadLevel);
             int offset = writer.saveEdge(edge, 0L);
 
             // 파일에서 읽어서 검증
             Path edgeFile = tempDir.resolve("edge.bin");
             FileChannel fc = FileChannel.open(edgeFile, StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
+            ByteBuffer buf = ByteBuffer.allocate(DataStructureSizes.EDGE_SIZE);
             fc.read(buf);
 
             buf.flip();
@@ -134,13 +137,17 @@ public class HybridDataWriterTest {
             int to = buf.getInt();
             double distance = buf.getDouble();
             int nextEdgeOffset = buf.getInt();
+            int speed = buf.getInt();
+            RoadLevel roadLevel = RoadLevel.fromString(new String(new byte[] {buf.get(), buf.get()}));
 
             assertThat(id).isEqualTo(testId);
             assertThat(from).isEqualTo(testFrom);
             assertThat(to).isEqualTo(testTo);
             assertThat(distance).isEqualTo(testDistance);
             assertThat(nextEdgeOffset).isEqualTo(testNextEdgeOffset);
-            assertThat(offset).isEqualTo(0);
+            assertThat(speed).isEqualTo(testSpeed);
+            assertThat(roadLevel).isEqualTo(testRoadLevel);
+
             
             fc.close();
             writer.close();
@@ -186,7 +193,7 @@ public class HybridDataWriterTest {
             // 파일에서 읽어서 검증
             Path nodeFile = tempDir.resolve("node.bin");
             FileChannel fc = FileChannel.open(nodeFile, StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
+            ByteBuffer buf = ByteBuffer.allocate(DataStructureSizes.NODE_SIZE);
             fc.read(buf);
 
             buf.flip();
@@ -210,17 +217,17 @@ public class HybridDataWriterTest {
             HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
             
             // 첫 번째 엣지 저장
-            Edge edge1 = new Edge(1, 10, 20, 100.0, 50, RoadLevel.L0);
+            Edge edge1 = new Edge(1, 10, 20, 100.0, 50, 100, RoadLevel.L0);
             writer.saveEdge(edge1, 0L);
             
             // 두 번째 엣지로 덮어쓰기
-            Edge edge2 = new Edge(2, 15, 25, 200.0, 75, RoadLevel.L1);
+            Edge edge2 = new Edge(2, 15, 25, 200.0, 75, 100, RoadLevel.L1);
             writer.overwriteEdge(edge2, 0L);
 
             // 파일에서 읽어서 검증
             Path edgeFile = tempDir.resolve("edge.bin");
             FileChannel fc = FileChannel.open(edgeFile, StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
+            ByteBuffer buf = ByteBuffer.allocate(DataStructureSizes.EDGE_SIZE);
             fc.read(buf);
 
             buf.flip();

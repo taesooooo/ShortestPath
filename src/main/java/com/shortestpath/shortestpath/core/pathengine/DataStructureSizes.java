@@ -7,8 +7,8 @@ public class DataStructureSizes {
     public static final int EDGE_INDEX_HEADER_SIZE = 4;
     // Node id(int, 4바이트), startEdgeOffset(int, 4바이트), x(double, 8바이트), y(double, 8바이트)
     public static final int NODE_SIZE = 24;
-    // Edge id(int, 4바이트), from(int, 4바이트), to(int, 4바이트), distance(double, 8바이트), nextEdgeOffset(int, 4바이트), loadLevel(String, 2바이트)
-    public static final int EDGE_SIZE = 26;
+    // Edge id(int, 4바이트), from(int, 4바이트), to(int, 4바이트), distance(double, 8바이트), nextEdgeOffset(int, 4바이트), speed(int, 4바이트), loadLevel(String, 2바이트)
+    public static final int EDGE_SIZE = 30;
     // LevelEdgeIndex level(String, 2바이트), startOffset(long, 8바이트), edgeCount(int, 4바이트)
     public static final int LEVEL_EDGE_INDEX_SIZE = 14;
     // EdgeIndexEntry nodeId(int, 4바이트), Level0EdgeIndex(14바이트), Level1EdgeIndex(14바이트), Level2EdgeIndex(14바이트)

@@ -83,20 +83,20 @@ class EngineTest {
 
 		// L0만 있는 Edge 설정
 		// Node 1의 엣지
-		Edge edge1 = new Edge(1, 1, 2, 40, -1, RoadLevel.L0);
-		Edge edge3 = new Edge(3, 1, 3, 1, -1, RoadLevel.L0);
+		Edge edge1 = new Edge(1, 1, 2, 40, -1, 60, RoadLevel.L0);
+		Edge edge3 = new Edge(3, 1, 3, 1, -1, 60, RoadLevel.L0);
 		
 		// Node 2의 엣지
-		Edge edge2 = new Edge(2, 2, 1, 2, -1, RoadLevel.L0);
-		Edge edge5 = new Edge(5, 2, 4, 2, -1, RoadLevel.L0);
+		Edge edge2 = new Edge(2, 2, 1, 2, -1, 60, RoadLevel.L0);
+		Edge edge5 = new Edge(5, 2, 4, 2, -1, 60, RoadLevel.L0);
 		
 		// Node 3의 엣지
-		Edge edge4 = new Edge(4, 3, 1, 1, -1, RoadLevel.L0);
-		Edge edge7 = new Edge(7, 3, 4, 1, -1, RoadLevel.L0);
+		Edge edge4 = new Edge(4, 3, 1, 1, -1, 60, RoadLevel.L0);
+		Edge edge7 = new Edge(7, 3, 4, 1, -1, 60, RoadLevel.L0);
 		
 		// Node 4의 엣지
-		Edge edge6 = new Edge(6, 4, 2, 2, -1, RoadLevel.L0);
-		Edge edge8 = new Edge(8, 4, 3, 1, -1, RoadLevel.L0);
+		Edge edge6 = new Edge(6, 4, 2, 2, -1, 60, RoadLevel.L0);
+		Edge edge8 = new Edge(8, 4, 3, 1, -1, 60, RoadLevel.L0);
 
 		// readEdge mock 설정 (offset 기준)
 		// Node 1: L0 startOffset=0, count=2 → 0+(0*EDGE_SIZE), 0+(1*EDGE_SIZE)
@@ -172,28 +172,28 @@ class EngineTest {
 		when(store.readNode(DataStructureSizes.calculateNodeOffset(5))).thenReturn(node5);
 		// L0 계층 Edge 설정 (from 다음 RoadLevel 순으로 정렬)
 		// Node 1의 엣지
-		Edge edge1 = new Edge(1, 1, 2, 40, 3, RoadLevel.L0);  // 상위 계층 엣지 참조: 3
-		Edge edge3 = new Edge(3, 1, 3, 1, -1, RoadLevel.L0);
-		Edge edge101 = new Edge(9, 1, 4, 10, -1, RoadLevel.L1);   // 1 → 4 직통로, 비용: 10
-		Edge edge105 = new Edge(13, 1, 3, 5, -1, RoadLevel.L1);   // 1 → 3 고속도로, 비용: 5
+		Edge edge1 = new Edge(1, 1, 2, 40, 3, 100, RoadLevel.L0);  // 상위 계층 엣지 참조: 3
+		Edge edge3 = new Edge(3, 1, 3, 1, -1, 100, RoadLevel.L0);
+		Edge edge101 = new Edge(9, 1, 4, 10, -1, 60, RoadLevel.L1);   // 1 → 4 직통로, 비용: 10
+		Edge edge105 = new Edge(13, 1, 3, 5, -1, 60, RoadLevel.L1);   // 1 → 3 고속도로, 비용: 5
 		
 		// Node 2의 엣지
-		Edge edge2 = new Edge(2, 2, 1, 2, 5, RoadLevel.L0);
-		Edge edge5 = new Edge(5, 2, 4, 2, -1, RoadLevel.L0);
-		Edge edge103 = new Edge(11, 2, 4, 8, -1, RoadLevel.L1);    // 2 → 4 고속도로 진입로, 비용: 8
-		Edge edge107 = new Edge(15, 2, 3, 6, -1, RoadLevel.L1);    // 2 → 3 고속도로, 비용: 6
+		Edge edge2 = new Edge(2, 2, 1, 2, 5, 100, RoadLevel.L0);
+		Edge edge5 = new Edge(5, 2, 4, 2, -1, 100, RoadLevel.L0);
+		Edge edge103 = new Edge(11, 2, 4, 8, -1, 60, RoadLevel.L1);    // 2 → 4 고속도로 진입로, 비용: 8
+		Edge edge107 = new Edge(15, 2, 3, 6, -1, 60, RoadLevel.L1);    // 2 → 3 고속도로, 비용: 6
 		
 		// Node 3의 엣지
-		Edge edge4 = new Edge(4, 3, 1, 1, 7, RoadLevel.L0);
-		Edge edge7 = new Edge(7, 3, 4, 1, -1, RoadLevel.L0);
-		Edge edge106 = new Edge(14, 3, 1, 5, -1, RoadLevel.L1);    // 3 → 1 양방향, 비용: 5
-		Edge edge108 = new Edge(16, 3, 2, 6, -1, RoadLevel.L1);    // 3 → 2 양방향, 비용: 6
+		Edge edge4 = new Edge(4, 3, 1, 1, 7, 100, RoadLevel.L0);
+		Edge edge7 = new Edge(7, 3, 4, 1, -1, 100, RoadLevel.L0);
+		Edge edge106 = new Edge(14, 3, 1, 5, -1, 60, RoadLevel.L1);    // 3 → 1 양방향, 비용: 5
+		Edge edge108 = new Edge(16, 3, 2, 6, -1, 60, RoadLevel.L1);    // 3 → 2 양방향, 비용: 6
 		
 		// Node 4의 엣지
-		Edge edge6 = new Edge(6, 4, 2, 2, 8, RoadLevel.L0);  // 상위 계층 엣지 참조: 8
-		Edge edge8 = new Edge(8, 4, 3, 1, -1, RoadLevel.L0);
-		Edge edge102 = new Edge(10, 4, 1, 10, -1, RoadLevel.L1);   // 4 → 1 양방향, 비용: 10
-		Edge edge104 = new Edge(12, 4, 2, 8, -1, RoadLevel.L1);    // 4 → 2 양방향, 비용: 8
+		Edge edge6 = new Edge(6, 4, 2, 2, 8, 100, RoadLevel.L0);  // 상위 계층 엣지 참조: 8
+		Edge edge8 = new Edge(8, 4, 3, 1, -1, 100, RoadLevel.L0);
+		Edge edge102 = new Edge(10, 4, 1, 10, -1, 60, RoadLevel.L1);   // 4 → 1 양방향, 비용: 10
+		Edge edge104 = new Edge(12, 4, 2, 8, -1, 60, RoadLevel.L1);    // 4 → 2 양방향, 비용: 8
 
 		// readEdge mock 설정 (offset 기준)
 		// Node 1: L0 offset 1-2, L1 offset 3-4

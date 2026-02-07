@@ -107,14 +107,24 @@ public class EdgeExtract implements Runnable {
                     
                     // 엣지 거리 계산
                     double distance = PathUtil.haversineDistance(coordinateFrom, coordinateTo);
+                    int speed = (int) feature.getAttribute("maxspeed");
                     
                     // 양방향 엣지 생성 (ID는 0으로 고정)
-                    Edge forwardEdge = createEdge(extractedEdgeCount++, fromNodeId, toNodeId, distance, roadLevel);
-                    Edge backwardEdge = createEdge(extractedEdgeCount++, toNodeId, fromNodeId, distance, roadLevel);
-                    
-                    // 엣지를 큐에 추가
-                    edgeList.add(new EdgeItem(forwardEdge));
-                    edgeList.add(new EdgeItem(backwardEdge));
+                    String oneway = (String) feature.getAttribute("oneway");
+                    if(oneway.equals("F")) {
+                        Edge forwardEdge = createEdge(extractedEdgeCount++, fromNodeId, toNodeId, distance, speed, roadLevel);
+                        edgeList.add(new EdgeItem(forwardEdge));
+                    }
+                    else if(oneway.equals("T")) {
+                        Edge backwardEdge = createEdge(extractedEdgeCount++, toNodeId, fromNodeId, distance, speed, roadLevel);
+                        edgeList.add(new EdgeItem(backwardEdge));
+                    }
+                    else {
+                        Edge forwardEdge = createEdge(extractedEdgeCount++, fromNodeId, toNodeId, distance, speed, roadLevel);
+                        Edge backwardEdge = createEdge(extractedEdgeCount++, toNodeId, fromNodeId, distance, speed, roadLevel);
+                        edgeList.add(new EdgeItem(forwardEdge));
+                        edgeList.add(new EdgeItem(backwardEdge));
+                    }
                 }
                 
                 // 진행률 업데이트
@@ -204,7 +214,7 @@ public class EdgeExtract implements Runnable {
     /**
      * 엣지 객체 생성
      */
-    private Edge createEdge(int id, int fromNodeId, int toNodeId, double distance, RoadLevel roadLevel) {
-        return new Edge(id, fromNodeId, toNodeId, distance, -1, roadLevel);
+    private Edge createEdge(int id, int fromNodeId, int toNodeId, double distance, int speed, RoadLevel roadLevel) {
+        return new Edge(id, fromNodeId, toNodeId, distance, -1, speed, roadLevel);
     }
 }
