@@ -9,6 +9,7 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.MappableEdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.InMemoryEdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Reader.DataReader;
 import com.shortestpath.shortestpath.core.pathengine.Store.Reader.HybridDataReader;
@@ -327,6 +328,16 @@ public class HybridDataStore implements MappableDataStore {
      * EdgeIndex도 매핑 모드를 지원하면 함께 전환
      */
     public void switchToMappingMode() throws IOException {
+        switchDataReaderToMappingMode();
+        switchEdgeIndexToMappingMode();
+    }
+    
+    /**
+     * DataReader를 메모리 매핑 모드로 전환
+     * @throws IOException IO 오류 발생 시
+     * @throws UnsupportedOperationException Reader가 메모리 매핑을 지원하지 않는 경우
+     */
+    public void switchDataReaderToMappingMode() throws IOException {
         if (!readOnlyMode) {
             log.warn("경로탐색 단계에서만 메모리 매핑 모드를 사용하는 것을 권장합니다.");
         }
@@ -343,10 +354,17 @@ public class HybridDataStore implements MappableDataStore {
             throw new UnsupportedOperationException(
                     "현재 Reader는 메모리 매핑을 지원하지 않습니다: " + dataReader.getClass().getSimpleName());
         }
-        
+    }
+    
+    /**
+     * EdgeIndex를 메모리 매핑 모드로 전환 (선택적)
+     * EdgeIndex가 MappableEdgeIndex를 구현하는 경우만 전환
+     * @throws IOException IO 오류 발생 시
+     */
+    public void switchEdgeIndexToMappingMode() throws IOException {
         // EdgeIndex 매핑 모드 전환 (지원하는 경우)
-        if (edgeIndex != null && edgeIndex.supportsMappingMode()) {
-            edgeIndex.switchToMappingMode();
+        if (edgeIndex != null && edgeIndex instanceof MappableEdgeIndex) {
+            ((MappableEdgeIndex) edgeIndex).switchToMappingMode();
             log.info("EdgeIndex 메모리 매핑 모드로 전환 완료");
         }
     }

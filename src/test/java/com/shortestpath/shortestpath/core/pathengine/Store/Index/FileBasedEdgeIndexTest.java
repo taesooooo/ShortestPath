@@ -94,12 +94,6 @@ class FileBasedEdgeIndexTest {
     }
     
     @Test
-    @DisplayName("매핑 모드 지원 확인")
-    void testSupportsMappingMode() {
-        assertThat(index.supportsMappingMode()).isTrue();
-    }
-    
-    @Test
     @DisplayName("매핑 모드로 전환 및 조회")
     void testSwitchToMappingMode() throws IOException {
         // Given

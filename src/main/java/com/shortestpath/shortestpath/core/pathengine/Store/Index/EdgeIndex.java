@@ -60,21 +60,4 @@ public interface EdgeIndex {
      * 인덱스 초기화
      */
     void clear();
-    
-    /**
-     * 메모리 매핑 모드 지원 여부 확인
-     * @return 지원하면 true
-     */
-    default boolean supportsMappingMode() {
-        return false;
-    }
-    
-    /**
-     * 메모리 매핑 모드로 전환 (선택적 구현)
-     * @throws IOException IO 오류 발생 시
-     * @throws UnsupportedOperationException 지원하지 않는 경우
-     */
-    default void switchToMappingMode() throws IOException {
-        throw new UnsupportedOperationException("이 구현은 메모리 매핑 모드를 지원하지 않습니다.");
-    }
 }

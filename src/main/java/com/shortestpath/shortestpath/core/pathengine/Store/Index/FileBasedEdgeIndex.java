@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  * 읽기 모드: MappedByteBuffer 사용 (빠른 조회)
  */
 @Slf4j
-public class FileBasedEdgeIndex implements EdgeIndex {
+public class FileBasedEdgeIndex implements MappableEdgeIndex {
     private final Path indexFilePath;
     private FileChannel channel;  // 읽기/쓰기용 채널
     private MappedByteBuffer mappedBuffer;
@@ -177,14 +177,6 @@ public class FileBasedEdgeIndex implements EdgeIndex {
         int entryCount = headerBuffer.getInt();
 
         header = new EdgeIndexHedaer(entryCount);
-    }
-    
-    /**
-     * 메모리 매핑 모드 지원 여부
-     */
-    @Override
-    public boolean supportsMappingMode() {
-        return true;
     }
     
     /**

@@ -25,6 +25,9 @@ import org.locationtech.jts.geom.Geometry;
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.EdgeIndexCreator;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeCSVWriter;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
@@ -186,14 +189,17 @@ public class NodeEdgeExtractor implements Extractor {
 		
 		// 모든 워커 스레드가 정상적으로 끝난 경우
 		if (taskContinue.get() && !taskError.get()) {
-			// 엣지 정렬
+			// 1단계: 엣지 정렬 (인플레이: 정렬 결과를 바로 edge.bin에 씀)
+			log.info("엣지 정렬 시작");
 			EdgeSort edgeSort = new EdgeSort(store);
 			edgeSort.sort();
 	
-			// 인덱스 생성 및 저장
+			// 2단계: 인덱스 생성 (이미 정렬된 edge.bin 사용)
+			log.info("엣지 인덱스 생성 시작");
 			EdgeIndexCreator edgeIndexCreator = new EdgeIndexCreator(store);
 			edgeIndexCreator.createEdgeIndex();
 			
+			// 3단계: 노드 인덱스 생성
 			// idArray를 이용해 노드 인덱스 생성
 			ArrayList<IndexInfo> indexList = createIndexList(idArray);
 
@@ -212,9 +218,9 @@ public class NodeEdgeExtractor implements Extractor {
 
 			log.info("노드 및 엣지 추출 작업 완료");
 
-			if (store instanceof MappableDataStore) {
-				((MappableDataStore) store).switchToMappingMode();
-			}
+			// DataStore 닫기 (리소스 정리)
+			// store.close();
+			// log.info("DataStore 종료");
 
 			shpStore.dispose();
 		}

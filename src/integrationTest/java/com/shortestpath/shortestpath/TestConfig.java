@@ -29,12 +29,12 @@ public class TestConfig {
         String parentDir = new File(shpFilePath).getParent();
         File nodeFile = new File(parentDir, "node.bin");
         File edgeFile = new File(parentDir, "edge.bin");
-        // if (nodeFile.exists()) {
-        //     nodeFile.delete();
-        // }
-        // if (edgeFile.exists()) {
-        //     edgeFile.delete();
-        // }
+        if (nodeFile.exists()) {
+            nodeFile.delete();
+        }
+        if (edgeFile.exists()) {
+            edgeFile.delete();
+        }
 
         HybridDataStore dataStore = new HybridDataStore(parentDir);
         dataStore.setPersistence(dataPersistence);

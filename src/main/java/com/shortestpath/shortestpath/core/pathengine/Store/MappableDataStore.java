@@ -13,4 +13,18 @@ public interface MappableDataStore extends DataStore {
      * @throws IOException 전환 실패 시
      */
     void switchToMappingMode() throws IOException;
+    
+    /**
+     * DataReader를 메모리 매핑 모드로 전환
+     * @throws IOException IO 오류 발생 시
+     * @throws UnsupportedOperationException Reader가 메모리 매핑을 지원하지 않는 경우
+     */
+    void switchDataReaderToMappingMode() throws IOException;
+    
+    /**
+     * EdgeIndex를 메모리 매핑 모드로 전환 (선택적)
+     * EdgeIndex가 MappableEdgeIndex를 구현하는 경우만 전환
+     * @throws IOException IO 오류 발생 시
+     */
+    void switchEdgeIndexToMappingMode() throws IOException;
 }
