@@ -1,11 +1,13 @@
 package com.shortestpath.shortestpath.core.unit.Extractor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.geotools.api.feature.simple.SimpleFeature;
@@ -57,6 +59,8 @@ public class EdgeExtractTest {
         builder.setName("Road");
         builder.add("geometry", LineString.class);
         builder.add("fclass", String.class);
+        builder.add("maxspeed", Integer.class);
+        builder.add("oneway", String.class);
         featureType = builder.buildFeatureType();
         
         collection = new DefaultFeatureCollection();
@@ -74,6 +78,8 @@ public class EdgeExtractTest {
         SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
         featureBuilder.set("geometry", geometry);
         featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature = featureBuilder.buildFeature(null);
         
         ((DefaultFeatureCollection) collection).add(feature);
@@ -99,6 +105,8 @@ public class EdgeExtractTest {
         SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
         featureBuilder.set("geometry", geometry);
         featureBuilder.set("fclass", "primary");
+        featureBuilder.set("maxspeed", 60);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature = featureBuilder.buildFeature(null);
         
         ((DefaultFeatureCollection) collection).add(feature);
@@ -124,6 +132,8 @@ public class EdgeExtractTest {
         SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
         featureBuilder.set("geometry", geometry);
         featureBuilder.set("fclass", "residential");
+        featureBuilder.set("maxspeed", 40);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature = featureBuilder.buildFeature(null);
         
         ((DefaultFeatureCollection) collection).add(feature);
@@ -150,6 +160,8 @@ public class EdgeExtractTest {
         SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
         featureBuilder.set("geometry", geometry);
         featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature = featureBuilder.buildFeature(null);
         
         ((DefaultFeatureCollection) collection).add(feature);
@@ -175,6 +187,8 @@ public class EdgeExtractTest {
         SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
         featureBuilder.set("geometry", geometry);
         featureBuilder.set("fclass", "unknown_type");
+        featureBuilder.set("maxspeed", 40);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature = featureBuilder.buildFeature(null);
         
         ((DefaultFeatureCollection) collection).add(feature);
@@ -206,11 +220,15 @@ public class EdgeExtractTest {
         
         featureBuilder.set("geometry", geometryFactory.createLineString(coords1));
         featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature1 = featureBuilder.buildFeature(null);
         ((DefaultFeatureCollection) collection).add(feature1);
         
         featureBuilder.set("geometry", geometryFactory.createLineString(coords2));
         featureBuilder.set("fclass", "residential");
+        featureBuilder.set("maxspeed", 50);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature2 = featureBuilder.buildFeature(null);
         ((DefaultFeatureCollection) collection).add(feature2);
         
@@ -235,6 +253,8 @@ public class EdgeExtractTest {
         SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
         featureBuilder.set("geometry", geometry);
         featureBuilder.set("fclass", null);
+        featureBuilder.set("maxspeed", 40);
+        featureBuilder.set("oneway", "B");
         SimpleFeature feature = featureBuilder.buildFeature(null);
         
         ((DefaultFeatureCollection) collection).add(feature);
@@ -247,5 +267,110 @@ public class EdgeExtractTest {
         
         assertThat(items).hasSize(2);
         assertThat(items).allMatch(edgeItem -> ((EdgeItem)edgeItem).getEdge().getRoadLevel() == RoadLevel.L2);
+    }
+
+    @Test
+    @DisplayName("엣지 양방향 생성 테스트")
+    public void testBidirectionalEdgeCreation() throws InterruptedException {
+        Coordinate[] coords = {
+            new Coordinate(127.0, 37.0),
+            new Coordinate(127.1, 37.1)
+        };
+        LineString geometry = geometryFactory.createLineString(coords);
+        
+        SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
+        featureBuilder.set("geometry", geometry);
+        featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", "B");
+        SimpleFeature feature = featureBuilder.buildFeature(null);
+        
+        ((DefaultFeatureCollection) collection).add(feature);
+        
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
+        
+        edgeExtract.run();
+        
+        List<TaskItem> items = edgeQueue.take();
+        
+        assertThat(items).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("엣지 단방향 생성 테스트")
+    public void testForwadEdgeCreation() throws InterruptedException {
+        Coordinate[] coords = {
+            new Coordinate(127.0, 37.0),
+            new Coordinate(127.1, 37.1)
+        };
+        LineString geometry = geometryFactory.createLineString(coords);
+        
+        SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
+        featureBuilder.set("geometry", geometry);
+        featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", "F");
+        SimpleFeature feature = featureBuilder.buildFeature(null);
+        
+        ((DefaultFeatureCollection) collection).add(feature);
+        
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
+        
+        edgeExtract.run();
+        
+        List<TaskItem> items = edgeQueue.take();
+        
+        assertThat(items).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("엣지 역방향 생성 테스트")
+    public void testBackwardEdgeCreation() throws InterruptedException {
+        Coordinate[] coords = {
+            new Coordinate(127.0, 37.0),
+            new Coordinate(127.1, 37.1)
+        };
+        LineString geometry = geometryFactory.createLineString(coords);
+        
+        SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
+        featureBuilder.set("geometry", geometry);
+        featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", "T");
+        SimpleFeature feature = featureBuilder.buildFeature(null);
+        
+        ((DefaultFeatureCollection) collection).add(feature);
+        
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
+        
+        edgeExtract.run();
+        
+        List<TaskItem> items = edgeQueue.take();
+        
+        assertThat(items).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("엣지 생성 중 에러 발생시 바로 종료 테스트")
+    public void testEdgeCreationWithError() throws InterruptedException {
+        Coordinate[] coords = {
+            new Coordinate(127.0, 37.0),
+            new Coordinate(127.1, 37.1)
+        };
+        LineString geometry = geometryFactory.createLineString(coords);
+        
+        SimpleFeatureBuilder featureBuilder = new SimpleFeatureBuilder(featureType);
+        featureBuilder.set("geometry", geometry);
+        featureBuilder.set("fclass", "motorway");
+        featureBuilder.set("maxspeed", 100);
+        featureBuilder.set("oneway", null);
+        SimpleFeature feature = featureBuilder.buildFeature(null);
+        
+        ((DefaultFeatureCollection) collection).add(feature);
+
+        edgeExtract = new EdgeExtract(idArrays, edgeQueue, dataStore, collection, taskContinue, taskError, null, 1);
+        edgeExtract.run();
+
+        assertThat(taskError).isTrue();
     }
 }
