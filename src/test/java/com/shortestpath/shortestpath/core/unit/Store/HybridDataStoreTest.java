@@ -118,9 +118,10 @@ public class HybridDataStoreTest {
             int testToOffset = 2;
             double testDistance = 30.5;
             int testNextEdgeOffset = 40;
+            int testSpeed = 100;
             RoadLevel testRoadLevel = RoadLevel.L0;
 
-            Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset, testRoadLevel);
+            Edge edge = new Edge(testId, testFromOffset, testToOffset, testDistance, testNextEdgeOffset, testSpeed, testRoadLevel);
 
             store.saveEdge(edge, 26L);
 
@@ -131,7 +132,9 @@ public class HybridDataStoreTest {
             assertThat(readEdge.getTo()).as("읽어온 Edge의 To값이 일치하지 않습니다.").isEqualTo(testToOffset);
             assertThat(readEdge.getDistance()).as("읽어온 Edge의 Distance값이 일치하지 않습니다.").isEqualTo(testDistance);
             assertThat(readEdge.getNextEdgeOffset()).as("읽어온 Edge의 NextEdgeOffset값이 일치하지 않습니다.").isEqualTo(testNextEdgeOffset);
-
+            assertThat(readEdge.getSpeed()).as("읽어온 Edge의 Speed값이 일치하지 않습니다.").isEqualTo(testSpeed);
+            assertThat(readEdge.getRoadLevel()).as("읽어온 Edge의 RoadLevel값이 일치하지 않습니다.").isEqualTo(testRoadLevel);
+            
             store.close();
         } finally {
             deleteTestDirectory(tempDir);

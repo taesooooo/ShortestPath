@@ -132,6 +132,7 @@ public class HybridDataWriter implements AllocatableDataWriter, HeaderWriter {
         buffer.putInt(edge.getTo());
         buffer.putDouble(edge.getDistance());
         buffer.putInt(edge.getNextEdgeOffset());
+        buffer.putInt(edge.getSpeed());
         buffer.put(edge.getRoadLevel().toString().getBytes());
         buffer.flip();
 
