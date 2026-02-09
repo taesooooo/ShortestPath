@@ -119,23 +119,35 @@ public class InteEngineTest {
         assertThat(searchResult.getRouteNode()).isNull();
     }
 
-    // @Test
-    // @DisplayName("계층 경로 탐색 - 정상 탐색")
-    // public void findHierarchyPathTest() throws EmptyGeometryListException, IOException {
-    //     ArrayList<Coordinate> coordinateList = new ArrayList<Coordinate>();
-    //     // 36.8010399, 127.1259318
-    //     // 35.8278131, 128.5237598
-    //     Coordinate startCoordinate = new Coordinate(36.8010399, 127.1259318);
-    //     Coordinate endCoordinate = new Coordinate(35.8278131, 128.5237598);
+    @Test
+    @DisplayName("계층 경로 탐색 - 정상 탐색")
+    public void findHierarchyPathTest() throws EmptyGeometryListException, IOException {
+        // 36.8010399, 127.1259318
+        // 35.8278131, 128.5237598
+        ArrayList<Coordinate> coordinateList = new ArrayList<Coordinate>();
+        coordinateList.add(new Coordinate(33.2403307, 126.5624673));
+        coordinateList.add(new Coordinate(33.2403234, 126.5627931));
+        coordinateList.add(new Coordinate(33.2402282, 126.5630821));
+        coordinateList.add(new Coordinate(33.2401702, 126.5632367));
+        coordinateList.add(new Coordinate(33.2403103, 126.5634159));
+        coordinateList.add(new Coordinate(33.2404554, 126.5635482));
+        coordinateList.add(new Coordinate(33.2408904, 126.5637502));
+        coordinateList.add(new Coordinate(33.2412932, 126.5638586));
+        coordinateList.add(new Coordinate(33.2415727, 126.5639338));
+        coordinateList.add(new Coordinate(33.2418125, 126.5640198));
+        coordinateList.add(new Coordinate(33.2417782, 126.5647375));
 
-    //     RouteSearchResult searchResult = engine.shortestPathFind(endCoordinate, startCoordinate, false);
-    //     ArrayList<Node> findPath = searchResult.getRouteNode();
+        Coordinate startCoordinate = new Coordinate(33.2403307, 126.5624673);
+        Coordinate endCoordinate = new Coordinate(33.2417782, 126.5647375);
 
-    //     findPath.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
+        RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+        ArrayList<Node> findPath = searchResult.getRouteNode();
 
-    //     assertThat(findPath).extracting(Node::getCoordinate)
-    //             .usingRecursiveComparison()
-    //             .isEqualTo(coordinateList);
-    // }
+        findPath.forEach(item -> System.out.println(item.getCoordinate().toWKT()));
+
+        assertThat(findPath).extracting(Node::getCoordinate)
+                .usingRecursiveComparison()
+                .isEqualTo(coordinateList);
+    }
 
 }
