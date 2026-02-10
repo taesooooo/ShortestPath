@@ -59,10 +59,6 @@ public class Engine {
 	 * @return 속도와 가중치를 고려한 비용 (거리/속도) × 가중치
 	 */
 	private double getWeightedDistance(Edge edge) {
-		if(edge == null || edge.getRoadLevel() == null) {
-			return edge.getDistance();
-		}
-		
 		double baseDistance = edge.getDistance();
 		double speed;  // km/h
 		double weight; // 추가 가중치
@@ -151,17 +147,20 @@ public class Engine {
 			routeTracker = new RouteTracker();
 		}
 
-		double searchDistance = PathUtil.haversineDistance(startCoordinate, endCoordinate);
+		// double searchDistance = PathUtil.haversineDistance(startCoordinate, endCoordinate);
 		ArrayList<Node> resultPath = null;
 		
-		if(searchDistance >= 50) {
-			log.info("계층 경로 탐색 모드로 전환 - 탐색 거리 : " + searchDistance);
-			resultPath = findhierarchyPath(startNode, endNode, routeTracker);
-			// resultPath = test(startNode, endNode, routeTracker);
-		}
-		else {
-			resultPath = findPath(startNode, endNode, routeTracker);
-		}
+
+		resultPath = findhierarchyPath(startNode, endNode, routeTracker);
+
+		// if(searchDistance >= 50) {
+		// 	log.info("계층 경로 탐색 모드로 전환 - 탐색 거리 : " + searchDistance);
+		// 	resultPath = findhierarchyPath(startNode, endNode, routeTracker);
+		// 	// resultPath = test(startNode, endNode, routeTracker);
+		// }
+		// else {
+		// 	resultPath = findhierarchyPath(startNode, endNode, routeTracker);
+		// }
 		
 		long et = System.currentTimeMillis();
 		double searchTime = (et - st) / 1000.0;
@@ -405,10 +404,10 @@ public class Engine {
 					toNode.setgCost(newDist);
 					toNode.setfCost(fCost);
 
-					if(!isNewNode) {
-						// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
-						openList.remove(toNode);
-					}
+					// if(!isNewNode) {
+					// 	// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
+					// 	openList.remove(toNode);
+					// }
 
 					openList.add(new SearchRoute(toNode, edge));
 					// 경로 역추적을 위해 이전 노드 저장

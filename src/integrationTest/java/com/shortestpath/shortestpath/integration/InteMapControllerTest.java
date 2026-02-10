@@ -133,9 +133,8 @@ class InteMapControllerTest {
 		ArrayList<Coordinate> routeCoordinates = new ArrayList<Coordinate>();
 		routeCoordinates.add(new Coordinate(33.2403234, 126.5627931));
 		routeCoordinates.add(new Coordinate(33.2402282, 126.5630821));
-		routeCoordinates.add(new Coordinate(33.2401702, 126.5632367));
-		routeCoordinates.add(new Coordinate(33.2403103, 126.5634159));
-		routeCoordinates.add(new Coordinate(33.2404554, 126.5635482));
+		routeCoordinates.add(new Coordinate(33.2404177, 126.5631293));
+		routeCoordinates.add(new Coordinate(33.2409855, 126.5631549));
 		routeCoordinates.add(new Coordinate(33.2408904, 126.5637502));
 		routeCoordinates.add(new Coordinate(33.2407988, 126.5643231));
 		routeCoordinates.add(new Coordinate(33.2408074, 126.5644749));
@@ -143,29 +142,27 @@ class InteMapControllerTest {
 		ArrayList<Coordinate> parentCoordinates = new ArrayList<Coordinate>();
 		parentCoordinates.add(new Coordinate(33.2403234, 126.5627931));
 		parentCoordinates.add(new Coordinate(33.2402282, 126.56308210000002));
-		parentCoordinates.add(new Coordinate(33.2404177, 126.56312929999999));
-		parentCoordinates.add(new Coordinate(33.2401702, 126.5632367));
-		parentCoordinates.add(new Coordinate(33.2403103, 126.5634159));
-		parentCoordinates.add(new Coordinate(33.2404554, 126.5635482));
+		parentCoordinates.add(new Coordinate(33.2404177, 126.5631293));
+		parentCoordinates.add(new Coordinate(33.2409855, 126.5631549));
 		parentCoordinates.add(new Coordinate(33.2408904, 126.5637502));
 		parentCoordinates.add(new Coordinate(33.2407988, 126.5643231));
 		parentCoordinates.add(new Coordinate(33.2408074, 126.5644749));
 
+
 		ArrayList<Coordinate> visitedCoordinates = new ArrayList<Coordinate>();
-		// searchCoordinates.add(new Coordinate(33.2403234, 126.5627931));
+		// visited coordinates from provided POINT list
+		visitedCoordinates.add(new Coordinate(33.2403307, 126.5624673));
 		visitedCoordinates.add(new Coordinate(33.2402282, 126.5630821));
+		visitedCoordinates.add(new Coordinate(33.2404177, 126.5631293));
 		visitedCoordinates.add(new Coordinate(33.2401702, 126.5632367));
-		visitedCoordinates.add(new Coordinate(33.2403103, 126.5634159));
-		visitedCoordinates.add(new Coordinate(33.2404554, 126.5635482));
-		visitedCoordinates.add(new Coordinate(33.2408904, 126.5637502));
 		visitedCoordinates.add(new Coordinate(33.2409855, 126.5631549));
+		visitedCoordinates.add(new Coordinate(33.2418930, 126.5631720));
+		visitedCoordinates.add(new Coordinate(33.2408904, 126.5637502));
+		visitedCoordinates.add(new Coordinate(33.2409625, 126.5624993));
+		visitedCoordinates.add(new Coordinate(33.2412932, 126.5638586));
+		visitedCoordinates.add(new Coordinate(33.2404554, 126.5635482));
 		visitedCoordinates.add(new Coordinate(33.2407988, 126.5643231));
 		visitedCoordinates.add(new Coordinate(33.2408074, 126.5644749));
-		visitedCoordinates.add(new Coordinate(33.2403307, 126.5624673));
-		visitedCoordinates.add(new Coordinate(33.2404177, 126.5631293));
-		visitedCoordinates.add(new Coordinate(33.2409855, 126.5631549));
-		visitedCoordinates.add(new Coordinate(33.2412932, 126.5638586));
-		visitedCoordinates.add(new Coordinate(33.2399523, 126.5638167));
 
 		MvcResult mvcResult = this.mockMvc.perform(get("/api/map/search-route-track")
 				.queryParam("coordinates", "33.2403234/126.5627931|33.2408074/126.5644749")
@@ -177,6 +174,8 @@ class InteMapControllerTest {
 
 		String contentAsString = mvcResult.getResponse().getContentAsString();
 		ResponeseRouteSearchTraceDto responseDto = om.readValue(contentAsString, ResponeseRouteSearchTraceDto.class);
+
+		responseDto.getRouteCoordinates().forEach(item -> System.out.println(item.toWKT()));
 
 		assertThat(responseDto.getRouteCoordinates()).as("예상한 탐색 경로 좌표가 일치하지 않습니다.")
 				.containsExactlyElementsOf(routeCoordinates);
