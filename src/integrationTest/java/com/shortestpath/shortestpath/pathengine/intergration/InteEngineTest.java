@@ -65,7 +65,7 @@ public class InteEngineTest {
     
     @BeforeAll
     public void setUp() throws IOException {
-        loader.extractData(false);
+        // loader.extractData(false);
         // loader.createIndex();
         ((HybridDataStore) dataStore).switchToMappingMode();
     }
@@ -73,8 +73,8 @@ public class InteEngineTest {
     @AfterAll
     public void destroy() throws IOException {
         dataStore.close();
-        IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
-        dbHelper.turncate();
+        // IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
+        // dbHelper.turncate();
     }
 
     @Test

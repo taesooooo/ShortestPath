@@ -247,7 +247,7 @@ public class NodeEdgeExtractor implements Extractor {
 	}
 
 	private long[] createIdArray(FeatureCollection<SimpleFeatureType, SimpleFeature> collection) throws IOException {
-		log.info("내부 인덱스 배열 생성중.");
+		log.info("내부 인덱스 배열 생성중 (레이어 포함)");
 		long[] nodeIdArray = new long[100000];
 		int count = 0;
 
@@ -256,21 +256,31 @@ public class NodeEdgeExtractor implements Extractor {
 		while (iterator.hasNext()) {
 			SimpleFeature feature = iterator.next();
 			Geometry geo = (Geometry) feature.getDefaultGeometry();
+			
+			// layer 속성 추출
+			Object layerId = null;
+			try {
+				layerId = feature.getProperty("layer").getValue();
+			} catch (Exception e) {
+				log.debug("layer 속성을 찾을 수 없습니다. 기본값 0으로 처리");
+				layerId = 0;
+			}
 
 			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
-				long coordinateId = GeometryUtil.coordinateToLong(coordinate);
+				// 좌표와 레이어 정보를 조합하여 유니크 ID 생성
+				long uniqueId = GeometryUtil.coordinateToLong(coordinate);
+				
 				if (count == nodeIdArray.length) {
 					nodeIdArray = Arrays.copyOf(nodeIdArray, nodeIdArray.length * 2);
 				}
 
-				nodeIdArray[count++] = coordinateId;
-
+				nodeIdArray[count++] = uniqueId;
 			}
 		}
 
 		Arrays.sort(nodeIdArray);
 
-		// 중복 제거
+		// 중복 제거 (좌표+레이어 조합으로 중복 판단)
 		int tempIndex = 0;
 		for (int i = 0; i < nodeIdArray.length; i++) {
 			if (i == 0 || nodeIdArray[i] != nodeIdArray[i - 1]) {

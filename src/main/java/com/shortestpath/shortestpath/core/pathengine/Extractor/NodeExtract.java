@@ -64,6 +64,20 @@ public class NodeExtract implements Runnable {
                 Node nodeB = null;
 
                 Geometry geometry = (Geometry) feature.getDefaultGeometry();
+                
+                // layer 속성 추출
+                Object layerId = null;
+                try {
+                    layerId = feature.getProperty("layer").getValue();
+                } catch (Exception e) {
+                    logger.debug("layer 속성을 찾을 수 없습니다. 기본값 0으로 처리");
+                    layerId = 0;
+                }
+                
+                // 게이트 여부 판단 (motorway_link, primary_link, trunk_link)
+                String roadType = getRoadType(feature);
+                boolean isGate = isGateType(roadType);
+                
                 for (int i = 0; i < geometry.getNumPoints() - 1; i++) {
                     double x = geometry.getCoordinates()[i].x;
                     double y = geometry.getCoordinates()[i].y;
@@ -80,8 +94,8 @@ public class NodeExtract implements Runnable {
                     int indexA = Arrays.binarySearch(idArrays, coordIdA);
                     int indexB = Arrays.binarySearch(idArrays, coordIdB);
 
-                    nodeA = createNode(coordinateA, indexA);
-                    nodeB = createNode(coordinateB, indexB);
+                    nodeA = createNode(coordinateA, indexA, isGate);
+                    nodeB = createNode(coordinateB, indexB, isGate);
                     nodeList.add(new NodeItem(nodeA, nodeB));
                     extractedNodeCount += 2;
                 }
@@ -120,8 +134,27 @@ public class NodeExtract implements Runnable {
         }
     }
 
-    private Node createNode(Coordinate coordinate, int nodeId) {
-        return new Node(nodeId, coordinate);
+    private String getRoadType(SimpleFeature feature) {
+        try {
+            Object roadTypeValue = feature.getAttribute("fclass");
+            if (roadTypeValue != null) {
+                return roadTypeValue.toString().toLowerCase().trim();
+            }
+        } 
+        catch (Exception e) {
+            logger.debug("도로 유형 속성 'fclass' 읽기 실패");
+        }
+        return "unclassified"; // 기본값
+    }
+
+    private boolean isGateType(String roadType) {
+        return ("motorway_link".equals(roadType) || 
+                "primary_link".equals(roadType) || 
+                "trunk_link".equals(roadType));
+    }
+
+    private Node createNode(Coordinate coordinate, int nodeId, boolean isGate) {
+        return new Node(nodeId, coordinate, isGate);
     }
 
 }

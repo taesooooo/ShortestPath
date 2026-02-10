@@ -88,6 +88,15 @@ public class EdgeExtract implements Runnable {
                 String roadType = getRoadType(feature);
                 RoadLevel roadLevel = determinateRoadLevel(roadType);
                 
+                // layer 속성 추출
+                Object layerId = null;
+                try {
+                    layerId = feature.getProperty("layer").getValue();
+                } catch (Exception e) {
+                    logger.debug("layer 속성을 찾을 수 없습니다. 기본값 0으로 처리");
+                    layerId = 0;
+                }
+                
                 // 연속된 두 좌표를 엣지로 변환
                 for (int i = 0; i < geometry.getNumPoints() - 1; i++) {
                     double x = geometry.getCoordinates()[i].x;

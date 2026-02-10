@@ -72,7 +72,7 @@ class EngineTest {
 		Node node1 = new Node(1, new Coordinate(127.1, 33.1), 1, Double.MAX_VALUE, 0, 0);
 		Node node2 = new Node(2, new Coordinate(127.1, 33.2), 5, Double.MAX_VALUE, 0, 0);
 		Node node3 = new Node(3, new Coordinate(127.2, 33.2), 7, Double.MAX_VALUE, 0, 0);
-		Node node4 = new Node(4, new Coordinate(127.1, 33.4), 6, Double.MAX_VALUE, 0, 0);
+		Node node4 = new Node(4, new Coordinate(127.2, 33.4), 6, Double.MAX_VALUE, 0, 0);
 		Node node5 = new Node(5, new Coordinate(127.2, 33.3), -1, Double.MAX_VALUE, 0, 0);
 
 		when(store.readNode(DataStructureSizes.calculateNodeOffset(1))).thenReturn(node1);
@@ -303,12 +303,12 @@ class EngineTest {
 				.hasSize(3)
 				.extracting(TraceRoute::getParentCoordinate)
 				.extracting(Coordinate::getLatitude, Coordinate::getLongitude)
-				.containsExactly(tuple(127.1, 33.1), tuple(127.2, 33.2), tuple(127.1, 33.4));
+				.containsExactly(tuple(127.1, 33.1), tuple(127.2, 33.2), tuple(127.2, 33.4));
 
 				// 한번에 모든 탐색한 좌표 검증
 				assertThat(traceRoutes).flatExtracting(TraceRoute::getVisitedCoordinates)
 				.extracting(Coordinate::getLatitude, Coordinate::getLongitude)
-				.containsExactly(tuple(127.1, 33.2),tuple(127.2, 33.2),tuple(127.1, 33.4));
+				.containsExactly(tuple(127.1, 33.2),tuple(127.2, 33.2),tuple(127.2, 33.4));
 	}
 
 	// @Test

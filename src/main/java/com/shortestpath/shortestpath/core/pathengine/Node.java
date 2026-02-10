@@ -26,10 +26,13 @@ public class Node implements Comparable<Node> {
 	private double hCost;
 	// 총 비용
 	private double fCost;
+	// 고속도로 진출입 게이트 여부 (motorway_link, primary_link, trunk_link)
+	private boolean isGate = false;
 
 	public Node(int id, Coordinate coordinate) {
 		this.id = id;
 		this.coordinate = coordinate;
+		this.isGate = false;
 	}
 
 	public Node(int id, Coordinate coordinate, int startEdgeOffset, double gCost, double hCost, double fCost) {
@@ -39,6 +42,13 @@ public class Node implements Comparable<Node> {
 		this.gCost = gCost;
 		this.hCost = hCost;
 		this.fCost = fCost;
+		this.isGate = false;
+	}
+
+	public Node(int id, Coordinate coordinate, boolean isGate) {
+		this.id = id;
+		this.coordinate = coordinate;
+		this.isGate = isGate;
 	}
 
 	public int getId() {
@@ -89,9 +99,13 @@ public class Node implements Comparable<Node> {
 		this.fCost = fCost;
 	}
 
-	/**
-	 * 휴리스틱을 계산하면 fCost까지 모두 갱신됨
-	 **/
+	public boolean isGate() {
+		return isGate;
+	}
+
+	public void setGate(boolean gate) {
+		isGate = gate;
+	}
 	public void calculateHeuristic(Node endNode) {
 		// 맨하튼 거리 공식
 //		Coordinate currentNode = this.getCoordinate();

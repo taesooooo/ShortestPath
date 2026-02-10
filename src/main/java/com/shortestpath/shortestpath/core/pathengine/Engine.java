@@ -354,25 +354,37 @@ public class Engine {
 			// 현재 계층에 따른 엣지 제공
 			if(currentLevel != null) {
 				if(currentLevel == RoadLevel.L0) {
-					connectedEdges = getConnectedLevelEdgesWithExit(edgeList, minRoute.getNode(), currentLevel);
-				 }
-				 else if(currentLevel == RoadLevel.L1) {
+					// L0(고속도로)에서는 게이트 노드에서만 다른 계층으로 전환 가능
+					if(minRoute.getNode().isGate()) {
+						// 게이트 노드면 모든 엣지 제공 (다른 계층 진출 가능)
+						connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+					} else {
+						// 게이트가 아니면 L0 엣지만 제공 (같은 계층 유지)
+						connectedEdges = getConnectedLevelEdges(edgeList, minRoute.getNode(), RoadLevel.L0);
+						// L0 엣지가 없으면 모든 엣지 (고속도로 끝나는 지점)
+						if(connectedEdges.isEmpty()) {
+							connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+						}
+					}
+				}
+				else if(currentLevel == RoadLevel.L1) {
 					if(distToTarget <= 10) {
 						connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
 					}
 					else {
 						connectedEdges = getConnectedLevelEdgesWithExit(edgeList, minRoute.getNode(), currentLevel);
 					}
-				 }				 
-				 else {
-					 connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
-				 }
-			} 
+				}
+				else {
+					// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
+					connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+				}		 
+			}
 			else {
 				// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
 				connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
 			}
-			
+
 			for(Edge edge : connectedEdges) {
 				Node toNode = nodeList.get(edge.getTo());
 				if(toNode == null) {
@@ -404,10 +416,10 @@ public class Engine {
 					toNode.setgCost(newDist);
 					toNode.setfCost(fCost);
 
-					// if(!isNewNode) {
-					// 	// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
-					// 	openList.remove(toNode);
-					// }
+					if(!isNewNode) {
+						// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
+						openList.remove(toNode);
+					}
 
 					openList.add(new SearchRoute(toNode, edge));
 					// 경로 역추적을 위해 이전 노드 저장
@@ -437,288 +449,7 @@ public class Engine {
 	    return path;
 	}
 
-	private ArrayList<Node> findBidirectional(Node startNode, Node endNode, RouteTracker routeTracker) {
-		ConcurrentHashMap<Integer, Node> forwardCheckList = new ConcurrentHashMap<>();
-		ConcurrentHashMap<Integer, Node> backwardCheckList = new ConcurrentHashMap<>();
-
-		HashMap<Node, Node> forwardList = new HashMap<Node, Node>();
-		HashMap<Node, Node> backwardList = new HashMap<Node, Node>();
-		
-		// 🔥 캐시 공유로 I/O 중복 제거
-		ConcurrentHashMap<Integer, Node> sharedNodeCache = new ConcurrentHashMap<>();
-		ConcurrentHashMap<Long, Edge> sharedEdgeCache = new ConcurrentHashMap<>();
-		
-		// 🔥 양쪽이 만났을 때 종료 신호
-		AtomicBoolean meetingDetected = new AtomicBoolean(false);
-		AtomicReference<Node> meetingNodeRef = new AtomicReference<>(null);
-		
-		Thread forwardThread = new Thread(() -> {
-			try {
-				// RouteTracker 비활성화로 동기화 비용 제거
-				findhierarchyPath(startNode, endNode, null, forwardList, forwardCheckList, backwardCheckList, meetingDetected, meetingNodeRef, sharedNodeCache, sharedEdgeCache);
-			} catch (IOException e) {
-				log.error("Forward 탐색 중 오류 발생", e);
-			}
-		});
-		
-		Thread backwardThread = new Thread(() -> {
-			try {
-				// RouteTracker 비활성화로 동기화 비용 제거
-				findhierarchyPath(endNode, startNode, null, backwardList, backwardCheckList, forwardCheckList, meetingDetected, meetingNodeRef, sharedNodeCache, sharedEdgeCache);
-			} catch (IOException e) {
-				log.error("Backward 탐색 중 오류 발생", e);
-			}
-		});
-
-		long st = System.currentTimeMillis();
-		forwardThread.start();
-		backwardThread.start();
-
-		try {
-			forwardThread.join();
-			backwardThread.join();
-		} catch (InterruptedException e) {
-			log.error("스레드 대기 중 오류 발생", e);
-			Thread.currentThread().interrupt();
-		}
-
-		// 🔥 만남 노드는 탐색 중에 이미 감지됨
-		Node meetingNode = meetingNodeRef.get();
-
-		long et = System.currentTimeMillis();
-		double searchTime = (et - st) / 1000.0;
-		
-		log.info("양방향 탐색 완료 시간 - {} 초", searchTime);
-
-		if(meetingNode != null) {
-			log.info("만남 노드: {}", meetingNode.getId());
-		}
-
-		// 경로 통합
-		ArrayList<Node> resultPath = mergeBidirectionalPath(
-			startNode,
-			endNode,
-			meetingNode,
-			forwardList,
-			backwardList
-		);
-
-		if(resultPath != null) {
-			log.info("양방향 탐색 완료 - 경로 노드 수: {}", resultPath.size());
-		} else {
-			log.warn("양방향 탐색 실패 - 경로를 찾을 수 없습니다");
-		}
-
-		return resultPath;
-	}
-
-	/**
-	 * 양방향 계층 탐색: 시작점과 목적지에서 동시에 탐색하여 만나는 지점 발견
-	 * @param location 현재 탐색의 역추적 맵
-	 * @param currentCheckList 현재 탐색이 방문한 노드들을 기록하는 맵
-	 * @param otherCheckList 다른 탐색이 방문한 노드들을 확인하는 맵
-	 * @param sharedNodeCache 공유 노드 캐시 (I/O 중복 제거)
-	 * @param sharedEdgeCache 공유 엣지 캐시 (I/O 중복 제거)
-	 */
-	private HashMap<Node, Node> findhierarchyPath(Node startNode, Node endNode, RouteTracker routeTracker, HashMap<Node, Node> location, ConcurrentHashMap<Integer, Node> currentCheckList, ConcurrentHashMap<Integer, Node> otherCheckList, AtomicBoolean meetingDetected, AtomicReference<Node> meetingNodeRef, ConcurrentHashMap<Integer, Node> sharedNodeCache, ConcurrentHashMap<Long, Edge> sharedEdgeCache) throws IOException {
-		// fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
-		PriorityQueue<SearchRoute> openList = new PriorityQueue<SearchRoute>(Comparator.comparingDouble(c -> c.getNode().getfCost()));
-		// 이미 방문한 노드 집합
-		HashSet<Node> closeList = new HashSet<Node>();
-
-		EdgeIndex edgeIndex = store.getEdgeIndex();
-
-		// 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
-		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate());
-
-		// 첫 노드 설정
-		startNode.setgCost(0);
-		startNode.sethCost(heuristic);
-		startNode.setfCost(heuristic);
-		sharedNodeCache.put(startNode.getId(), startNode);
-
-		openList.add(new SearchRoute(startNode, null));
-
-		RoadLevel currentLevel = null; // 현재 진행 중인 도로 계층 (null이면 모든 계층)
-
-		while(!openList.isEmpty() && !meetingDetected.get()) {  // 🔥 종료 신호 체크
-			SearchRoute minRoute = openList.poll();
-			Node currentNode = minRoute.getNode();
-
-			// 이미 방문한 노드는 건너뜀 (동기화 전에 체크하여 불필요한 락 최소화)
-			if(closeList.contains(currentNode)) {
-				continue;
-			}
-
-			// 🔥 만남 감지 (동기화 블록 최소화)
-			if(otherCheckList.containsKey(currentNode.getId())) {
-				if(meetingDetected.compareAndSet(false, true)) {
-					log.info("✅ 만남 노드 감지: {}", currentNode.getId());
-					meetingNodeRef.set(currentNode);
-				}
-				break;  // 즉시 종료
-			}
-			
-			// checkList에 추가 (ConcurrentHashMap이므로 별도 동기화 불필요)
-			currentCheckList.put(currentNode.getId(), currentNode);
-
-			if(currentNode.equals(endNode)) {
-				break;
-			}
-
-			closeList.add(currentNode);
-			double distToTarget = PathUtil.haversineDistance(currentNode.getCoordinate(), endNode.getCoordinate());
-			
-			// 현재 노드에 도달한 엣지의 계층으로 매번 업데이트
-			// (L2 → L1 → L0 → L1 → L2 등 자유롭게 이동 가능)
-			if(minRoute.getEdge() != null) {
-				currentLevel = minRoute.getEdge().getRoadLevel();
-			}
-			
-			EdgeIndexEntry entry = edgeIndex.get(minRoute.getNode().getId());
-			ArrayList<Edge> connectedEdges = new ArrayList<>();
-
-			// 현재 계층에 따른 엣지 제공 (공유 캐시 사용)
-			if(currentLevel != null) {
-				if(currentLevel == RoadLevel.L0) {
-					connectedEdges = getConnectedLevelEdgesWithExit(sharedEdgeCache, currentNode, currentLevel);
-				 }
-				 else if(currentLevel == RoadLevel.L1) {
-					if(distToTarget <= 10) {
-						connectedEdges = getConnectedEdges(sharedEdgeCache, currentNode);
-					}
-					else {
-						connectedEdges = getConnectedLevelEdgesWithExit(sharedEdgeCache, currentNode, currentLevel);
-					}
-				 }				 
-				 else {
-				 	connectedEdges = getConnectedEdges(sharedEdgeCache, currentNode);
-				 }
-			} 
-			else {
-				connectedEdges = getConnectedEdges(sharedEdgeCache, currentNode);
-			}
-			
-			for(Edge edge : connectedEdges) {
-				if(meetingDetected.get()) {  // 🔥 만남 감지되면 즉시 중단
-					break;
-				}
-				
-				// 🔥 공유 캐시 사용 (중복 I/O 제거)
-				Node toNode = sharedNodeCache.computeIfAbsent(edge.getTo(), id -> {
-					try {
-						return store.readNode(DataStructureSizes.calculateNodeOffset(id));
-					} catch (IOException e) {
-						log.error("노드 읽기 실패: {}", id, e);
-						return null;
-					}
-				});
-				
-				if(toNode == null) {
-					continue;
-				}
-				
-				// 🔥 이웃 노드에서 만남 감지 (동기화 최소화)
-				if(otherCheckList.containsKey(toNode.getId())) {
-					if(meetingDetected.compareAndSet(false, true)) {
-						log.info("✅ 만남 노드 감지 (이웃 노드): {}", toNode.getId());
-						location.put(toNode, currentNode);  // 역추적 저장
-						currentCheckList.put(toNode.getId(), toNode);
-						meetingNodeRef.set(toNode);
-					}
-					break;
-				}
-
-				// 이미 방문한 노드는 건너뜀
-				if(closeList.contains(toNode)) {
-					continue;
-				}
-
-				// 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산 - roadLevel 가중치 적용
-				double newDist = minRoute.getNode().getgCost() + getWeightedDistance(edge);
-
-				// 더 짧은 경로를 발견한 경우
-				if(newDist < toNode.getgCost()) {
-					// 처음 발견한 노드인지 확인
-					boolean isNewNode = !openList.contains(toNode);
-
-					// hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
-					double hCost = PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate());
-					double fCost = newDist + hCost;
-					toNode.sethCost(hCost);
-					toNode.setgCost(newDist);
-					toNode.setfCost(fCost);
-
-					if(!isNewNode) {
-						// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
-						openList.remove(toNode);
-					}
-
-					openList.add(new SearchRoute(toNode, edge));
-					// 경로 역추적을 위해 이전 노드 저장
-					location.put(toNode, currentNode);
-				}
-			}
-		}
-
-	    return location;
-	}
-
-	
-	/**
-	 * 양방향 탐색 결과를 통합하여 최종 경로를 생성합니다.
-	 * @param startNode 출발 노드
-	 * @param endNode 도착 노드
-	 * @param meetingNode 두 탐색이 만난 노드
-	 * @param forwardLocation Forward 탐색의 역추적 맵
-	 * @param backwardLocation Backward 탐색의 역추적 맵
-	 * @return 통합된 최종 경로 리스트
-	 */
-	private ArrayList<Node> mergeBidirectionalPath(Node startNode, Node endNode, Node meetingNode,
-			HashMap<Node, Node> forwardLocation, HashMap<Node, Node> backwardLocation) {
-		
-		if(meetingNode == null || forwardLocation == null || backwardLocation == null) {
-			return null;
-		}
-		
-		ArrayList<Node> path = new ArrayList<>();
-		
-		// Forward 경로: 출발점 → 만남점
-		// forwardLocation에서 meetingNode부터 출발점까지 역추적
-		Node currentNode = forwardLocation.get(meetingNode);
-		while(currentNode != null) {
-			path.add(currentNode);
-			currentNode = forwardLocation.get(currentNode);
-		}
-		
-		// 경로를 올바른 순서로 뒤집음 (출발점 → 만남점)
-		Collections.reverse(path);
-		path.add(meetingNode);
-		
-		// Backward 경로: 만남점 → 도착점
-		// backwardLocation에서 meetingNode의 다음 노드부터 도착점까지 추적
-		ArrayList<Node> backwardPath = new ArrayList<>();
-		currentNode = backwardLocation.get(meetingNode);
-		while(currentNode != null) {
-			backwardPath.add(currentNode);
-			currentNode = backwardLocation.get(currentNode);
-		}
-		
-		// Backward 경로는 역순이므로 뒤집지 않음 (이미 만남점 → 도착점 순서)
-		path.addAll(backwardPath);
-		
-		// 최종 경로 검증
-		if(path.isEmpty() || path.get(0) != startNode || path.get(path.size() - 1) != endNode) {
-			log.warn("경로 통합 실패: 첫노드={}, 마지막노드={}", 
-				path.isEmpty() ? "empty" : path.get(0).getId(),
-				path.isEmpty() ? "empty" : path.get(path.size() - 1).getId());
-			return null;
-		}
-		
-		return path;
-	}
-
-	private ArrayList<Edge> getConnectedLevelEdge(ConcurrentHashMap<Long,Edge> edgeList, Node node, RoadLevel level) throws IOException {
+	private ArrayList<Edge> getConnectedLevelEdges(Map<Long,Edge> edgeList, Node node, RoadLevel level) throws IOException {
 		ArrayList<Edge> levelEdges = new ArrayList<Edge>();
 		
 		// 지정된 계층의 엣지만 필터링해서 반환
