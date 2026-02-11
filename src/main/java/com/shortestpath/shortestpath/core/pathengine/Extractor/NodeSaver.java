@@ -62,13 +62,10 @@ public class NodeSaver implements Runnable {
                 for (TaskItem task : taskList) {
                     if (task instanceof NodeItem) {
                         NodeItem nodeItem = (NodeItem) task;
-                        // nodeA 저장
-                        saveNodeIfNotExists(nodeItem.getNodeA());
+                        // 노드 저장
+                        saveNodeIfNotExists(nodeItem.getNode());
 
-                        // nodeB 저장
-                        saveNodeIfNotExists(nodeItem.getNodeB());
-
-                        localNodeCount += 2;
+                        localNodeCount += 1;
                     }
                 }
 

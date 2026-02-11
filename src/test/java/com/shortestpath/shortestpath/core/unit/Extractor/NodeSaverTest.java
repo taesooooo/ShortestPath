@@ -58,8 +58,9 @@ public class NodeSaverTest {
         Node nodeB = new Node(1, new Coordinate(37.1, 127.1));
         Node nodeC = new Node(2, new Coordinate(37.2, 127.2));
         ArrayList<TaskItem> nodeItems = new ArrayList<>();
-        nodeItems.add(new NodeItem(nodeA, nodeB));
-        nodeItems.add(new NodeItem(nodeB, nodeC));
+        nodeItems.add(new NodeItem(nodeA));
+        nodeItems.add(new NodeItem(nodeB));
+        nodeItems.add(new NodeItem(nodeC));
 
         nodeQueue.put(nodeItems);
         
@@ -82,8 +83,8 @@ public class NodeSaverTest {
         ArrayList<TaskItem> nodeItems = new ArrayList<>();
 
         nodeCreated[0] = true;
-        nodeItems.add(new NodeItem(nodeA, nodeB));
-        nodeItems.add(new NodeItem(nodeA, nodeB));
+        nodeItems.add(new NodeItem(nodeA));
+        nodeItems.add(new NodeItem(nodeB));
 
         nodeQueue.put(nodeItems);
 

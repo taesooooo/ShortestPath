@@ -78,26 +78,22 @@ public class NodeExtract implements Runnable {
                 String roadType = getRoadType(feature);
                 boolean isGate = isGateType(roadType);
                 
-                for (int i = 0; i < geometry.getNumPoints() - 1; i++) {
+                for (int i = 0; i < geometry.getNumPoints(); i++) {
                     double x = geometry.getCoordinates()[i].x;
                     double y = geometry.getCoordinates()[i].y;
-                    double nextX = geometry.getCoordinates()[i + 1].x;
-                    double nextY = geometry.getCoordinates()[i + 1].y;
 
-                    Coordinate coordinateA = new Coordinate(y, x);
-                    Coordinate coordinateB = new Coordinate(nextY, nextX);
+                    Coordinate coordinate = new Coordinate(y, x);
 
-                    long coordIdA = GeometryUtil.coordinateToLong(geometry.getCoordinates()[i]);
-                    long coordIdB = GeometryUtil.coordinateToLong(geometry.getCoordinates()[i + 1]);
+                    long coordId = GeometryUtil.coordinateToLong(geometry.getCoordinates()[i]);
 
                     // idArray에서 이진 탐색 후 나오는 인덱스가 노드 ID
-                    int indexA = Arrays.binarySearch(idArrays, coordIdA);
-                    int indexB = Arrays.binarySearch(idArrays, coordIdB);
+                    int index = Arrays.binarySearch(idArrays, coordId);
 
-                    nodeA = createNode(coordinateA, indexA, isGate);
-                    nodeB = createNode(coordinateB, indexB, isGate);
-                    nodeList.add(new NodeItem(nodeA, nodeB));
-                    extractedNodeCount += 2;
+                    Node node = createNode(coordinate, index, isGate);
+                    
+                    // 노드를 하나씩 리스트에 추가
+                    nodeList.add(new NodeItem(node));
+                    extractedNodeCount++;
                 }
                 
                 // 진행률 업데이트

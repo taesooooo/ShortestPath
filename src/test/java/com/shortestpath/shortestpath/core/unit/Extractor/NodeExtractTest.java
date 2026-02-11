@@ -84,7 +84,7 @@ public class NodeExtractTest {
         
         List<TaskItem> items = nodeQueue.take();
         
-        assertThat(items).hasSize(2);
+        assertThat(items).hasSize(3);
     }
     
     @Test
@@ -109,14 +109,11 @@ public class NodeExtractTest {
         
         List<TaskItem> items = nodeQueue.take();
         
-        assertThat(items).hasSize(1);
-        NodeItem nodeItem = (NodeItem) items.get(0);
+        assertThat(items).hasSize(2);
         
-        Node nodeA = nodeItem.getNodeA();
-        Node nodeB = nodeItem.getNodeB();
-        
-        assertThat(nodeA.getId()).isEqualTo(0);
-        assertThat(nodeB.getId()).isEqualTo(1);
+        assertThat(items).extracting(item -> ((NodeItem) item).getNode())
+                    .extracting(node -> ((Node) node).getId())
+                    .containsExactly(0, 1);
     }
     
     @Test
@@ -141,10 +138,8 @@ public class NodeExtractTest {
         
         List<TaskItem> items = nodeQueue.take();
 
-        NodeItem nodeItem = (NodeItem) items.get(0);
-        
-        Node nodeA = nodeItem.getNodeA();
-        Node nodeB = nodeItem.getNodeB();
+        Node nodeA = ((NodeItem) items.get(0)).getNode();
+        Node nodeB = ((NodeItem) items.get(1)).getNode();
         
         assertThat(nodeA.getCoordinate()).extracting(com.shortestpath.shortestpath.core.pathengine.Coordinate::getLatitude, com.shortestpath.shortestpath.core.pathengine.Coordinate::getLongitude)
                  .containsExactly(coords[0].getY(), coords[0].getX());
@@ -182,6 +177,6 @@ public class NodeExtractTest {
         
         List<TaskItem> items = nodeQueue.take();
 
-        assertThat(items).hasSize(2);
+        assertThat(items).hasSize(4);
     }
 }
