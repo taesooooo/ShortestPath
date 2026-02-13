@@ -104,10 +104,5 @@ public class NodeSaver implements Runnable {
         // 아직 저장되지 않은 노드이면 저장
         dataStore.saveNode(node, nodeId * DataStructureSizes.NODE_SIZE);
         nodeCreated[nodeId] = true;
-
-        // 진행률 업데이트
-        if (progressStatus != null) {
-            progressStatus.progress(TaskType.NODE_EXTRACT, nodeCreated.length, 0);
-        }
     }
 }

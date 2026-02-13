@@ -25,15 +25,9 @@ import org.locationtech.jts.geom.Geometry;
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.EdgeIndexCreator;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeCSVWriter;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.NodeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
-import com.shortestpath.shortestpath.core.pathengine.Store.MappableDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -256,15 +250,6 @@ public class NodeEdgeExtractor implements Extractor {
 		while (iterator.hasNext()) {
 			SimpleFeature feature = iterator.next();
 			Geometry geo = (Geometry) feature.getDefaultGeometry();
-			
-			// layer 속성 추출
-			Object layerId = null;
-			try {
-				layerId = feature.getProperty("layer").getValue();
-			} catch (Exception e) {
-				log.debug("layer 속성을 찾을 수 없습니다. 기본값 0으로 처리");
-				layerId = 0;
-			}
 
 			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
 				// 좌표와 레이어 정보를 조합하여 유니크 ID 생성
@@ -280,7 +265,7 @@ public class NodeEdgeExtractor implements Extractor {
 
 		Arrays.sort(nodeIdArray);
 
-		// 중복 제거 (좌표+레이어 조합으로 중복 판단)
+		// 중복 제거
 		int tempIndex = 0;
 		for (int i = 0; i < nodeIdArray.length; i++) {
 			if (i == 0 || nodeIdArray[i] != nodeIdArray[i - 1]) {
@@ -289,6 +274,7 @@ public class NodeEdgeExtractor implements Extractor {
 			}
 		}
 
+		log.info("내부 노드 인덱스 배열 총 개수 {}, 중복 제외 총 개수 {}", nodeIdArray.length, tempIndex);
 		return Arrays.copyOf(nodeIdArray, tempIndex);
 	}
 
