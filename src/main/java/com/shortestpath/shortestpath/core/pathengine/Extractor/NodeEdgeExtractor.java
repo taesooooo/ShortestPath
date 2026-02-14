@@ -137,7 +137,7 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 
 		// 엣지 작업
-		store.allocateEdgeFileSpace(idArray.length * 6 * DataStructureSizes.EDGE_ENTRY_SIZE);
+		// store.allocateEdgeFileSpace(idArray.length * 6 * DataStructureSizes.EDGE_ENTRY_SIZE);
 		store.writeEdgeHeader(new EdgeHeader(0, false));
 		taskContinue.set(true);
 		AtomicInteger edgeIndexCounter = new AtomicInteger(0);
