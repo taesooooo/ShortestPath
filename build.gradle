@@ -52,6 +52,8 @@ dependencies {
 	implementation group:'org.geotools', name:'gt-main', version: '33.0'
 	implementation group:'org.geotools', name:'gt-referencing', version: '33.0'
 	implementation group:'org.geotools', name:'gt-shapefile', version: '33.0'
+	// Source: https://mvnrepository.com/artifact/org.geotools/gt-cql
+	implementation 'org.geotools:gt-cql:33.2'
 }
 
 

@@ -86,6 +86,12 @@ public class EdgeExtract implements Runnable {
                 
                 // 도로 유형을 속성에서 가져오기
                 String roadType = getRoadType(feature);
+                
+                // 허용된 도로 타입인지 확인
+                if (!RoadTypeFilter.isAllowedRoadType(roadType)) {
+                    continue; // 허용되지 않은 도로 타입은 건너뛰기
+                }
+                
                 RoadLevel roadLevel = determinateRoadLevel(roadType);
                 
                 // layer 속성 추출

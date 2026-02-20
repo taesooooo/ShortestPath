@@ -24,6 +24,7 @@ import org.geotools.api.data.SimpleFeatureSource;
 import org.geotools.api.feature.simple.SimpleFeature;
 import org.geotools.api.feature.simple.SimpleFeatureType;
 import org.geotools.feature.DefaultFeatureCollection;
+import org.geotools.filter.text.cql2.CQLException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -81,7 +82,7 @@ public class NodeEdgeExtractorTest  {
 
     @Test
     @DisplayName("extract() 메서드 - FileDataStoreFinder.getDataStore() 호출 확인")
-    public void extractCallsFileDataStoreFinder(@TempDir Path tempDir) throws IOException, InterruptedException {
+    public void extractCallsFileDataStoreFinder(@TempDir Path tempDir) throws IOException, InterruptedException, CQLException {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
         FileDataStore fileDataStore = mock(FileDataStore.class);
         FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = mock(SimpleFeatureSource.class);
@@ -107,7 +108,7 @@ public class NodeEdgeExtractorTest  {
 
     @Test
     @DisplayName("saveToDb=true일 때 saveNodeIndex() 호출 확인")
-    public void extractWithSaveToDbTrue(@TempDir Path tempDir) throws IOException, InterruptedException {
+    public void extractWithSaveToDbTrue(@TempDir Path tempDir) throws IOException, InterruptedException, CQLException {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
         FileDataStore fileDataStore = mock(FileDataStore.class);
         FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = mock(SimpleFeatureSource.class);
@@ -139,7 +140,7 @@ public class NodeEdgeExtractorTest  {
 
     @Test
     @DisplayName("saveToDb=false일 때 CSV 파일 생성 확인")
-    public void extractWithSaveToDbFalse(@TempDir Path tempDir) throws IOException, InterruptedException {
+    public void extractWithSaveToDbFalse(@TempDir Path tempDir) throws IOException, InterruptedException, CQLException {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
         FileDataStore fileDataStore = mock(FileDataStore.class);
         FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = mock(SimpleFeatureSource.class);
@@ -175,7 +176,7 @@ public class NodeEdgeExtractorTest  {
 
     @Test
     @DisplayName("extract() 메서드 - ProgressStatus 파라미터 전달 확인")
-    public void extractWithProgressStatusParameter(@TempDir Path tempDir) throws IOException, InterruptedException {
+    public void extractWithProgressStatusParameter(@TempDir Path tempDir) throws IOException, InterruptedException, CQLException {
         Path tempFile = Files.createFile(tempDir.resolve("test.shp"));
         FileDataStore fileDataStore = mock(FileDataStore.class);
         FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = mock(SimpleFeatureSource.class);

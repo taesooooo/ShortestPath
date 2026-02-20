@@ -19,9 +19,14 @@ import org.geotools.api.data.FileDataStoreFinder;
 import org.geotools.api.data.Query;
 import org.geotools.api.feature.simple.SimpleFeature;
 import org.geotools.api.feature.simple.SimpleFeatureType;
+import org.geotools.api.filter.Filter;
 import org.geotools.feature.FeatureCollection;
 import org.geotools.feature.FeatureIterator;
+import org.geotools.filter.text.cql2.CQL;
+import org.geotools.filter.text.cql2.CQLException;
+import org.geotools.filter.text.ecql.ECQL;
 import org.locationtech.jts.geom.Geometry;
+
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
@@ -61,19 +66,18 @@ public class NodeEdgeExtractor implements Extractor {
 	}
 
 	@Override
-	public void extract() throws IOException {
+	public void extract() throws IOException, CQLException {
 		doExtract(null);
 	}
 
 	@Override
-	public void extract(ProgressStatus progressStatus) throws IOException {
+	public void extract(ProgressStatus progressStatus) throws IOException, CQLException {
 		doExtract(progressStatus);
 	}
 
-	private void doExtract(ProgressStatus progressStatus) throws IOException {
+	private void doExtract(ProgressStatus progressStatus) throws IOException, CQLException {
 		log.info("노드 및 엣지 추출 및 저장 시작");
 		FeatureSource<SimpleFeatureType, SimpleFeature> source = shpStore.getFeatureSource(shpStore.getTypeNames()[0]);
-		// Filter filter = CQL
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
 
 		long[] idArray = createIdArray(collection);

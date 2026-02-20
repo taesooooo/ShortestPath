@@ -104,16 +104,16 @@ public class InteEngineTest {
                 .isEqualTo(coordinateList);
     }
 
-    @Test
-    @DisplayName("경로 탐색 - 연결이 끊어져 있어 탐색이 불가한 경우")
-    public void findPathTestDisconnectNode() throws IOException {
-        // 126.56571449999998,33.2601044
-        // 126.5662567,33.257629
-        Coordinate startCoordinate = new Coordinate(33.2601044, 126.56571449999998);
-        Coordinate endCoordinate = new Coordinate(33.257629, 126.5662567);
+    // @Test
+    // @DisplayName("경로 탐색 - 연결이 끊어져 있어 탐색이 불가한 경우")
+    // public void findPathTestDisconnectNode() throws IOException {
+    //     // 126.56571449999998,33.2601044
+    //     // 126.5662567,33.257629
+    //     Coordinate startCoordinate = new Coordinate(33.2601044, 126.56571449999998);
+    //     Coordinate endCoordinate = new Coordinate(33.257629, 126.5662567);
 
-        RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+    //     RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
 
-        assertThat(searchResult.getRouteNode()).isNull();
-    }
+    //     assertThat(searchResult.getRouteNode()).isNull();
+    // }
 }

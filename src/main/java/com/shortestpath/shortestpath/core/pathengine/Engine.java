@@ -66,7 +66,7 @@ public class Engine {
 		switch(edge.getRoadLevel()) {
 			case L0:
 				speed = 100;  // 고속도로
-				weight = 0.8; // 선호 (할인)
+				weight = 0.5; // 선호 (할인)
 				break;
 			case L1:
 				speed = 60;   // 일반도로

@@ -3,6 +3,8 @@ package com.shortestpath.shortestpath.core.pathengine;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.geotools.filter.text.cql2.CQLException;
+
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.TaskType;
 
@@ -42,9 +44,14 @@ public class Loader {
 			long endTime = System.currentTimeMillis();
 
 			log.info("종료 시간 - " + formatDuration(endTime - startTime));
-		} catch (IOException e) {
+		} 
+		catch (IOException e) {
 			log.error("노드 및 엣지 추출 작업중 오류가 발생 했습니다.", e);
 			throw e;
+		}
+		catch (CQLException e) {
+			log.error("CQL 구문 분석 중 오류가 발생 했습니다.", e);
+			throw new IOException("CQL 구문 분석 중 오류가 발생 했습니다.", e);
 		}
 	}
 

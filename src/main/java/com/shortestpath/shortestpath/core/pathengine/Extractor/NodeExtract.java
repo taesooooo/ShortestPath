@@ -65,6 +65,12 @@ public class NodeExtract implements Runnable {
 
                 Geometry geometry = (Geometry) feature.getDefaultGeometry();
                 
+                // 도로 타입 확인 및 필터링
+                String roadType = getRoadType(feature);
+                if (!RoadTypeFilter.isAllowedRoadType(roadType)) {
+                    continue; // 허용되지 않은 도로 타입은 건너뛰기
+                }
+                
                 // layer 속성 추출
                 Object layerId = null;
                 try {
@@ -75,7 +81,6 @@ public class NodeExtract implements Runnable {
                 }
                 
                 // 게이트 여부 판단 (motorway_link, primary_link, trunk_link)
-                String roadType = getRoadType(feature);
                 boolean isGate = isGateType(roadType);
                 
                 for (int i = 0; i < geometry.getNumPoints(); i++) {

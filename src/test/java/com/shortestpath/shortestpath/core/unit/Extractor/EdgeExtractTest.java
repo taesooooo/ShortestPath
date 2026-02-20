@@ -26,6 +26,7 @@ import org.locationtech.jts.geom.LineString;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.EdgeExtract;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
@@ -176,7 +177,7 @@ public class EdgeExtractTest {
     }
     
     @Test
-    @DisplayName("정의되지 않은 도로 유형은 L2로 분류")
+    @DisplayName("정의되지 않은 도로 유형은 생성 안함")
     public void testUndefinedRoadTypeDefaultsToL2() throws InterruptedException {
         Coordinate[] coords = {
             new Coordinate(127.0, 37.0),
@@ -199,8 +200,8 @@ public class EdgeExtractTest {
         
         List<TaskItem> items = edgeQueue.take();
         
-        assertThat(items).hasSize(2);
-        assertThat(items).allMatch(edgeItem -> ((EdgeItem)edgeItem).getEdge().getRoadLevel() == RoadLevel.L2);
+        assertThat(items).hasSize(1);
+        assertThat(items).allMatch(item -> item instanceof EndItem);
     }
     
     
@@ -242,7 +243,7 @@ public class EdgeExtractTest {
     }
     
     @Test
-    @DisplayName("도로 유형이 null인 경우 기본값(unclassified) 사용")
+    @DisplayName("도로 유형이 null인 경우 생성 안함")
     public void testNullRoadTypeDefaultsToUnclassified() throws InterruptedException {
         Coordinate[] coords = {
             new Coordinate(127.0, 37.0),
@@ -265,8 +266,8 @@ public class EdgeExtractTest {
         
         List<TaskItem> items = edgeQueue.take();
         
-        assertThat(items).hasSize(2);
-        assertThat(items).allMatch(edgeItem -> ((EdgeItem)edgeItem).getEdge().getRoadLevel() == RoadLevel.L2);
+        assertThat(items).hasSize(1);
+        assertThat(items).allMatch(item -> item instanceof EndItem);
     }
 
     @Test
