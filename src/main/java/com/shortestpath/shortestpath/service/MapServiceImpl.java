@@ -14,9 +14,13 @@ import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
+import com.shortestpath.shortestpath.dto.request.RequestBBox;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
+import com.shortestpath.shortestpath.dto.response.ResponseRestaurantsDto;
+import com.shortestpath.shortestpath.entity.Restaurants;
+import com.shortestpath.shortestpath.repository.RestaurantsRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,6 +30,7 @@ public class MapServiceImpl implements MapService {
 	private static final Logger log = LoggerFactory.getLogger(MapServiceImpl.class);
 
 	private final Engine engine;
+	private final RestaurantsRepository restaurantsRepository;
 
 	@Override
 	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> coordinateList) throws IOException {
@@ -78,7 +83,6 @@ public class MapServiceImpl implements MapService {
 				.build();
 	}
 
-
 	private ArrayList<Coordinate> getNodeCoordinate(List<Node> pathList) {
 		if(pathList == null || pathList.isEmpty()) {
 			return new ArrayList<Coordinate>();
@@ -87,5 +91,14 @@ public class MapServiceImpl implements MapService {
 		return pathList.stream().map(node -> node.getCoordinate())
 			.collect(Collectors.toCollection(ArrayList::new));
 	}
+
+
+	@Override
+	public ResponseRestaurantsDto findRestaurantsByBBox(RequestBBox bbox) {
+		// List<Restaurants> restaurantsList = restaurantsRepository.findRestaurantsByBBox(bbox);
+		return null;
+	}
+
+	
 
 }
