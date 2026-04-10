@@ -8,7 +8,7 @@ build/
 ### PROJECT ###
 src/**/**.properties
 src/test/resources/shp/
-src/**/resources/
+src/**/sample/**
 
 ### STS ###
 .apt_generated
