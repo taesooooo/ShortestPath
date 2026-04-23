@@ -10,9 +10,14 @@ public class PageInfo {
     }
     
     public PageInfo(int page, int size) {
-        this.page = page;
+        if(page < 0 || page -1 < 0) {
+            this.page = 0;
+        }
+        else {
+            this.page = page - 1;
+        }
         this.size = size;
-        this.offset = page * size;
+        this.offset = this.page * this.size;
     }
 
     public int getPage() {
