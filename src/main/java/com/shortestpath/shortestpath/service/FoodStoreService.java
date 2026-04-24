@@ -20,7 +20,7 @@ public interface FoodStoreService {
     ResponseFoodStoreDto getFoodStoreById(Long id);
     
     /**
-     * 키워드/카테고리로 음식점 검색 (통합 검색)
+     * 키워드/카테고리/Bbox로 음식점 검색 (통합 검색)
      */
     Page<ResponseFoodStoreSearchDto> searchFoodStores(PageInfo pageInfo, RequestFoodStoreSearchDto searchDto);
 }

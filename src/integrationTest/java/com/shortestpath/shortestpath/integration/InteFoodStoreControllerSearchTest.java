@@ -9,14 +9,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.LocalDate;
 import java.util.List;
 
+import org.geotools.api.referencing.crs.CoordinateReferenceSystem;
+import org.geotools.api.referencing.operation.MathTransform;
+import org.geotools.geometry.jts.JTS;
+import org.geotools.referencing.CRS;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.Geometry;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -24,8 +39,11 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shortestpath.shortestpath.controller.MapController;
+import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreSearchDto;
+import com.shortestpath.shortestpath.service.MapService;
 
 import jakarta.transaction.Transactional;
 
@@ -42,7 +60,11 @@ import jakarta.transaction.Transactional;
 @SpringBootTest
 @Transactional
 class InteFoodStoreControllerSearchTest {
+
 	private static final Logger log = LoggerFactory.getLogger(InteFoodStoreControllerSearchTest.class);
+	
+	@MockitoBean
+	private Engine engine;
 	
 	@Autowired
 	private WebApplicationContext context;
@@ -210,5 +232,73 @@ class InteFoodStoreControllerSearchTest {
 				.andExpect(status().isNotFound())
 				.andReturn();
 		
+	}
+
+	@Test
+	@DisplayName("음식점 검색 - bbox 검색")
+	void searchFoodStores_Bbox() throws Exception {
+		Envelope envelope = new Envelope(127.02503272295894, 127.20324474749289, 36.74404275122443, 36.9037120534218);
+		CoordinateReferenceSystem sCRS = CRS.decode("EPSG:4326", true);
+		CoordinateReferenceSystem tCRS = CRS.decode("EPSG:5174", true	);
+		MathTransform transform = CRS.findMathTransform(sCRS, tCRS, true);
+
+		Envelope transformedEnvelope = JTS.transform(envelope, transform);
+
+		MvcResult result = mockMvc.perform(get("/api/foodstores/search")
+				.param("page", "1")
+				.param("size", "10")
+				.param("minLat", "36.74404275122443")
+				.param("minLon", "127.02503272295894")
+				.param("maxLat", "36.9037120534218")
+				.param("maxLon", "127.20324474749289"))
+			.andDo(print())
+			.andExpect(status().isOk())
+			.andExpect(content().contentType("application/json"))
+			.andReturn();
+
+		String content = result.getResponse().getContentAsString();
+		JsonNode node = om.readTree(content).get("content");
+		List<ResponseFoodStoreSearchDto> searchResults = om.readValue(node.toString(), om.getTypeFactory().constructCollectionType(List.class, ResponseFoodStoreSearchDto.class));
+
+		assertThat(searchResults).isNotEmpty();
+		assertThat(searchResults).extracting("trdStateNm").allMatch(state -> ((String) state).contains("영업"));
+		
+		assertThat(searchResults).as("Bbox 검색 결과가 지정된 영역 내에 있어야 합니다.").allMatch((item) -> (item.getX() == null && item.getY() == null) ? true : transformedEnvelope.contains(new Coordinate(item.getX(), item.getY())));
+	}
+
+	@Test
+	@DisplayName("음식점 검색 - 키워드, 카테고리, bbox 검색")
+	void searchFoodStores_keyword_category_bbox() throws Exception {
+		Envelope envelope = new Envelope(127.02503272295894, 127.20324474749289, 36.74404275122443, 36.9037120534218);
+		CoordinateReferenceSystem sCRS = CRS.decode("EPSG:4326", true);
+		CoordinateReferenceSystem tCRS = CRS.decode("EPSG:5174", true	);
+		MathTransform transform = CRS.findMathTransform(sCRS, tCRS, true);
+
+		Envelope transformedEnvelope = JTS.transform(envelope, transform);
+
+		MvcResult result = mockMvc.perform(get("/api/foodstores/search")
+				.param("page", "1")
+				.param("size", "10")
+				.param("keyword", "삼겹살")
+				.param("category", "한식")
+
+				.param("minLat", "36.74404275122443")
+				.param("minLon", "127.02503272295894")
+				.param("maxLat", "36.9037120534218")
+				.param("maxLon", "127.20324474749289"))
+			.andDo(print())
+			.andExpect(status().isOk())
+			.andExpect(content().contentType("application/json"))
+			.andReturn();
+
+		String content = result.getResponse().getContentAsString();
+		JsonNode node = om.readTree(content).get("content");
+		List<ResponseFoodStoreSearchDto> searchResults = om.readValue(node.toString(), om.getTypeFactory().constructCollectionType(List.class, ResponseFoodStoreSearchDto.class));
+
+		assertThat(searchResults).isNotEmpty();
+		assertThat(searchResults).extracting("uptaeGbnNm").contains("한식");
+		assertThat(searchResults).extracting("trdStateNm").allMatch(state -> ((String) state).contains("영업"));
+		
+		assertThat(searchResults).as("Bbox 검색 결과가 지정된 영역 내에 있어야 합니다.").allMatch((item) -> (item.getX() == null && item.getY() == null) ? true : transformedEnvelope.contains(new Coordinate(item.getX(), item.getY())));
 	}
 }

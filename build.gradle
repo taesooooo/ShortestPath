@@ -64,6 +64,8 @@ dependencies {
 	implementation group:'org.geotools', name:'gt-shapefile', version: '33.0'
 	// Source: https://mvnrepository.com/artifact/org.geotools/gt-cql
 	implementation 'org.geotools:gt-cql:33.2'
+	// Source: https://mvnrepository.com/artifact/org.geotools/gt-epsg-hsql
+	implementation 'org.geotools:gt-epsg-hsql:33.0'
 }
 
 

@@ -43,11 +43,11 @@ public class FoodStoreServiceImpl implements FoodStoreService {
     }
     
     /**
-     * 키워드/카테고리로 음식점 검색 (통합 검색)
+     * 키워드/카테고리/Bbox로 음식점 검색 (통합 검색)
      */
     @Override
     public Page<ResponseFoodStoreSearchDto> searchFoodStores(PageInfo pageInfo, RequestFoodStoreSearchDto searchDto) {
-        List<ResponseFoodStoreSearchDto> foodStores = foodStoreMapper.searchByKeywordAndCategory(pageInfo, searchDto);
+        List<ResponseFoodStoreSearchDto> foodStores = foodStoreMapper.search(pageInfo, searchDto);
         if(foodStores.isEmpty()) {
             throw new ItemEmptyException("음식점들이 존재하지 않습니다.");
         }

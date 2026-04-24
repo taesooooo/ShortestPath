@@ -56,15 +56,12 @@ public class FoodStoreController {
     }
     
     /**
-     * 키워드/카테고리로 음식점 검색 (통합 검색)
+     * 키워드/카테고리/Bbox로 음식점 검색 (통합 검색)
      * GET /api/foodstores/search?keyword=한식&category=한식
+     * GET /api/foodstores/search?minLat=37.0&minLon=127.0&maxLat=38.0&maxLon=128.0
      */
     @GetMapping("/search")
-    public ResponseEntity<Page<ResponseFoodStoreSearchDto>> searchFoodStores(PageInfo pageInfo, @RequestParam(value = "keyword", required = false) String keyword, @RequestParam(value = "category", required = false) String category) {
-        RequestFoodStoreSearchDto searchDto = RequestFoodStoreSearchDto.builder()
-                .keyword(keyword)
-                .category(category)
-                .build();
+    public ResponseEntity<Page<ResponseFoodStoreSearchDto>> searchFoodStores(PageInfo pageInfo, RequestFoodStoreSearchDto searchDto) {
         Page<ResponseFoodStoreSearchDto> foodStores = foodStoreService.searchFoodStores(pageInfo, searchDto);
         return ResponseEntity.ok(foodStores);
     }

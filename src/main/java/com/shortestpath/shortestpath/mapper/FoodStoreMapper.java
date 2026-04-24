@@ -24,12 +24,12 @@ public interface FoodStoreMapper {
     List<ResponseFoodStoreSearchDto> searchByKeyword(String keyword);
     
     /**
-     * 키워드/카테고리 통합 검색
+     * 키워드/카테고리/Bbox 통합 검색
      */
-    List<ResponseFoodStoreSearchDto> searchByKeywordAndCategory(@Param("pageInfo") PageInfo pageInfo, @Param("searchDto") RequestFoodStoreSearchDto searchDto);
+    List<ResponseFoodStoreSearchDto> search(@Param("pageInfo") PageInfo pageInfo, @Param("searchDto") RequestFoodStoreSearchDto searchDto);
     
     /**
      * 검색 결과 총 개수
      */
-    long countBySearch(RequestFoodStoreSearchDto searchDto);
+    long countBySearch(@Param("searchDto") RequestFoodStoreSearchDto searchDto);
 }

@@ -22,4 +22,24 @@ public class RequestFoodStoreSearchDto {
      * 카테고리 검색 (음식 종류)
      */
     private String category;
+    
+    /**
+     * Bounding Box 검색 - 최소 위도
+     */
+    private Double minLat;
+    
+    /**
+     * Bounding Box 검색 - 최소 경도
+     */
+    private Double minLon;
+    
+    /**
+     * Bounding Box 검색 - 최대 위도
+     */
+    private Double maxLat;
+    
+    /**
+     * Bounding Box 검색 - 최대 경도
+     */
+    private Double maxLon;
 }

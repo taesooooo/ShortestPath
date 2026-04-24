@@ -123,13 +123,14 @@
         LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
     </select>
     
-    <!-- 키워드/카테고리 통합 검색 -->
-    <select id="searchByKeywordAndCategory" resultMap="foodStoreListResultMap">
+    <!-- 키워드/카테고리/Bbox 통합 검색 -->
+    <select id="search" resultMap="foodStoreListResultMap" parameterType="com.shortestpath.shortestpath.dto.request.RequestFoodStoreSearchDto">
         SELECT 
             A.id, A.trd_state_nm, A.bplc_nm, A.uptae_gbn_nm, A.rdn_whl_addr, A.tel_no, A.x, A.y, A.homepage, A.building_id, B.center_cord
         FROM food_store AS A
         INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
         <where>
+            <!-- 키워드/카테고리 검색 -->
             <if test="searchDto.keyword != null and searchDto.keyword != ''">
                 A.bplc_nm LIKE '%' || #{searchDto.keyword} || '%'
             </if>
@@ -138,6 +139,21 @@
                     AND
                 </if>
                 A.uptae_gbn_nm = #{searchDto.category}
+            </if>
+            
+            <!-- Bbox 검색 -->
+            <if test="searchDto.minLat != null and searchDto.minLon != null and searchDto.maxLat != null and searchDto.maxLon != null">
+                <if test="(searchDto.keyword != null and searchDto.keyword != '') or (searchDto.category != null and searchDto.category != '')">
+                    AND
+                </if>
+                ST_Intersects(A.geometry,ST_Transform(
+                    ST_MakeEnvelope(
+                        #{searchDto.minLon}, #{searchDto.minLat}, -- 좌측하단 (MinX, MinY)
+                        #{searchDto.maxLon}, #{searchDto.maxLat}, -- 우측상단 (MaxX, MaxY)
+                        4326
+                    ), 
+                    5174
+                ))
             </if>
         </where>
         AND A.trd_state_nm LIKE '영업%'
@@ -151,14 +167,30 @@
         FROM food_store AS A
         INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
         <where>
-            <if test="keyword != null and keyword != ''">
-                A.bplc_nm LIKE '%' || #{keyword} || '%'
+            <!-- 키워드/카테고리 검색 -->
+            <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                A.bplc_nm LIKE '%' || #{searchDto.keyword} || '%'
             </if>
-            <if test="category != null and category != ''">
-                <if test="keyword != null and keyword != ''">
+            <if test="searchDto.category != null and searchDto.category != ''">
+                <if test="searchDto.keyword != null and searchDto.keyword != ''">
                     AND
                 </if>
-                A.uptae_gbn_nm = #{category}
+                A.uptae_gbn_nm = #{searchDto.category}
+            </if>
+            
+            <!-- Bbox 검색 -->
+            <if test="searchDto.minLat != null and searchDto.minLon != null and searchDto.maxLat != null and searchDto.maxLon != null">
+                <if test="(searchDto.keyword != null and searchDto.keyword != '') or (searchDto.category != null and searchDto.category != '')">
+                    AND
+                </if>
+                ST_Intersects(A.geometry,ST_Transform(
+                    ST_MakeEnvelope(
+                        #{searchDto.minLon}, #{searchDto.minLat}, -- 좌측하단 (MinX, MinY)
+                        #{searchDto.maxLon}, #{searchDto.maxLat}, -- 우측상단 (MaxX, MaxY)
+                        4326
+                    ), 
+                    5174
+                ))
             </if>
         </where>
         AND A.trd_state_nm LIKE '영업%'
