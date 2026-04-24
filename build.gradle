@@ -15,14 +15,6 @@ java {
 
 // 소스셋 설정
 sourceSets {
-	main {
-		java.srcDir 'src/main/java'
-		resources.srcDir 'src/main/resources'
-	}
-	test {
-		java.srcDir 'src/test/java'
-		resources.srcDir 'src/test/resources'
-	}
 	integrationTest {
 		java.srcDir 'src/integrationTest/java'
 		resources.srcDir 'src/integrationTest/resources'
