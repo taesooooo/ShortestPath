@@ -16,7 +16,7 @@ public class Page<T> {
     public Page(long totalElements, PageInfo pageInfo, List<T> content) {
         this.totalElements = totalElements;
         this.totalPages = (int) Math.ceil((double) totalElements / pageInfo.getSize());
-        this.currentPage = pageInfo.getPage();
+        this.currentPage = pageInfo.getPage() + 1;
         this.pageSize = pageInfo.getSize();
         this.content = content;
     }
