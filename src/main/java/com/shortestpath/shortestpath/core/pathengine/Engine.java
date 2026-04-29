@@ -70,15 +70,15 @@ public class Engine {
 				break;
 			case L1:
 				speed = 60;   // 일반도로
-				weight = 1.0; // 표준
+				weight = 1.5; // 표준
 				break;
 			case L2:
-				speed = 40;   // 지방도로
-				weight = 1.2; // 회피 (페널티)
+				speed = 30;   // 지방도로
+				weight = 3.5; // 회피 (페널티)
 				break;
 			default:
 				speed = 20;
-				weight = 1.5;
+				weight = 5.0;
 		}
 		
 		// 최종 비용 = (거리 / 속도) × 가중치
