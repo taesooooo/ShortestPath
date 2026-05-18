@@ -13,8 +13,6 @@ import java.nio.file.StandardOpenOption;
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
-import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
-
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -26,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  * 읽기 모드: MappedByteBuffer 사용 (빠른 조회)
  */
 @Slf4j
-public class FileBasedEdgeIndex implements MappableEdgeIndex {
+public class FileBasedEdgeIndex implements MappableEdgeIndex, Viewable {
     private final Path indexFilePath;
     private FileChannel channel;  // 읽기/쓰기용 채널
     private MappedByteBuffer mappedBuffer;
@@ -45,12 +43,13 @@ public class FileBasedEdgeIndex implements MappableEdgeIndex {
         this.mappedBuffer = null;
         this.entryCount = 0;
 
-        // 헤더 초기화
-        ByteBuffer headerBuffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
-        headerBuffer.putInt(0);
-        headerBuffer.flip();
-        channel.write(headerBuffer, 0);
-        header = new EdgeIndexHedaer(0);
+        if (channel.size() >= DataStructureSizes.EDGE_INDEX_HEADER_SIZE) {
+            load();
+            this.entryCount = header.getEntryCount();
+        } else {
+            writeHeader(0, false);
+            header = new EdgeIndexHedaer(0, false);
+        }
 
         log.info("FileBasedEdgeIndex 초기화 - 파일: {}", indexFilePath);
     }
@@ -78,11 +77,9 @@ public class FileBasedEdgeIndex implements MappableEdgeIndex {
         channel.write(entryBuffer, DataStructureSizes.calculateEdgeIndexOffset(entry.getNodeId()));
         entryCount++;
         
-        // 헤더 업데이트
-        ByteBuffer headerBuffer = ByteBuffer.allocate(DataStructureSizes.EDGE_INDEX_HEADER_SIZE);
-        headerBuffer.putInt(entryCount);
-        headerBuffer.flip();
-        channel.write(headerBuffer, 0);
+        writeHeader(entryCount, false);
+        header.setEntryCount(entryCount);
+        header.setTaskCompleted(false);
     }
     
     @Override
@@ -120,18 +117,47 @@ public class FileBasedEdgeIndex implements MappableEdgeIndex {
     private synchronized EdgeIndexEntry readMapped(int nodeId) {
         mappedBuffer.position((int) DataStructureSizes.calculateEdgeIndexOffset(nodeId));
         byte[] levelBytes = new byte[2];
-        
         EdgeIndexEntry entry = new EdgeIndexEntry(mappedBuffer.getInt());
-        mappedBuffer.get(levelBytes);
-        entry.setLevel0EdgeIndex(new LevelEdgeIndex(RoadLevel.fromString(new String(levelBytes, StandardCharsets.US_ASCII)), mappedBuffer.getLong(), mappedBuffer.getInt()));
-        mappedBuffer.get(levelBytes);
-        entry.setLevel1EdgeIndex(new LevelEdgeIndex(RoadLevel.fromString(new String(levelBytes, StandardCharsets.US_ASCII)), mappedBuffer.getLong(), mappedBuffer.getInt()));
-        mappedBuffer.get(levelBytes);
-        entry.setLevel2EdgeIndex(new LevelEdgeIndex(RoadLevel.fromString(new String(levelBytes, StandardCharsets.US_ASCII)), mappedBuffer.getLong(), mappedBuffer.getInt()));
+        int currentPos = mappedBuffer.position();
+        byte b2 = mappedBuffer.get(currentPos + 1);
+        mappedBuffer.position(currentPos + 2);
+        entry.setLevel0EdgeIndex(new LevelEdgeIndex(RoadLevel.valueOf(b2), mappedBuffer.getLong(), mappedBuffer.getInt()));
+        currentPos = mappedBuffer.position();
+        b2 = mappedBuffer.get(currentPos + 1);
+        mappedBuffer.position(currentPos + 2);
+        // mappedBuffer.get(levelBytes);
+        entry.setLevel1EdgeIndex(new LevelEdgeIndex(RoadLevel.valueOf(b2), mappedBuffer.getLong(), mappedBuffer.getInt()));
+        currentPos = mappedBuffer.position();
+        b2 = mappedBuffer.get(currentPos + 1);
+        mappedBuffer.position(currentPos + 2);
+        // mappedBuffer.get(levelBytes);
+        entry.setLevel2EdgeIndex(new LevelEdgeIndex(RoadLevel.valueOf(b2), mappedBuffer.getLong(), mappedBuffer.getInt()));
         
         return entry;
     }
+
+    @Override
+    public RoadLevel viewRoadLevel(int nodeId, RoadLevel roadLevel) {
+        int offset = (int) DataStructureSizes.calculateEdgeIndexOffset(nodeId) + DataStructureSizes.NODE_ID_SIZE + ((roadLevel.ordinal()) * DataStructureSizes.LEVEL_EDGE_INDEX_SIZE);
+        byte[] levelBytes = new byte[2];
+
+        mappedBuffer.get(offset,levelBytes);
+
+        return RoadLevel.fromString((new String(levelBytes, StandardCharsets.US_ASCII)));
+    }
     
+    @Override
+    public long viewStartOffset(int nodeId, RoadLevel roadLevel) {
+        int offset = (int) DataStructureSizes.calculateEdgeIndexOffset(nodeId) + DataStructureSizes.NODE_ID_SIZE + ((roadLevel.ordinal()) * DataStructureSizes.LEVEL_EDGE_INDEX_SIZE) + DataStructureSizes.LEVEL_EDGE_INDEX_LEVEL_SIZE;
+        return mappedBuffer.getLong(offset);
+    }
+
+    @Override
+    public int viewEdgeCount(int nodeId, RoadLevel roadLevel) {
+        int offset = (int) DataStructureSizes.calculateEdgeIndexOffset(nodeId) + DataStructureSizes.NODE_ID_SIZE + ((roadLevel.ordinal()) * DataStructureSizes.LEVEL_EDGE_INDEX_SIZE) + DataStructureSizes.LEVEL_EDGE_INDEX_LEVEL_SIZE + DataStructureSizes.LEVEL_EDGE_INDEX_START_OFFSET_SIZE;
+        return mappedBuffer.getInt(offset);
+    }
+
     @Override
     public boolean containsKey(int nodeId) {
         try {
@@ -156,6 +182,9 @@ public class FileBasedEdgeIndex implements MappableEdgeIndex {
         // FileChannel을 사용하는 경우 put() 메서드에서 이미 파일에 쓰기 때문에
         // flush는 단순히 채널을 flush하기만 하면 됨
         if (channel != null && channel.isOpen()) {
+            writeHeader(entryCount, true);
+            header.setEntryCount(entryCount);
+            header.setTaskCompleted(true);
             channel.force(true);
             log.info("Edge 인덱스 파일 flush 완료 - {} 개 항목, 파일: {}", header.getEntryCount(), indexFilePath);
         }
@@ -171,12 +200,14 @@ public class FileBasedEdgeIndex implements MappableEdgeIndex {
         }
         
         // 헤더 읽기
-        ByteBuffer headerBuffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
+        ByteBuffer headerBuffer = ByteBuffer.allocate(DataStructureSizes.EDGE_INDEX_HEADER_SIZE);
         channel.read(headerBuffer, 0);
         headerBuffer.flip();
         int entryCount = headerBuffer.getInt();
+        boolean taskCompleted = headerBuffer.hasRemaining() && headerBuffer.get() != 0;
 
-        header = new EdgeIndexHedaer(entryCount);
+        header = new EdgeIndexHedaer(entryCount, taskCompleted);
+        this.entryCount = entryCount;
     }
     
     /**
@@ -236,10 +267,29 @@ public class FileBasedEdgeIndex implements MappableEdgeIndex {
     
     @Override
     public void clear() {
-        if (header != null) {
-            header.setEntryCount(0);
+        try {
+            if (channel != null && channel.isOpen()) {
+                channel.truncate(0);
+                writeHeader(0, false);
+            }
+            entryCount = 0;
+            header = new EdgeIndexHedaer(0, false);
+        } catch (IOException e) {
+            throw new IllegalStateException("인덱스 파일 초기화 실패", e);
         }
         mappingMode = false;
+    }
+
+    public boolean isTaskCompleted() {
+        return header != null && header.isTaskCompleted();
+    }
+
+    private void writeHeader(int entryCount, boolean taskCompleted) throws IOException {
+        ByteBuffer headerBuffer = ByteBuffer.allocate(DataStructureSizes.EDGE_INDEX_HEADER_SIZE);
+        headerBuffer.putInt(entryCount);
+        headerBuffer.put((byte) (taskCompleted ? 1 : 0));
+        headerBuffer.flip();
+        channel.write(headerBuffer, 0);
     }
     
     /**

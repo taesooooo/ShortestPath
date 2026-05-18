@@ -4,18 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
+import org.locationtech.jts.geom.Envelope;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.ActiveProfiles;
@@ -23,15 +28,23 @@ import org.springframework.test.context.ActiveProfiles;
 import com.shortestpath.shortestpath.DBHelper;
 import com.shortestpath.shortestpath.IntegrationTestHelper;
 import com.shortestpath.shortestpath.TestConfig;
+import com.shortestpath.shortestpath.config.DataSourceConfig;
+import com.shortestpath.shortestpath.config.TransactionConfig;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
-import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
+import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
+import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 import com.shortestpath.shortestpath.provider.JpaDataPersistence;
 import com.shortestpath.shortestpath.provider.JpaNodeProvider;
 import com.shortestpath.shortestpath.repository.NodeIndexInsertRepository;
@@ -42,10 +55,13 @@ import jakarta.transaction.Transactional;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("inte")
 @Import({
+    DataSourceConfig.class,
+    TransactionConfig.class,
     JpaDataPersistence.class,
         JpaNodeProvider.class,
         NodeIndexInsertRepository.class,
         TestConfig.class,
+        InteEngineTest.EngineIntegrationOverrideConfig.class,
         DBHelper.class
 })
 @Transactional
@@ -62,12 +78,79 @@ public class InteEngineTest {
     Engine engine; 
     @Autowired
     DBHelper dbHelper;
+
+    @TestConfiguration
+    static class EngineIntegrationOverrideConfig {
+        @Bean
+        @Primary
+        public Extractor engineIntegrationExtractor(@Value("${findpath.shp-path}") String shpFilePath, DataStore dataStore) throws IOException {
+            return new NodeEdgeExtractor(shpFilePath, dataStore, false);
+        }
+
+        @Bean
+        @Primary
+        public NodeProvider fileNodeProvider(DataStore dataStore) {
+            return new NodeProvider() {
+                @Override
+                public void insertNodeIndex(List<IndexInfo> indexList) {
+                }
+
+                @Override
+                public int getNodeIndex(Coordinate coordinate) {
+                    throw new UnsupportedOperationException("Engine integration test uses nearest-node lookup only.");
+                }
+
+                @Override
+                public Coordinate getNearestNode(Envelope envelope, Coordinate coordinate) {
+                    return findNearestNodeId(envelope, coordinate).stream()
+                            .findFirst()
+                            .map(nodeId -> readNodeCoordinate(dataStore, nodeId))
+                            .orElseThrow(() -> new IllegalStateException("가장 가까운 노드를 찾을 수 없습니다."));
+                }
+
+                @Override
+                public List<Integer> findNearestNodeId(Envelope envelope, Coordinate coordinate) {
+                    try {
+                        ArrayList<Node> candidates = new ArrayList<Node>();
+                        ArrayList<Node> fallback = new ArrayList<Node>();
+                        int totalNodes = dataStore.getTotalNodes();
+
+                        for(int nodeId = 0; nodeId < totalNodes; nodeId++) {
+                            Node node = dataStore.readNode(DataStructureSizes.calculateNodeOffset(nodeId));
+                            fallback.add(node);
+                            if(envelope.contains(node.getCoordinate().getLongitude(), node.getCoordinate().getLatitude())) {
+                                candidates.add(node);
+                            }
+                        }
+
+                        ArrayList<Node> searchNodes = candidates.isEmpty() ? fallback : candidates;
+                        searchNodes.sort(Comparator.comparingDouble(node -> node.getCoordinate().calculateDistanceToTarget(coordinate)));
+
+                        return searchNodes.stream()
+                                .limit(5)
+                                .map(Node::getId)
+                                .toList();
+                    }
+                    catch(IOException e) {
+                        throw new IllegalStateException("노드 바이너리에서 가까운 노드를 찾는 중 오류가 발생했습니다.", e);
+                    }
+                }
+
+                private Coordinate readNodeCoordinate(DataStore dataStore, int nodeId) {
+                    try {
+                        return dataStore.readNode(DataStructureSizes.calculateNodeOffset(nodeId)).getCoordinate();
+                    }
+                    catch(IOException e) {
+                        throw new IllegalStateException("노드 좌표를 읽는 중 오류가 발생했습니다.", e);
+                    }
+                }
+            };
+        }
+    }
     
     @BeforeAll
     public void setUp() throws IOException {
-        loader.extractData(false);
-        // loader.createIndex();
-        ((HybridDataStore) dataStore).switchToMappingMode();
+        assertThat(engine).isNotNull();
     }
 
     @AfterAll
@@ -82,13 +165,15 @@ public class InteEngineTest {
     public void findPathTestByNode() throws IOException {
         ArrayList<Coordinate> coordinateList = new ArrayList<Coordinate>();
         coordinateList.add(new Coordinate(33.2403307, 126.5624673));
-        coordinateList.add(new Coordinate(33.2409605, 126.5624426));
-        coordinateList.add(new Coordinate(33.2409625, 126.5624993));
-        coordinateList.add(new Coordinate(33.2409855, 126.5631549));
-        coordinateList.add(new Coordinate(33.2408904, 126.5637502));
-        coordinateList.add(new Coordinate(33.2412932, 126.5638586));
-        coordinateList.add(new Coordinate(33.2415727, 126.5639338));
-        coordinateList.add(new Coordinate(33.2418125, 126.5640198));
+        coordinateList.add(new Coordinate(33.2403234, 126.5627931));
+        coordinateList.add(new Coordinate(33.2402282, 126.5630821));
+        coordinateList.add(new Coordinate(33.2401702, 126.5632367));
+        coordinateList.add(new Coordinate(33.2399523, 126.5638167));
+        coordinateList.add(new Coordinate(33.2398888, 126.5640292));
+        coordinateList.add(new Coordinate(33.2398754, 126.5640982));
+        coordinateList.add(new Coordinate(33.2400544, 126.5642293));
+        coordinateList.add(new Coordinate(33.2402428, 126.5643355));
+        coordinateList.add(new Coordinate(33.2408074, 126.5644749));
         coordinateList.add(new Coordinate(33.2417782, 126.5647375));
 
         Coordinate startCoordinate = new Coordinate(33.2403307, 126.5624673);
@@ -102,6 +187,68 @@ public class InteEngineTest {
         assertThat(findPath).extracting(Node::getCoordinate)
                 .usingRecursiveComparison()
                 .isEqualTo(coordinateList);
+    }
+
+    @Test
+    @DisplayName("양방향 경로 탐색 - 제주 장거리 정방향/역방향 정상 탐색")
+    public void bidirectionalPathFindForwardAndReverseTest() throws IOException {
+        Coordinate startCoordinate = new Coordinate(33.22155, 126.25198);
+        Coordinate endCoordinate = new Coordinate(33.52386, 126.85794);
+
+        RouteSearchResult forwardResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+        RouteSearchResult reverseResult = engine.shortestPathFind(endCoordinate, startCoordinate, false);
+
+        ArrayList<Node> forwardPath = forwardResult.getRouteNode();
+        ArrayList<Node> reversePath = reverseResult.getRouteNode();
+
+        System.out.println("forward bidirectional search time = " + forwardResult.getSearchTime());
+        System.out.println("reverse bidirectional search time = " + reverseResult.getSearchTime());
+        System.out.println("forward path size = " + (forwardPath != null ? forwardPath.size() : 0));
+        System.out.println("reverse path size = " + (reversePath != null ? reversePath.size() : 0));
+
+        assertThat(forwardPath).isNotNull();
+        assertThat(reversePath).isNotNull();
+        assertThat(forwardPath).hasSizeGreaterThan(1);
+        assertThat(reversePath).hasSizeGreaterThan(1);
+        assertThat(forwardPath.get(0).getCoordinate()).isEqualTo(reversePath.get(reversePath.size() - 1).getCoordinate());
+        assertThat(forwardPath.get(forwardPath.size() - 1).getCoordinate()).isEqualTo(reversePath.get(0).getCoordinate());
+        assertPathEdgesAreConnected(forwardPath);
+        assertPathEdgesAreConnected(reversePath);
+
+        assertThat(forwardResult.getSearchTime()).isGreaterThanOrEqualTo(0);
+        assertThat(reverseResult.getSearchTime()).isGreaterThanOrEqualTo(0);
+    }
+
+    private void assertPathEdgesAreConnected(ArrayList<Node> path) throws IOException {
+        for(int i = 0; i < path.size() - 1; i++) {
+            int fromNodeId = path.get(i).getId();
+            int toNodeId = path.get(i + 1).getId();
+
+            assertThat(hasForwardEdge(fromNodeId, toNodeId))
+                    .as("edge should exist from %s to %s", fromNodeId, toNodeId)
+                    .isTrue();
+        }
+    }
+
+    private boolean hasForwardEdge(int fromNodeId, int toNodeId) throws IOException {
+        FileBasedEdgeIndex edgeIndex = (FileBasedEdgeIndex) dataStore.getEdgeIndex();
+
+        for(RoadLevel roadLevel : RoadLevel.values()) {
+            int edgeCount = edgeIndex.viewEdgeCount(fromNodeId, roadLevel);
+            if(edgeCount == 0) {
+                continue;
+            }
+
+            long startOffset = edgeIndex.viewStartOffset(fromNodeId, roadLevel);
+            for(int i = 0; i < edgeCount; i++) {
+                Edge edge = dataStore.readEdge(startOffset + (i * DataStructureSizes.EDGE_SIZE));
+                if(edge.getTo() == toNodeId) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     // @Test

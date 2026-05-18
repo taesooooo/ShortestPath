@@ -23,24 +23,62 @@ public class EdgeIndexCreator {
     }
 
     public void createEdgeIndex() throws IOException {
-        int totalEdges = store.getTotalEdges();
-        EdgeIndex edgeIndex = store.getEdgeIndex();
-        
-        log.info("엣지 인덱스 생성 시작 - 총 엣지 개수: {}", totalEdges);
-        
+        createEdgeIndex(store.getEdgeIndex());
+    }
+
+    public void createEdgeIndex(EdgeIndex edgeIndex) throws IOException {
+        validateEdgeIndex(edgeIndex, "엣지 인덱스");
+
+        createEdgeIndex(store.getTotalEdges(), edgeIndex, new EdgeReader() {
+            @Override
+            public Edge read(long offset) throws IOException {
+                return store.readEdge(offset);
+            }
+        }, new EdgeNodeSelector() {
+            @Override
+            public int select(Edge edge) {
+                return edge.getFrom();
+            }
+        }, "엣지 인덱스");
+    }
+
+    public void createReverseEdgeIndex(EdgeIndex reverseEdgeIndex) throws IOException {
+        validateEdgeIndex(reverseEdgeIndex, "리버스 엣지 인덱스");
+
+        createEdgeIndex(store.getTotalReverseEdges(), reverseEdgeIndex, new EdgeReader() {
+            @Override
+            public Edge read(long offset) throws IOException {
+                return store.readReverseEdge(offset);
+            }
+        }, new EdgeNodeSelector() {
+            @Override
+            public int select(Edge edge) {
+                return edge.getTo();
+            }
+        }, "리버스 엣지 인덱스");
+    }
+
+    public void createReverseEdgeIndex() throws IOException {
+        createReverseEdgeIndex(store.getReverseEdgeIndex());
+    }
+
+    private void createEdgeIndex(int totalEdges, EdgeIndex edgeIndex, EdgeReader edgeReader, EdgeNodeSelector nodeSelector, String indexName) throws IOException {
+        log.info("{} 생성 시작 - 총 엣지 개수: {}", indexName, totalEdges);
+        edgeIndex.clear();
+
         EdgeIndexEntry currentEntry = null;
         int previousNodeId = -1;
 
         for (int i = 0; i < totalEdges; i++) {
             long edgeOffset = DataStructureSizes.calculateEdgeOffset(i);
-            Edge edge = store.readEdge(edgeOffset);
+            Edge edge = edgeReader.read(edgeOffset);
             
-            int currentNodeId = edge.getFrom();
+            int currentNodeId = nodeSelector.select(edge);
             
             // 노드가 바뀌면 이전 노드의 엣지 인덱스를 저장
             if (previousNodeId != -1 && previousNodeId != currentNodeId) {
                 edgeIndex.put(currentEntry);
-                log.debug("노드 {} 엣지 인덱스 저장 완료", previousNodeId);
+                log.debug("{} - 노드 {} 저장 완료", indexName, previousNodeId);
                 currentEntry = null;
             }
             
@@ -58,10 +96,17 @@ public class EdgeIndexCreator {
         // 마지막 노드의 엣지 인덱스 저장
         if (currentEntry != null) {
             edgeIndex.put(currentEntry);
-            log.debug("노드 {} 엣지 인덱스 저장 완료 (마지막)", previousNodeId);
+            log.debug("{} - 노드 {} 저장 완료 (마지막)", indexName, previousNodeId);
         }
-        
-        log.info("엣지 인덱스 생성 및 저장 완료");
+
+        edgeIndex.flush();
+        log.info("{} 생성 및 저장 완료", indexName);
+    }
+
+    private void validateEdgeIndex(EdgeIndex edgeIndex, String indexName) {
+        if(edgeIndex == null) {
+            throw new IllegalArgumentException(indexName + "는 null일 수 없습니다.");
+        }
     }
 
     private void updateLevelEdgeIndex(RoadLevel roadLevel, long edgeOffset, EdgeIndexEntry edgeIndexEntry) {
@@ -97,5 +142,13 @@ public class EdgeIndexCreator {
                 );
             }
         }
+    }
+
+    private interface EdgeNodeSelector {
+        int select(Edge edge);
+    }
+
+    private interface EdgeReader {
+        Edge read(long offset) throws IOException;
     }
 }

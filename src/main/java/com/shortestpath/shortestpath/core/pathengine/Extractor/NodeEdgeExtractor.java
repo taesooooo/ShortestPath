@@ -2,6 +2,8 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -33,6 +35,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -80,6 +83,32 @@ public class NodeEdgeExtractor implements Extractor {
 		FeatureSource<SimpleFeatureType, SimpleFeature> source = shpStore.getFeatureSource(shpStore.getTypeNames()[0]);
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
 
+		int featureCount = source.getCount(Query.ALL);
+		
+		// featureCount가 0이면 작업을 수행하지 않고 종료
+		if (featureCount == 0) {
+			log.warn("피쳐가 존재하지 않습니다. 작업을 수행하지 않습니다.");
+			shpStore.dispose();
+			return;
+		}
+
+		boolean nodeTaskCompleted = isNodeTaskCompleted();
+		boolean edgeTaskCompleted = isEdgeTaskCompleted();
+		boolean edgeIndexTaskCompleted = store.isEdgeIndexTaskCompleted();
+		boolean reverseEdgeIndexTaskCompleted = store.isReverseEdgeIndexTaskCompleted();
+		Path csvFilePath = file.getParentFile().toPath().resolve("node_index.csv");
+		boolean nodeIndexOutputCompleted = saveToDb || Files.exists(csvFilePath);
+
+		if (nodeTaskCompleted
+				&& edgeTaskCompleted
+				&& edgeIndexTaskCompleted
+				&& reverseEdgeIndexTaskCompleted
+				&& nodeIndexOutputCompleted) {
+			log.info("노드/엣지/인덱스 추출 작업이 모두 완료되어 건너뜁니다.");
+			shpStore.dispose();
+			return;
+		}
+
 		long[] idArray = createIdArray(collection);
 		boolean[] nodeCreatedArray = new boolean[idArray.length];
 		int[] lastEdgeOffsetArray = new int[idArray.length];
@@ -91,137 +120,136 @@ public class NodeEdgeExtractor implements Extractor {
 		AtomicBoolean taskError = new AtomicBoolean(false); // 작업 중 예외 발생 여부 플래그
 
 		int threadCount = 4;
-		int featureCount = source.getCount(Query.ALL);
-		
-		// featureCount가 0이면 작업을 수행하지 않고 종료
-		if (featureCount == 0) {
-			log.warn("피쳐가 존재하지 않습니다. 작업을 수행하지 않습니다.");
-			shpStore.dispose();
-			return;
-		}
 
-		store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
+		boolean nodeRebuilt = false;
+		if (!nodeTaskCompleted || !isNodeTaskCompleted(idArray.length)) {
+			log.info("노드 작업을 시작합니다. 기존 파일이 있어도 taskCompleted=false이면 이 단계부터 다시 생성합니다.");
+			store.truncateNodeFile(0);
+			store.writeNodeHeader(new NodeHeader(idArray.length, false, false));
+			store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
 
-		ExecutorService nodeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
-		AtomicInteger totalSavedNodeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 노드 개수 집계
-		
-		// Shutdown Hook 등록: Ctrl+C 시 ExecutorService 종료
-		Thread shutdownHook = new Thread(() -> {
-			log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
-			nodeExecutorService.shutdownNow();
-		});
-		Runtime.getRuntime().addShutdownHook(shutdownHook);
-		
-		nodeExecutorService.submit(new NodeExtract(idArray, nodeQueue, collection, taskContinue, taskError, progressStatus, threadCount));
-		// 노드 작업
-		for(int i=0; i<threadCount; i++) {
-			nodeExecutorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, progressStatus, taskContinue, taskError, totalSavedNodeCount));
-		}
-
-		nodeExecutorService.shutdown();
-		try {
-			// 모든 작업이 완료될 때까지 대기
-			while(!nodeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
-			// 노드 작업 완료 후 Shutdown Hook 제거
-			Runtime.getRuntime().removeShutdownHook(shutdownHook);
-
-			// 작업 완료 후 다시 복구
-			taskContinue.set(true);
+			ExecutorService nodeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
+			AtomicInteger totalSavedNodeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 노드 개수 집계
 			
-			// 예외 발생으로 작업이 중단되었는지 확인
-			if (taskError.get()) {
-				log.error("노드 추출 중 예외 발생으로 작업 중단");
+			Thread shutdownHook = new Thread(() -> {
+				log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
+				nodeExecutorService.shutdownNow();
+			});
+			Runtime.getRuntime().addShutdownHook(shutdownHook);
+			
+			nodeExecutorService.submit(new NodeExtract(idArray, nodeQueue, collection, taskContinue, taskError, progressStatus, threadCount));
+			for(int i=0; i<threadCount; i++) {
+				nodeExecutorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, progressStatus, taskContinue, taskError, totalSavedNodeCount));
+			}
+
+			nodeExecutorService.shutdown();
+			try {
+				while(!nodeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
+				Runtime.getRuntime().removeShutdownHook(shutdownHook);
+
+				taskContinue.set(true);
+				
+				if (taskError.get()) {
+					log.error("노드 추출 중 예외 발생으로 작업 중단");
+					return;
+				}
+
+				store.truncateNodeFile(DataStructureSizes.HEADER_SIZE + ((long) idArray.length * DataStructureSizes.NODE_SIZE));
+				store.writeNodeHeader(new NodeHeader(idArray.length, false, true));
+				nodeRebuilt = true;
+			} catch (InterruptedException e) {
+				log.error("작업 대기 중 인터럽트 발생", e);
+				nodeExecutorService.shutdownNow();
+				Thread.currentThread().interrupt();
 				return;
 			}
-		} catch (InterruptedException e) {
-			log.error("작업 대기 중 인터럽트 발생", e);
-			nodeExecutorService.shutdownNow();
-			Thread.currentThread().interrupt();
-			return; // 인터럽트 시 조기 종료
+		} else {
+			log.info("노드 작업이 이미 완료되어 건너뜁니다.");
 		}
 
-		// 엣지 작업
-		// store.allocateEdgeFileSpace(idArray.length * 6 * DataStructureSizes.EDGE_ENTRY_SIZE);
-		store.writeEdgeHeader(new EdgeHeader(0, false));
-		taskContinue.set(true);
-		AtomicInteger edgeIndexCounter = new AtomicInteger(0);
-		ExecutorService edgeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
-		AtomicInteger totalSavedEdgeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 엣지 개수 집계
-		
-		// 엣지 작업용 Shutdown Hook 등록
-		Thread edgeShutdownHook = new Thread(() -> {
-			log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
-			edgeExecutorService.shutdownNow();
-		});
-		Runtime.getRuntime().addShutdownHook(edgeShutdownHook);
-
-		edgeExecutorService.submit(new EdgeExtract(idArray, edgeQueue, store, collection, taskContinue, taskError, progressStatus, threadCount));
-		for(int i=0; i<threadCount; i++) {
-			edgeExecutorService.submit(new EdgeSaver(edgeQueue, store, progressStatus, taskContinue, taskError, totalSavedEdgeCount));
-		}
-
-		edgeExecutorService.shutdown();
-		try {
-			// 모든 작업이 완료될 때까지 대기
-			while(!edgeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
-			// 엣지 작업 완료 후 Shutdown Hook 제거
-			Runtime.getRuntime().removeShutdownHook(edgeShutdownHook);
-
-			store.truncateEdgeFile(store.getTotalEdges() * DataStructureSizes.EDGE_ENTRY_SIZE);
-
-			// 작업 완료 후 다시 복구
+		boolean edgeRebuilt = false;
+		if (nodeRebuilt || !edgeTaskCompleted) {
+			log.info("엣지 작업을 시작합니다. 기존 파일이 있어도 taskCompleted=false이면 이 단계부터 다시 생성합니다.");
+			store.truncateEdgeFile(0);
+			store.writeEdgeHeader(new EdgeHeader(0, false, false));
 			taskContinue.set(true);
+			taskError.set(false);
+
+			ExecutorService edgeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
+			AtomicInteger totalSavedEdgeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 엣지 개수 집계
 			
-			// 예외 발생으로 작업이 중단되었는지 확인
-			if (taskError.get()) {
-				log.error("엣지 추출 중 예외 발생으로 작업 중단");
+			Thread edgeShutdownHook = new Thread(() -> {
+				log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
+				edgeExecutorService.shutdownNow();
+			});
+			Runtime.getRuntime().addShutdownHook(edgeShutdownHook);
+
+			edgeExecutorService.submit(new EdgeExtract(idArray, edgeQueue, store, collection, taskContinue, taskError, progressStatus, threadCount));
+			for(int i=0; i<threadCount; i++) {
+				edgeExecutorService.submit(new EdgeSaver(edgeQueue, store, progressStatus, taskContinue, taskError, totalSavedEdgeCount));
+			}
+
+			edgeExecutorService.shutdown();
+			try {
+				while(!edgeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
+				Runtime.getRuntime().removeShutdownHook(edgeShutdownHook);
+
+				store.truncateEdgeFile(DataStructureSizes.HEADER_SIZE + ((long) store.getTotalEdges() * DataStructureSizes.EDGE_SIZE));
+
+				taskContinue.set(true);
+				
+				if (taskError.get()) {
+					log.error("엣지 추출 중 예외 발생으로 작업 중단");
+					return;
+				}
+			} catch (InterruptedException e) {
+				log.error("작업 대기 중 인터럽트 발생", e);
+				edgeExecutorService.shutdownNow();
+				Thread.currentThread().interrupt();
 				return;
 			}
-		} catch (InterruptedException e) {
-			log.error("작업 대기 중 인터럽트 발생", e);
-			edgeExecutorService.shutdownNow();
-			Thread.currentThread().interrupt();
-			return; // 인터럽트 시 조기 종료
-		}
-		
-		
-		// 모든 워커 스레드가 정상적으로 끝난 경우
-		if (taskContinue.get() && !taskError.get()) {
-			// 1단계: 엣지 정렬 (인플레이: 정렬 결과를 바로 edge.bin에 씀)
+
 			log.info("엣지 정렬 시작");
 			EdgeSort edgeSort = new EdgeSort(store);
 			edgeSort.sort();
-	
-			// 2단계: 인덱스 생성 (이미 정렬된 edge.bin 사용)
-			log.info("엣지 인덱스 생성 시작");
-			EdgeIndexCreator edgeIndexCreator = new EdgeIndexCreator(store);
-			edgeIndexCreator.createEdgeIndex();
-			
-			// 3단계: 노드 인덱스 생성
-			// idArray를 이용해 노드 인덱스 생성
-			ArrayList<IndexInfo> indexList = createIndexList(idArray);
+			edgeRebuilt = true;
+		} else {
+			log.info("엣지 작업이 이미 완료되어 건너뜁니다.");
+		}
 
-			// DB 저장 여부 판단
-			if (saveToDb) {
-				// DB에 저장하는 경우
-				saveIndex(indexList);
-				log.info("노드 인덱스 DB 저장 완료");
-			} else {
-				// CSV 파일로 저장하는 경우
-				String csvFilePath = file.getParentFile().toPath().resolve("node_index.csv").toString();
-				NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath, indexList);
+		EdgeIndexCreator edgeIndexCreator = new EdgeIndexCreator(store);
+		if (edgeRebuilt || !edgeIndexTaskCompleted) {
+			log.info("엣지 인덱스 생성 시작");
+			edgeIndexCreator.createEdgeIndex();
+		} else {
+			log.info("엣지 인덱스 작업이 이미 완료되어 건너뜁니다.");
+		}
+
+		if (edgeRebuilt || !reverseEdgeIndexTaskCompleted) {
+			log.info("리버스 엣지 인덱스 생성 시작");
+			edgeIndexCreator.createReverseEdgeIndex();
+		} else {
+			log.info("리버스 엣지 인덱스 작업이 이미 완료되어 건너뜁니다.");
+		}
+		
+		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+
+		if (saveToDb) {
+			saveIndex(indexList);
+			log.info("노드 인덱스 DB 저장 완료");
+		} else {
+			if(!Files.exists(csvFilePath)) {
+				NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath.toString(), indexList);
 				csvWriter.write();
 				log.info("노드 CSV 저장 완료: {}", csvFilePath);
 			}
-
-			log.info("노드 및 엣지 추출 작업 완료");
-
-			// DataStore 닫기 (리소스 정리)
-			// store.close();
-			// log.info("DataStore 종료");
-
-			shpStore.dispose();
+			else {
+				log.info("노드 CSV 파일이 있어 건너 뜁니다.");
+			}
 		}
+
+		log.info("노드 및 엣지 추출 작업 완료");
+		shpStore.dispose();
 	}
 
 	@Override
@@ -234,11 +262,61 @@ public class NodeEdgeExtractor implements Extractor {
 		saveIndex(indexList);
 	}
 
+	private boolean isNodeTaskCompleted(int expectedNodeCount) {
+		try {
+			NodeHeader header = store.readNodeHeader();
+			boolean completed = header.isTaskCompleted() && header.getNodeCount() == expectedNodeCount;
+			if (!completed) {
+				log.info("노드 헤더 확인 - nodeCount: {}, expected: {}, taskCompleted: {}",
+						header.getNodeCount(), expectedNodeCount, header.isTaskCompleted());
+			}
+			return completed;
+		} catch (Exception e) {
+			log.info("노드 헤더를 읽을 수 없어 노드 작업부터 다시 시작합니다. reason: {}", e.getMessage());
+			return false;
+		}
+	}
+
+	private boolean isNodeTaskCompleted() {
+		try {
+			NodeHeader header = store.readNodeHeader();
+			if (!header.isTaskCompleted()) {
+				log.info("노드 헤더 확인 - nodeCount: {}, taskCompleted: {}",
+						header.getNodeCount(), header.isTaskCompleted());
+			}
+			return header.isTaskCompleted();
+		} catch (Exception e) {
+			log.info("노드 헤더를 읽을 수 없어 노드 작업이 필요합니다. reason: {}", e.getMessage());
+			return false;
+		}
+	}
+
+	private boolean isEdgeTaskCompleted() {
+		try {
+			EdgeHeader edgeHeader = store.readEdgeHeader();
+			EdgeHeader reverseEdgeHeader = store.readReverseEdgeHeader();
+			boolean completed = edgeHeader.isTaskCompleted()
+					&& reverseEdgeHeader.isTaskCompleted()
+					&& edgeHeader.isSorted()
+					&& reverseEdgeHeader.isSorted()
+					&& edgeHeader.getEdgeCount() == reverseEdgeHeader.getEdgeCount();
+			if (!completed) {
+				log.info("엣지 헤더 확인 - edgeCount: {}, reverseEdgeCount: {}, edgeTask: {}, reverseTask: {}, edgeSorted: {}, reverseSorted: {}",
+						edgeHeader.getEdgeCount(), reverseEdgeHeader.getEdgeCount(), edgeHeader.isTaskCompleted(),
+						reverseEdgeHeader.isTaskCompleted(), edgeHeader.isSorted(), reverseEdgeHeader.isSorted());
+			}
+			return completed;
+		} catch (Exception e) {
+			log.info("엣지 헤더를 읽을 수 없어 엣지 작업부터 다시 시작합니다. reason: {}", e.getMessage());
+			return false;
+		}
+	}
+
 	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
 		ArrayList<IndexInfo> indexList = new ArrayList<>();
 		for (int nodeId = 0; nodeId < idArray.length; nodeId++) {
 			long coordinate = idArray[nodeId];
-			int offset = nodeId * DataStructureSizes.NODE_SIZE;
+			int offset = (int) DataStructureSizes.calculateNodeOffset(nodeId);
 			indexList.add(new IndexInfo(nodeId, coordinate, offset));
 		}
 		return indexList;

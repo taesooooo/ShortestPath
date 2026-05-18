@@ -257,8 +257,8 @@ class EngineTest {
 		setupMockDataL0Only();
 		Engine engine = new Engine(store, dataProvider);
 
-		Node startNode = store.readNode(1 * DataStructureSizes.NODE_SIZE);
-		Node endNode = store.readNode(4 * DataStructureSizes.NODE_SIZE);
+		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
+		Node endNode = store.readNode(DataStructureSizes.calculateNodeOffset(4));
 
 		ArrayList<Node> path = (ArrayList<Node>) engine.shortestPathFind(startNode, endNode);
 
@@ -272,8 +272,8 @@ class EngineTest {
 		setupMockDataL0Only();
 		Engine engine = new Engine(store, dataProvider);
 
-		Node startNode = store.readNode(1 * DataStructureSizes.NODE_SIZE);
-		Node endNode = store.readNode(5 * DataStructureSizes.NODE_SIZE);
+		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
+		Node endNode = store.readNode(DataStructureSizes.calculateNodeOffset(5));
 
 		ArrayList<Node> path = (ArrayList<Node>) engine.shortestPathFind(startNode, endNode);
 
@@ -289,8 +289,8 @@ class EngineTest {
 		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
-		Node startNode = store.readNode(1 * DataStructureSizes.NODE_SIZE);
-		Node endNode = store.readNode(4 * DataStructureSizes.NODE_SIZE);
+		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
+		Node endNode = store.readNode(DataStructureSizes.calculateNodeOffset(4));
 
 		RouteSearchResult result = engine.shortestPathFind(startNode.getCoordinate(), endNode.getCoordinate(), true);
 		ArrayList<Node> path = result.getRouteNode();

@@ -223,10 +223,12 @@ public class HybridDataWriter implements AllocatableDataWriter, HeaderWriter {
         ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
         buffer.putInt(header.getNodeCount());
         buffer.put((byte) (header.isIndexed() ? 1 : 0));
+        buffer.put((byte) (header.isTaskCompleted() ? 1 : 0));
         buffer.flip();
 
         nodeFileChannel.write(buffer, 0);
-        log.info("Node 헤더 작성 완료 - nodeCount: {}, indexed: {}", header.getNodeCount(), header.isIndexed());
+        log.info("Node 헤더 작성 완료 - nodeCount: {}, indexed: {}, taskCompleted: {}",
+                header.getNodeCount(), header.isIndexed(), header.isTaskCompleted());
     }
 
     @Override
@@ -238,10 +240,12 @@ public class HybridDataWriter implements AllocatableDataWriter, HeaderWriter {
         ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
         buffer.putInt(header.getEdgeCount());
         buffer.put((byte) (header.isSorted() ? 1 : 0));
+        buffer.put((byte) (header.isTaskCompleted() ? 1 : 0));
         buffer.flip();
 
         edgeFileChannel.write(buffer, 0);
-        log.info("Edge 헤더 작성 완료 - edgeCount: {}, sorted: {}", header.getEdgeCount(), header.isSorted());
+        log.info("Edge 헤더 작성 완료 - edgeCount: {}, sorted: {}, taskCompleted: {}",
+                header.getEdgeCount(), header.isSorted(), header.isTaskCompleted());
     }
 
     @Override

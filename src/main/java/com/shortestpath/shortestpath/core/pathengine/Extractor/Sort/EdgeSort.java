@@ -4,9 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,6 +56,19 @@ public class EdgeSort {
     }
 
     public void sort() throws IOException {
+        sortForward();
+        sortReverse();
+    }
+
+    public void sortForward() throws IOException {
+        sortToFile(new EdgeComparator(), "edge_chunk_", "edge.bin");
+    }
+
+    public void sortReverse() throws IOException {
+        sortToFile(new EdgeToComparator(), "reverse_edge_chunk_", "reverse_edge.bin");
+    }
+
+    private void sortToFile(Comparator<Edge> comparator, String chunkPrefix, String resultFileName) throws IOException {
         if (dataStore == null) {
             throw new IllegalStateException("DataStore가 초기화되지 않았습니다.");
         }
@@ -81,15 +92,19 @@ public class EdgeSort {
         String fileDirectory = getFileDirectory();
 
         // 1단계: 청크 정렬
-        List<File> sortedChunkFiles = sortChunksInParallel(totalEdges, fileDirectory);
+        List<File> sortedChunkFiles = sortChunksInParallel(totalEdges, fileDirectory, comparator, chunkPrefix);
 
-        // 2단계: K-way 병합 (인플레이 방식 - DataStore에 직접 쓰기)
-        mergeChunksInPlace(sortedChunkFiles, totalEdges);
+        try (FileChannel resultChannel = FileChannel.open(Path.of(fileDirectory, resultFileName), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            writeEdgeHeader(resultChannel, totalEdges, true, true);
 
-        // 임시 파일 정리
-        cleanupTempFiles(sortedChunkFiles);
+            // 2단계: K-way 병합
+            mergeChunks(sortedChunkFiles, totalEdges, comparator, resultChannel, resultFileName);
+        } finally {
+            // 임시 파일 정리
+            cleanupTempFiles(sortedChunkFiles);
+        }
 
-        logger.info("외부 정렬 완료! (정렬된 결과가 edge.bin에 저장됨)");
+        logger.info("외부 정렬 완료! (정렬된 결과가 {}에 저장됨)", resultFileName);
     }
 
 
@@ -108,7 +123,7 @@ public class EdgeSort {
     /**
      * 1단계: 청크 단위로 분할하여 병렬 정렬
      */
-    private List<File> sortChunksInParallel(int totalEdges, String fileDirectory) throws IOException {
+    private List<File> sortChunksInParallel(int totalEdges, String fileDirectory, Comparator<Edge> comparator, String chunkPrefix) throws IOException {
         int numChunks = (totalEdges + chunkSize - 1) / chunkSize;
         List<File> chunkFiles = new ArrayList<>();
 
@@ -126,7 +141,7 @@ public class EdgeSort {
                 Future<File> future = executor.submit(new Callable<File>() {
                     @Override
                     public File call() throws Exception {
-                        File chunkFile = sortChunk(currentChunk, startIdx, endIdx, fileDirectory);
+                        File chunkFile = sortChunk(currentChunk, startIdx, endIdx, fileDirectory, comparator, chunkPrefix);
                         int completed = completedChunks.incrementAndGet();
                         logger.info("청크 정렬 완료: {}/{} ({}%)",
                                 completed, numChunks, completed * 100 / numChunks);
@@ -154,7 +169,7 @@ public class EdgeSort {
     /**
      * 개별 청크를 메모리에서 정렬하고 임시 파일로 저장
      */
-    private File sortChunk(int chunkIdx, int startIdx, int endIdx, String fileDirectory) throws IOException {
+    private File sortChunk(int chunkIdx, int startIdx, int endIdx, String fileDirectory, Comparator<Edge> comparator, String chunkPrefix) throws IOException {
         int chunkLength = endIdx - startIdx;
         Edge[] edges = new Edge[chunkLength];
 
@@ -165,11 +180,13 @@ public class EdgeSort {
         }
 
         // 메모리 내 정렬 (병렬 정렬)
-        Arrays.parallelSort(edges, new EdgeComparator());
+        Arrays.parallelSort(edges, comparator);
 
         // 정렬된 청크를 임시 파일로 저장
-        File chunkFile = createTempChunkFile(chunkIdx, fileDirectory);
-        writeChunkToFile(edges, chunkFile);
+        File chunkFile = createTempChunkFile(chunkIdx, fileDirectory, chunkPrefix);
+        try (FileChannel chunkChannel = FileChannel.open(chunkFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            writeChunkToFile(edges, chunkChannel, 0);
+        }
 
         return chunkFile;
     }
@@ -177,8 +194,8 @@ public class EdgeSort {
     /**
      * 임시 파일 생성 (DataStore 디렉토리에 생성)
     */
-    private File createTempChunkFile(int chunkIdx, String fileDirectory) throws IOException {
-        File file = new File(fileDirectory, "edge_chunk_" + chunkIdx + ".tmp");
+    private File createTempChunkFile(int chunkIdx, String fileDirectory, String chunkPrefix) throws IOException {
+        File file = new File(fileDirectory, chunkPrefix + chunkIdx + ".tmp");
         file.deleteOnExit();
         return file;
     }
@@ -186,27 +203,16 @@ public class EdgeSort {
     /**
      * 엣지 배열을 파일에 쓰기
      */
-    private void writeChunkToFile(Edge[] edges, File file) throws IOException {
-        try (FileChannel channel = FileChannel.open(
-                file.toPath(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE)) {
+    private void writeChunkToFile(Edge[] edges, FileChannel channel, long offset) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(edges.length * DataStructureSizes.EDGE_SIZE);
 
-            ByteBuffer buffer = ByteBuffer.allocate(
-                    edges.length * DataStructureSizes.EDGE_ENTRY_SIZE);
+        for (Edge edge : edges) {
+            writeEdgeToBuffer(buffer, edge);
+        }
 
-            for (Edge edge : edges) {
-                buffer.putInt(edge.getId());
-                buffer.putInt(edge.getFrom());
-                buffer.putInt(edge.getTo());
-                buffer.putDouble(edge.getDistance());
-                buffer.putInt(edge.getNextEdgeOffset());
-                buffer.putInt(edge.getSpeed());
-                buffer.put(edge.getRoadLevel().toString().getBytes());
-            }
-
-            buffer.flip();
-            channel.write(buffer);
+        buffer.flip();
+        while (buffer.hasRemaining()) {
+            offset += channel.write(buffer, offset);
         }
     }
 
@@ -214,8 +220,8 @@ public class EdgeSort {
      * 2단계: K-way 병합 - 우선순위 큐 사용 (인플레이 방식)
      * 정렬된 결과를 DataStore에 직접 써서 edge.bin을 현장 수정
      */
-    private void mergeChunksInPlace(List<File> chunkFiles, int totalEdges) throws IOException {
-        logger.info("K-way 병합 시작 (인플레이) - 청크 수: {}", chunkFiles.size());
+    private void mergeChunks(List<File> chunkFiles, int totalEdges, Comparator<Edge> comparator, FileChannel resultChannel, String resultFileName) throws IOException {
+        logger.info("K-way 병합 시작 - 청크 수: {}", chunkFiles.size());
 
         // 각 청크 파일의 리더 준비
         List<ChunkReader> readers = new ArrayList<>();
@@ -229,7 +235,7 @@ public class EdgeSort {
                     new Comparator<ChunkWithEdge>() {
                         @Override
                         public int compare(ChunkWithEdge c1, ChunkWithEdge c2) {
-                            return new EdgeComparator().compare(c1.getEdge(), c2.getEdge());
+                            return comparator.compare(c1.getEdge(), c2.getEdge());
                         }
                     });
 
@@ -251,7 +257,7 @@ public class EdgeSort {
 
                 // DataStore에 직접 쓰기 (인플레이 방식)
                 long writeOffset = DataStructureSizes.calculateEdgeOffset(writeIndex);
-                dataStore.overwriteEdge(current.getEdge(), writeOffset);
+                writeChunkToFile(new Edge[] { current.getEdge() }, resultChannel, writeOffset);
 
                 writeIndex++;
 
@@ -268,7 +274,7 @@ public class EdgeSort {
                 }
             }
 
-            logger.info("병합 완료: {} 개 엣지를 edge.bin에 저장", writeIndex);
+            logger.info("병합 완료: {} 개 엣지를 {}에 저장", writeIndex, resultFileName);
         } finally {
             // 모든 리더 닫기
             for (ChunkReader reader : readers) {
@@ -277,7 +283,24 @@ public class EdgeSort {
         }
     }
 
+    private void writeEdgeHeader(FileChannel channel, int edgeCount, boolean sorted, boolean taskCompleted) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.HEADER_SIZE);
+        buffer.putInt(edgeCount);
+        buffer.put((byte) (sorted ? 1 : 0));
+        buffer.put((byte) (taskCompleted ? 1 : 0));
+        buffer.flip();
+        channel.write(buffer, 0);
+    }
 
+    private void writeEdgeToBuffer(ByteBuffer buffer, Edge edge) {
+        buffer.putInt(edge.getId());
+        buffer.putInt(edge.getFrom());
+        buffer.putInt(edge.getTo());
+        buffer.putDouble(edge.getDistance());
+        buffer.putInt(edge.getNextEdgeOffset());
+        buffer.putInt(edge.getSpeed());
+        buffer.put(edge.getRoadLevel().toString().getBytes());
+    }
 
     /**
      * 임시 청크 파일 정리

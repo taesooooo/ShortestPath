@@ -102,7 +102,7 @@ public class NodeSaver implements Runnable {
         }
 
         // 아직 저장되지 않은 노드이면 저장
-        dataStore.saveNode(node, nodeId * DataStructureSizes.NODE_SIZE);
+        dataStore.saveNode(node, DataStructureSizes.calculateNodeOffset(nodeId));
         nodeCreated[nodeId] = true;
     }
 }

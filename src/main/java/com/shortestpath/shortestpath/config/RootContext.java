@@ -45,16 +45,15 @@ public class RootContext implements WebMvcConfigurer {
 		HybridDataStore dataStore = new HybridDataStore(shpFileParent);
 		dataStore.setPersistence(dataPersistence);
 		dataStore.setEdgeIndex(new FileBasedEdgeIndex(shpFileParent));
+		dataStore.setReverseEdgeIndex(new FileBasedEdgeIndex(new File(shpFileParent, "reverse_edge_index.bin").toPath()));
 		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, isNodeDbSave);
 		Loader loader = new Loader(extractor);
 
-		if(!loader.isDataExtracted()) {
-			log.info("추출된 노드 및 엣지 데이터가 없으므로 추출을 시작합니다.");
+		log.info("노드/엣지/인덱스 추출 상태를 확인합니다.");
+		loader.extractData(true);
 
-			loader.extractData(true);
-			dataStore.switchToMappingMode();
-			// dataStore = new HybridDataStore(new File(shpFilePath).getParent(), true); // 읽기 전용 모드로 재생성
-		}
+		dataStore.switchToMappingMode();
+		dataStore.switchEdgeIndexToMappingMode();
 		
 		return new Engine(dataStore, dataProvider);
 	}

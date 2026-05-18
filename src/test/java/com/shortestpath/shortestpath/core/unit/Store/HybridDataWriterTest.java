@@ -303,8 +303,8 @@ public class HybridDataWriterTest {
             Path nodeFile = tempDir.resolve("node.bin");
             long fileSize = Files.size(nodeFile);
 
-            // 3개 노드 = 24 * 3 = 72 바이트
-            assertThat(fileSize).isEqualTo(24 * 3);
+            // 헤더 + 3개 노드 = 6 + (24 * 3) = 78 바이트
+            assertThat(fileSize).isEqualTo(DataStructureSizes.HEADER_SIZE + (DataStructureSizes.NODE_SIZE * 3));
             
             writer.close();
         } finally {

@@ -13,17 +13,18 @@ public class PathUtil {
 		return new Coordinate(lat, lon);
 	}
 	
-	public static Double haversineDistance(Coordinate a, Coordinate b) {
-		// 하버사인 거리 공식
-        Coordinate startPoint = a;
-        Coordinate endPoint = b;
+	public static double haversineDistance(Coordinate a, Coordinate b) {
+        return haversineDistance(a.getLongitude(), a.getLatitude(), b.getLongitude(), b.getLatitude());
+	}
+    
+    public static double haversineDistance(double x1, double y1, double x2, double y2) {
+        // 하버사인 거리 공식
+         double r = 6371; // 지구 반지름
 
-        double r = 6371; // 지구 반지름
-
-        double lat1 = Math.toRadians(startPoint.getLatitude());
-        double lat2 = Math.toRadians(endPoint.getLatitude());
-        double lon1 = Math.toRadians(startPoint.getLongitude());
-        double lon2 = Math.toRadians(endPoint.getLongitude());
+        double lat1 = Math.toRadians(y1);
+        double lat2 = Math.toRadians(y2);
+        double lon1 = Math.toRadians(x1);
+        double lon2 = Math.toRadians(x2);
         double deltaLon = lon2 - lon1;
         double deltaLat = lat2 - lat1;
         double sinLon = Math.sin(deltaLon/2);
@@ -32,7 +33,7 @@ public class PathUtil {
         double newDistance = 2 * r * Math.asin(middleResult);
         
         return newDistance;
-	}
+    }
 	
 	public static Double euclideanDistance(Coordinate a, Coordinate b) {
 		// 맨하튼 거리 공식

@@ -3,6 +3,7 @@ package com.shortestpath.shortestpath.core.unit.Extractor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -88,5 +89,40 @@ public class EdgeIndexCreatorTest {
         assertThat(captor.getAllValues().get(1)).extracting(e -> e.getLevel1EdgeIndex().getStartOffset()).isEqualTo(-1L);
         assertThat(captor.getAllValues().get(1)).extracting(e -> e.getLevel2EdgeIndex().getStartOffset()).isEqualTo(DataStructureSizes.calculateEdgeOffset(3));
         assertThat(captor.getAllValues().get(1)).extracting(e -> e.getLevel2EdgeIndex().getEdgeCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("리버스 엣지 인덱스 저장 및 확인")
+    public void testCreateReverseEdgeIndexSave() throws IOException {
+        EdgeIndex testReverseEdgeIndex = mock(EdgeIndex.class);
+        Edge testEdge1 = new Edge(0, 11, 22, 0, -1, 100, RoadLevel.L0);
+        Edge testEdge2 = new Edge(1, 33, 22, 0, -1, 60, RoadLevel.L1);
+        Edge testEdge3 = new Edge(2, 44, 55, 0, -1, 40, RoadLevel.L2);
+
+        when(mockDataStore.getTotalReverseEdges()).thenReturn(3);
+        when(mockDataStore.readReverseEdge(anyLong())).thenReturn(testEdge1, testEdge2, testEdge3);
+
+        edgeIndexCreator.createReverseEdgeIndex(testReverseEdgeIndex);
+
+        ArgumentCaptor<EdgeIndexEntry> captor = ArgumentCaptor.forClass(EdgeIndexEntry.class);
+        verify(testReverseEdgeIndex, times(2)).put(captor.capture());
+        verify(testReverseEdgeIndex).flush();
+        verify(mockDataStore, times(3)).readReverseEdge(anyLong());
+        verify(mockDataStore, never()).readEdge(anyLong());
+
+        assertThat(captor.getAllValues()).extracting(EdgeIndexEntry::getNodeId).containsExactly(22, 55);
+
+        EdgeIndexEntry node22Entry = captor.getAllValues().get(0);
+        assertThat(node22Entry.getLevel0EdgeIndex().getStartOffset()).isEqualTo(DataStructureSizes.calculateEdgeOffset(0));
+        assertThat(node22Entry.getLevel0EdgeIndex().getEdgeCount()).isEqualTo(1);
+        assertThat(node22Entry.getLevel1EdgeIndex().getStartOffset()).isEqualTo(DataStructureSizes.calculateEdgeOffset(1));
+        assertThat(node22Entry.getLevel1EdgeIndex().getEdgeCount()).isEqualTo(1);
+        assertThat(node22Entry.getLevel2EdgeIndex().getStartOffset()).isEqualTo(-1L);
+
+        EdgeIndexEntry node55Entry = captor.getAllValues().get(1);
+        assertThat(node55Entry.getLevel0EdgeIndex().getStartOffset()).isEqualTo(-1L);
+        assertThat(node55Entry.getLevel1EdgeIndex().getStartOffset()).isEqualTo(-1L);
+        assertThat(node55Entry.getLevel2EdgeIndex().getStartOffset()).isEqualTo(DataStructureSizes.calculateEdgeOffset(2));
+        assertThat(node55Entry.getLevel2EdgeIndex().getEdgeCount()).isEqualTo(1);
     }
 }

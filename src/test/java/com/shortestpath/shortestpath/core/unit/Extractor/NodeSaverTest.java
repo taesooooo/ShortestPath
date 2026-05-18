@@ -70,9 +70,9 @@ public class NodeSaverTest {
         
         nodeSaver.run();
         
-        verify(dataStore).saveNode(nodeA, 0 * DataStructureSizes.NODE_SIZE);
-        verify(dataStore).saveNode(nodeB, 1 * DataStructureSizes.NODE_SIZE);
-        verify(dataStore).saveNode(nodeC, 2 * DataStructureSizes.NODE_SIZE);
+        verify(dataStore).saveNode(nodeA, DataStructureSizes.calculateNodeOffset(0));
+        verify(dataStore).saveNode(nodeB, DataStructureSizes.calculateNodeOffset(1));
+        verify(dataStore).saveNode(nodeC, DataStructureSizes.calculateNodeOffset(2));
     }
     
     @Test

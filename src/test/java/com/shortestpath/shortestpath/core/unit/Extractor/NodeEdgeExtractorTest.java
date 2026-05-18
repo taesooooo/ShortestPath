@@ -34,6 +34,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor
 import com.shortestpath.shortestpath.core.pathengine.Extractor.ProgressStatus;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.InMemoryEdgeIndex;
 
 public class NodeEdgeExtractorTest  {
 
@@ -129,6 +130,8 @@ public class NodeEdgeExtractorTest  {
             executorsMockedStatic.when(() -> Executors.newFixedThreadPool(any(int.class))).thenReturn(mockExecutorService);
             when(mockExecutorService.submit(any(Runnable.class))).thenReturn(null);
             when(mockExecutorService.awaitTermination(any(long.class), any())).thenReturn(true);
+            when(dataStore.getEdgeIndex()).thenReturn(new InMemoryEdgeIndex());
+            when(dataStore.getReverseEdgeIndex()).thenReturn(new InMemoryEdgeIndex());
 
             NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toString(), dataStore, true);
             extractor.extract();
@@ -159,6 +162,8 @@ public class NodeEdgeExtractorTest  {
             executorsMockedStatic.when(() -> Executors.newFixedThreadPool(any(int.class))).thenReturn(mockExecutorService);
             when(mockExecutorService.submit(any(Runnable.class))).thenReturn(null);
             when(mockExecutorService.awaitTermination(any(long.class), any())).thenReturn(true);
+            when(dataStore.getEdgeIndex()).thenReturn(new InMemoryEdgeIndex());
+            when(dataStore.getReverseEdgeIndex()).thenReturn(new InMemoryEdgeIndex());
 
             NodeEdgeExtractor extractor = new NodeEdgeExtractor(tempFile.toString(), dataStore, false);
             extractor.extract();

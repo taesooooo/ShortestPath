@@ -33,6 +33,7 @@ public class TestConfig {
         HybridDataStore dataStore = new HybridDataStore(parentDir);
         dataStore.setPersistence(dataPersistence);
         dataStore.setEdgeIndex(new FileBasedEdgeIndex(parentDir));
+        dataStore.setReverseEdgeIndex(new FileBasedEdgeIndex(new File(parentDir, "reverse_edge_index.bin").toPath()));
         
         return dataStore;
     }
@@ -49,7 +50,9 @@ public class TestConfig {
     }
 
     @Bean
-    public Engine engine(DataStore dataStore, NodeProvider nodeIndexProvider) throws IOException {
+    public Engine engine(DataStore dataStore, NodeProvider nodeIndexProvider, Loader loader) throws IOException {
+        loader.extractData(false);
+        ((HybridDataStore) dataStore).switchToMappingMode();
         return new Engine(dataStore, nodeIndexProvider);
     }
 }

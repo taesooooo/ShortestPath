@@ -1,19 +1,24 @@
 package com.shortestpath.shortestpath.core.pathengine.Store;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
+import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.MappableEdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.InMemoryEdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Reader.DataReader;
+import com.shortestpath.shortestpath.core.pathengine.Store.Reader.EdgeViewer;
 import com.shortestpath.shortestpath.core.pathengine.Store.Reader.HybridDataReader;
 import com.shortestpath.shortestpath.core.pathengine.Store.Reader.MappableDataReader;
+import com.shortestpath.shortestpath.core.pathengine.Store.Reader.NodeViewer;
 import com.shortestpath.shortestpath.core.pathengine.Store.Writer.AllocatableDataWriter;
 import com.shortestpath.shortestpath.core.pathengine.Store.Writer.DataWriter;
 import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HeaderWriter;
@@ -40,6 +45,7 @@ public class HybridDataStore implements MappableDataStore {
     private boolean readOnlyMode;
     private DataPersistence dataPersistence;  // DB 모드 설정
     private EdgeIndex edgeIndex;  // Edge 인덱스 관리
+    private EdgeIndex reverseEdgeIndex;  // Reverse Edge 인덱스 관리
 
     /**
      * 추출 단계 생성자 - Reader + Writer 모두 초기화
@@ -50,6 +56,7 @@ public class HybridDataStore implements MappableDataStore {
         this.readOnlyMode = false;
         this.dataPersistence = null;
         this.edgeIndex = new InMemoryEdgeIndex();  // 기본 인메모리 인덱스
+        this.reverseEdgeIndex = new InMemoryEdgeIndex();
 
         // 추출 단계: Writer 먼저 생성 (파일 생성)
         this.dataWriter = new HybridDataWriter(fileDirectory);
@@ -70,6 +77,7 @@ public class HybridDataStore implements MappableDataStore {
         this.fileDirectory = fileDirectory;
         this.readOnlyMode = readMode;
         this.edgeIndex = new InMemoryEdgeIndex();  // 기본 인메모리 인덱스
+        this.reverseEdgeIndex = new InMemoryEdgeIndex();
 
         if (readMode) {
             // 경로탐색 단계: Reader만 초기화
@@ -91,9 +99,13 @@ public class HybridDataStore implements MappableDataStore {
     }
 
     @Override
+    public int getTotalReverseEdges() throws IOException {
+        return dataReader.readReverseEdgeHeader().getEdgeCount();
+    }
+
+    @Override
     public int getTotalNodes() throws IOException {
-        // TODO Auto-generated method stub
-        return 0;
+        return dataReader.readNodeHeader().getNodeCount();
     }
 
     @Override
@@ -286,6 +298,14 @@ public class HybridDataStore implements MappableDataStore {
     }
 
     @Override
+    public Edge readReverseEdge(long offset) throws IOException {
+        if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        return dataReader.readReverseEdge(offset);
+    }
+
+    @Override
     public int getNodeOffset(Coordinate coordinate) {
         if (dataReader == null) {
             throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
@@ -318,7 +338,35 @@ public class HybridDataStore implements MappableDataStore {
         if (dataReader == null) {
             throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
         }
-        return dataReader.hasExtractedData();
+        boolean dataReady = dataReader.hasExtractedData();
+        boolean indexReady = isIndexTaskCompleted(edgeIndex);
+        boolean reverseIndexReady = isIndexTaskCompleted(reverseEdgeIndex);
+
+        return dataReady && indexReady && reverseIndexReady;
+    }
+
+    @Override
+    public NodeHeader readNodeHeader() throws IOException {
+        if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        return dataReader.readNodeHeader();
+    }
+
+    @Override
+    public EdgeHeader readEdgeHeader() throws IOException {
+        if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        return dataReader.readEdgeHeader();
+    }
+
+    @Override
+    public EdgeHeader readReverseEdgeHeader() throws IOException {
+        if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        return dataReader.readReverseEdgeHeader();
     }
 
     /**
@@ -362,10 +410,13 @@ public class HybridDataStore implements MappableDataStore {
      * @throws IOException IO 오류 발생 시
      */
     public void switchEdgeIndexToMappingMode() throws IOException {
-        // EdgeIndex 매핑 모드 전환 (지원하는 경우)
         if (edgeIndex != null && edgeIndex instanceof MappableEdgeIndex) {
             ((MappableEdgeIndex) edgeIndex).switchToMappingMode();
             log.info("EdgeIndex 메모리 매핑 모드로 전환 완료");
+        }
+        if (reverseEdgeIndex != null && reverseEdgeIndex instanceof MappableEdgeIndex) {
+            ((MappableEdgeIndex) reverseEdgeIndex).switchToMappingMode();
+            log.info("Reverse EdgeIndex 메모리 매핑 모드로 전환 완료");
         }
     }
 
@@ -379,6 +430,9 @@ public class HybridDataStore implements MappableDataStore {
         }
         if (edgeIndex != null) {
             edgeIndex.close();
+        }
+        if (reverseEdgeIndex != null) {
+            reverseEdgeIndex.close();
         }
         log.info("HybridDataStore 리소스 해제 완료");
     }
@@ -452,4 +506,166 @@ public class HybridDataStore implements MappableDataStore {
     public EdgeIndex getEdgeIndex() {
         return edgeIndex;
     }
+
+    @Override
+    public boolean isEdgeIndexTaskCompleted() {
+        return isIndexTaskCompleted(edgeIndex);
+    }
+
+    @Override
+    public void setReverseEdgeIndex(EdgeIndex reverseEdgeIndex) {
+        if (reverseEdgeIndex == null) {
+            throw new IllegalArgumentException("ReverseEdgeIndex는 null일 수 없습니다.");
+        }
+        this.reverseEdgeIndex = reverseEdgeIndex;
+        log.info("ReverseEdgeIndex 설정 완료 - type: {}", reverseEdgeIndex.getClass().getSimpleName());
+    }
+
+    @Override
+    public EdgeIndex getReverseEdgeIndex() {
+        return reverseEdgeIndex;
+    }
+
+    @Override
+    public boolean isReverseEdgeIndexTaskCompleted() {
+        return isIndexTaskCompleted(reverseEdgeIndex);
+    }
+
+    private boolean isIndexTaskCompleted(EdgeIndex index) {
+        if (index == null) {
+            return true;
+        }
+        if (index instanceof FileBasedEdgeIndex) {
+            return ((FileBasedEdgeIndex) index).isTaskCompleted();
+        }
+        return index.size() > 0;
+    }
+
+    @Override
+    public int viewNodeId(int nodeId) {
+        return getNodeViewer().readNodeId(nodeId);
+    }
+
+    @Override
+    public int viewNodeStartEdgeOffset(int nodeId) {
+        return getNodeViewer().readStartEdgeOffset(nodeId);
+    }
+
+    @Override
+    public double viewNodeXCoordinate(int nodeId) {
+        return getNodeViewer().readXCoordinate(nodeId);
+    }
+
+    @Override
+    public double viewNodeYCoordinate(int nodeId) {
+        return getNodeViewer().readYCoordinate(nodeId);
+    }
+
+    @Override
+    public int viewEdgeId(long offset) {
+        return getEdgeViewer().readEdgeId(offset);
+    }
+
+    @Override
+    public int viewEdgeFrom(long offset) {
+        return getEdgeViewer().readEdgeFrom(offset);
+    }
+
+    @Override
+    public int viewEdgeTo(long offset) {
+        return getEdgeViewer().readEdgeTo(offset);
+    }
+
+    @Override
+    public double viewEdgeDistance(long offset) {
+        return getEdgeViewer().readEdgeDistance(offset);
+    }
+
+    @Override
+    public int viewEdgeNextEdgeOffset(long offset) {
+        return getEdgeViewer().readEdgeNextEdgeOffset(offset);
+    }
+
+    @Override
+    public int viewEdgeSpeed(long offset) {
+        return getEdgeViewer().readEdgeSpeed(offset);
+    }
+
+    @Override
+    public RoadLevel viewEdgeRoadLevel(long offset) {
+        return getEdgeViewer().readEdgeRoadLevel(offset);
+    }
+
+    @Override
+    public int viewReverseEdgeId(long offset) {
+        return getReverseEdgeViewer().readEdgeId(offset);
+    }
+
+    @Override
+    public int viewReverseEdgeFrom(long offset) {
+        return getReverseEdgeViewer().readEdgeFrom(offset);
+    }
+
+    @Override
+    public int viewReverseEdgeTo(long offset) {
+        return getReverseEdgeViewer().readEdgeTo(offset);
+    }
+
+    @Override
+    public double viewReverseEdgeDistance(long offset) {
+        return getReverseEdgeViewer().readEdgeDistance(offset);
+    }
+
+    @Override
+    public int viewReverseEdgeNextEdgeOffset(long offset) {
+        return getReverseEdgeViewer().readEdgeNextEdgeOffset(offset);
+    }
+
+    @Override
+    public int viewReverseEdgeSpeed(long offset) {
+        return getReverseEdgeViewer().readEdgeSpeed(offset);
+    }
+
+    @Override
+    public RoadLevel viewReverseEdgeRoadLevel(long offset) {
+        return getReverseEdgeViewer().readEdgeRoadLevel(offset);
+    }
+
+    private NodeViewer getNodeViewer() {
+        if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        if (dataReader instanceof HybridDataReader) {
+            return ((HybridDataReader) dataReader).getNodeViewer();
+        } else {
+            throw new UnsupportedOperationException(
+                    "현재 Reader는 NodeViewer를 지원하지 않습니다: " + dataReader.getClass().getSimpleName());
+        }
+    }
+
+    private EdgeViewer getEdgeViewer() {
+         if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        if (dataReader instanceof HybridDataReader) {
+            return ((HybridDataReader) dataReader).getEdgeViewer();
+        } else {
+            throw new UnsupportedOperationException(
+                    "현재 Reader는 EdgeViewer를 지원하지 않습니다: " + dataReader.getClass().getSimpleName());
+        }
+    }
+
+    private EdgeViewer getReverseEdgeViewer() {
+         if (dataReader == null) {
+            throw new IllegalStateException("Reader가 초기화되지 않았습니다.");
+        }
+        if (dataReader instanceof HybridDataReader) {
+            return ((HybridDataReader) dataReader).getReverseEdgeViewer();
+        } else {
+            throw new UnsupportedOperationException(
+                    "현재 Reader는 Reverse EdgeViewer를 지원하지 않습니다: " + dataReader.getClass().getSimpleName());
+        }
+    }
+
+    
 }

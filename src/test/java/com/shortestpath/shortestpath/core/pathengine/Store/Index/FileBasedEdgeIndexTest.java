@@ -232,13 +232,39 @@ class FileBasedEdgeIndexTest {
             assertThat(retrieved.getLevel0EdgeIndex().getStartOffset()).isEqualTo(i * 100L);
         }
     }
+
+    @Test
+    @DisplayName("엣지 엔트리 시작 엣지 오프셋 가져오기")
+    void testViewNextOffset() throws IOException {
+        index.put(createTestEntry(0, 10, 20, 30));
+        index.switchToMappingMode();
+
+        long offset = index.viewStartOffset(0, RoadLevel.L0);
+
+        assertThat(offset).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("엣지 엔트리 L0, L1, L2 엣지 개수 가져오기")
+    void testViewEdgeCount() throws IOException {
+        index.put(createTestEntry(0, 10, 20, 30));
+        index.switchToMappingMode();
+
+        int count = index.viewEdgeCount(0, RoadLevel.L0);
+        int count2 = index.viewEdgeCount(0, RoadLevel.L1);
+        int count3 = index.viewEdgeCount(0, RoadLevel.L2);
+
+        assertThat(count).isEqualTo(1);
+        assertThat(count2).isEqualTo(2);
+        assertThat(count3).isEqualTo(3);
+    }
     
     // 헬퍼 메서드
     private EdgeIndexEntry createTestEntry(int nodeId, long level0Offset, long level1Offset, long level2Offset) {
         EdgeIndexEntry entry = new EdgeIndexEntry(nodeId);
         entry.setLevel0EdgeIndex(new LevelEdgeIndex(RoadLevel.L0, level0Offset, 1));
-        entry.setLevel1EdgeIndex(new LevelEdgeIndex(RoadLevel.L1, level1Offset, 1));
-        entry.setLevel2EdgeIndex(new LevelEdgeIndex(RoadLevel.L2, level2Offset, 1));
+        entry.setLevel1EdgeIndex(new LevelEdgeIndex(RoadLevel.L1, level1Offset, 2));
+        entry.setLevel2EdgeIndex(new LevelEdgeIndex(RoadLevel.L2, level2Offset, 3));
         return entry;
     }
 }

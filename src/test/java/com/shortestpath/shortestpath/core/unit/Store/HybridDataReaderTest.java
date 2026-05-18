@@ -15,6 +15,8 @@ import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
+import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Store.Reader.HybridDataReader;
 import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HybridDataWriter;
 
@@ -246,11 +248,14 @@ public class HybridDataReaderTest {
             
             writer.saveNode(node);
             writer.saveEdge(edge);
+            writer.writeNodeHeader(new NodeHeader(2, false, true));
+            writer.writeEdgeHeader(new EdgeHeader(1, true, true));
             writer.close();
             
             // 데이터 존재 확인
             Path nodeFile = tempDir.resolve("node.bin");
             Path edgeFile = tempDir.resolve("edge.bin");
+            Files.copy(edgeFile, tempDir.resolve("reverse_edge.bin"));
             HybridDataReader reader = new HybridDataReader(nodeFile, edgeFile);
             
             assertThat(reader.hasExtractedData()).isTrue();
@@ -294,8 +299,11 @@ public class HybridDataReaderTest {
             Path nodeFile = tempDir.resolve("node.bin");
             Path edgeFile = tempDir.resolve("edge.bin");
             
-            Files.write(nodeFile, new byte[DataStructureSizes.NODE_ENTRY_SIZE]);
-            Files.write(edgeFile, new byte[DataStructureSizes.EDGE_ENTRY_SIZE]);
+            HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
+            writer.writeNodeHeader(new NodeHeader(0, false, true));
+            writer.writeEdgeHeader(new EdgeHeader(0, true, true));
+            writer.close();
+            Files.copy(edgeFile, tempDir.resolve("reverse_edge.bin"));
             
             HybridDataReader reader = new HybridDataReader(nodeFile, edgeFile);
             
