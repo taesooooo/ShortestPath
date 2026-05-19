@@ -667,5 +667,25 @@ public class HybridDataStore implements MappableDataStore {
         }
     }
 
+    @Override
+    public boolean canUseMappedViews() {
+        if (!(dataReader instanceof HybridDataReader)) {
+            return false;
+        }
+        if (!((HybridDataReader) dataReader).isMappingMode()) {
+            return false;
+        }
+
+        return canUseMappedIndex(edgeIndex) && canUseMappedIndex(reverseEdgeIndex);
+    }
+
+    private boolean canUseMappedIndex(EdgeIndex index) {
+        if (index instanceof FileBasedEdgeIndex) {
+            return ((FileBasedEdgeIndex) index).isMappingMode();
+        }
+
+        return true;
+    }
+
     
 }

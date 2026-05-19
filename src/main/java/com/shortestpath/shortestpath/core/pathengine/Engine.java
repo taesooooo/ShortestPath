@@ -49,7 +49,7 @@ public class Engine {
 
 		this.store = store;
 		this.dataProvider = dataProvider;
-		this.hotRoadCache = HotRoadCache.load(store, canUseMappedViews());
+		this.hotRoadCache = HotRoadCache.load(store, store.canUseMappedViews());
 
 		log.info("엔진 초기화 완료");
 	}
@@ -186,24 +186,10 @@ public class Engine {
 			routeTracker = new RouteTracker();
 		}
 
-		// double searchDistance = PathUtil.haversineDistance(startCoordinate, endCoordinate);
 		ArrayList<Node> resultPath = null;
 		
-
-		// resultPath = findhierarchyPath(startNode, endNode, routeTracker);
-
-		resultPath = routeTracker == null
-				? findBidirectionalPath(startNode, endNode)
-				: findtest(startNode, endNode, routeTracker);
-
-		// if(searchDistance >= 50) {
-		// 	log.info("계층 경로 탐색 모드로 전환 - 탐색 거리 : " + searchDistance);
-		// 	resultPath = findhierarchyPath(startNode, endNode, routeTracker);
-		// 	// resultPath = test(startNode, endNode, routeTracker);
-		// }
-		// else {
-		// 	resultPath = findhierarchyPath(startNode, endNode, routeTracker);
-		// }
+		// resultPath = findPath(startNode, endNode, routeTracker);
+		resultPath = findBidirectionalPath(startNode, endNode);
 		
 		long et = System.currentTimeMillis();
 		double searchTime = (et - st) / 1000.0;
@@ -226,180 +212,105 @@ public class Engine {
 	 * @throws IOException 
 	 */
 	private ArrayList<Node> findPath(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
-	    // fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
-	    PriorityQueue<Node> openList = new PriorityQueue<Node>(Comparator.comparingDouble(c -> c.getfCost()));
-	    // 이미 방문한 노드 집합
-	    HashSet<Node> closeList = new HashSet<Node>();
-	    // 각 노드의 이전 노드를 저장(경로 역추적용)
-	    HashMap<Node, Node> location = new HashMap<Node, Node>();
+		long findtestStartTimeNanos = System.nanoTime();
+		SearchBuffers searchBuffer = searchBuffers.get();
+		searchBuffer.prepare(Math.max(startNode.getId(), endNode.getId()));
+
+		PriorityQueue<SearchState> nodeQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
 
 		// 노드와 엣지 캐싱 맵
-		HashMap<Integer, Node> nodeList = new HashMap<>();
+		// HashMap<Integer, Node> nodeList = new HashMap<>();
 		HashMap<Long, Edge> edgeList = new HashMap<>();
 
-	    // 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
-	    double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate());
+		int a = 0;
+		int b = 0;
+		int c = 0;
+		long connectedEdgeCount = 0;
+		long hotEdgeHitCount = 0;
+		long coldEdgeReadCount = 0;
+		long queuePollTimeNanos = 0;
+		long connectedEdgeTimeNanos = 0;
+		long edgeToTimeNanos = 0;
+		long edgeCostTimeNanos = 0;
+		long heuristicTimeNanos = 0;
+		long queueOfferTimeNanos = 0;
+		long currentLevelTimeNanos = 0;
+		long hotEdgeCheckTimeNanos = 0;
+		long pathBuildTimeNanos = 0;
+		long heuristicCallCount = 0;
+		long heuristicMissCount = 0;
 
-		// 첫 시작 노드 gCost = 0 설정
-		startNode.setgCost(0);
-		startNode.sethCost(heuristic);
-		startNode.setfCost(heuristic);
-		nodeList.put(startNode.getId(), startNode);
-		// 첫 시작 노드를 추가
-	    openList.add(startNode);
-	    // costList.put(startNode, startCost);
+		int startNodeId = startNode.getId();
+		int endNodeId = endNode.getId();
+		double endLon = endNode.getCoordinate().getLongitude();
+		double endLat = endNode.getCoordinate().getLatitude();
 
-	    // A* 탐색 루프
-	    while(!openList.isEmpty()) {
-			// fCost가 가장 낮은 노드를 꺼냄
-	        Node minNode = openList.poll();
-			
-			TraceRoute traceRoute = null;
-			if(routeTracker != null) {
-				traceRoute = new TraceRoute(minNode.getCoordinate());
-				routeTracker.addTraceRoute(traceRoute);
-			}
-
-	        // 도착 노드에 도달하면 탐색 종료
-	        if(minNode.equals(endNode)) {
-				break;
-	        }
-			
-	        // 현재 노드를 closeList에 추가
-	        closeList.add(minNode);
-			
-	        // 현재 노드에 연결된 모든 이웃 노드(엣지) 탐색
-	        for(Edge edge : getConnectedEdges(edgeList, minNode)) {
-				Node storeNode = store.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
-				Node listNode = nodeList.get(storeNode.getId());
-				if(listNode == null) {
-					nodeList.put(storeNode.getId(), storeNode);
-				}
-				
-				Node toNode = listNode != null ? listNode : storeNode;
-				
-	            // 이미 방문한 노드는 건너뜀
-	            if(closeList.contains(toNode)) {
-					continue;
-	            }
-
-				if(routeTracker != null && traceRoute != null) {
-					traceRoute.addChild(toNode.getCoordinate());
-				}
-
-	            // 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산
-	            double newDist = minNode.getgCost() + edge.getDistance();
-	            
-	            // 더 짧은 경로를 발견한 경우
-	            if(newDist < toNode.getgCost()) {
-	                // 처음 발견한 노드인지 확인
-	                boolean isNewNode = !openList.contains(toNode);
-	                
-	                // hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
-	                double hCost = PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate());
-	                double fCost = newDist + hCost;
-					toNode.sethCost(hCost);
-					toNode.setgCost(newDist);
-					toNode.setfCost(fCost);
-
-	                if(!isNewNode) {
-	                    // 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
-	                    openList.remove(toNode);
-	                }
-	                
-	                openList.add(toNode);
-	                // 경로 역추적을 위해 이전 노드 저장
-	                location.put(toNode, minNode);
-	            }
-	        }
-	    }
-
-	    // 탐색 결과를 역추적하여 경로 리스트 생성
-	    ArrayList<Node> path = new ArrayList<Node>();
-	    Node node = location.get(endNode);
-	    while(node != null) {
-	        path.add(node);
-	        node = location.get(node);
-	    }
-
-	    // 경로를 올바른 순서로 뒤집음
-	    Collections.reverse(path);
-
-		path.add(endNode);
-
-		if(path.isEmpty() || path.get(0) != startNode) {
-			// 연결된 노드가 없는 경우
-			return null;
+		if(startNodeId == endNodeId) {
+			ArrayList<Node> path = new ArrayList<Node>();
+			path.add(startNode);
+			return path;
 		}
 
-	    return path;
-	}
-
-	private ArrayList<Node> findhierarchyPath(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
-		// return null;
-		// fCost(=gCost+hCost)가 가장 낮은 노드를 우선적으로 꺼내는 우선순위 큐
-		PriorityQueue<SearchRoute> openList = new PriorityQueue<SearchRoute>(Comparator.comparingDouble(c -> c.getNode().getfCost()));
-		// 이미 방문한 노드 집합
-		HashSet<Node> closeList = new HashSet<Node>();
-		// 각 노드의 이전 노드를 저장(경로 역추적용)
-		HashMap<Node, Node> location = new HashMap<Node, Node>();
-
-
-		// 노드와 엣지 캐싱 맵
-		HashMap<Integer, Node> nodeList = new HashMap<>();
-		HashMap<Long, Edge> edgeList = new HashMap<>();
-
-		EdgeIndex edgeIndex = store.getEdgeIndex();
-
-		int a = 0,b = 0,c = 0;
-
 		// 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
-		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate(), endNode.getCoordinate()) / 100;
+		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate().getLongitude(), startNode.getCoordinate().getLatitude(), endLon, endLat) / 100;
 		a++;
-
 		// 첫 노드 설정
-		startNode.setgCost(0);
-		startNode.sethCost(heuristic);
-		startNode.setfCost(heuristic);
-		nodeList.put(startNode.getId(), startNode);
+		searchBuffer.initializeStartNode(startNodeId, heuristic);
+		nodeQueue.add(new SearchState(startNodeId, -1L, 0, heuristic));
 
-		openList.add(new SearchRoute(startNode, null));
+		boolean found = false;
 
-
-		RoadLevel currentLevel = null; // 현재 진행 중인 도로 계층 (null이면 모든 계층)
-
-		while(!openList.isEmpty()) {
-			SearchRoute minRoute = openList.poll();
-
-			TraceRoute traceRoute = null;
-			if(routeTracker != null) {
-				traceRoute = new TraceRoute(minRoute.getNode().getCoordinate());
-				routeTracker.addTraceRoute(traceRoute);
-			}
-
-			// 이미 방문한 노드는 건너뜀
-			if(closeList.contains(minRoute.getNode())) {
+		while(!nodeQueue.isEmpty()) {
+			// //
+			long profileStart = System.nanoTime();
+		 	SearchState min = nodeQueue.poll();
+			queuePollTimeNanos += System.nanoTime() - profileStart;
+			int minNodeId = min.getNodeId();
+			long minEdge = min.getEdgeOffset();
+			searchBuffer.ensureCapacity(minNodeId);
+			if(!searchBuffer.hasCost(minNodeId)) {
 				continue;
 			}
 
-			if(minRoute.getNode().equals(endNode)) {
+			double minGCost = searchBuffer.getCurrentGCost(minNodeId);
+			if(min.getgCost() > minGCost) {
+				continue;
+			}
+
+			TraceRoute traceRoute = null;
+			if(routeTracker != null) {
+				traceRoute = new TraceRoute(getNodeCoordinate(minNodeId));
+				routeTracker.addTraceRoute(traceRoute);
+			}
+
+			// // 이미 방문한 노드는 건너뜀
+			if(searchBuffer.isVisited(minNodeId)) {
+				continue;
+			}
+
+			if(minNodeId == endNodeId) {
+				found = true;
 				break;
 			}
 
-			closeList.add(minRoute.getNode());
+			searchBuffer.markVisited(minNodeId);
 
-			double distToTarget = PathUtil.haversineDistance(minRoute.getNode().getCoordinate(), endNode.getCoordinate()) / 100;
+			//
 			b++;
+			
 			// 현재 노드에 도달한 엣지의 계층으로 매번 업데이트
-			// (L2 → L1 → L0 → L1 → L2 등 자유롭게 이동 가능)
-			if(minRoute.getEdge() != null) {
-				currentLevel = minRoute.getEdge().getRoadLevel();
-				// log.debug("현재 계층 업데이트: " + currentLevel);
+			// (L2 → L1 → L0 → L1 → L2 등 자유롭게 이동 가능
+			RoadLevel currentLevel = null; // 현재 진행 중인 도로 계층 (null이면 모든 계층)
+			if(minEdge != -1) {
+				profileStart = System.nanoTime();
+				currentLevel = getEdgeRoadLevel(minEdge, edgeList);
+				currentLevelTimeNanos += System.nanoTime() - profileStart;
 			}
 			
 			// EdgeIndexEntry entry = edgeIndex.get(minRoute.getNode().getId());
-			ArrayList<Edge> connectedEdges = new ArrayList<>();
+			int[] connectedEdges;
 
+			profileStart = System.nanoTime();
 			// 현재 계층에 따른 엣지 제공
 			if(currentLevel != null) {
 				boolean isGate = false;
@@ -407,103 +318,143 @@ public class Engine {
 					// L0(고속도로)에서는 게이트 노드에서만 다른 계층으로 전환 가능
 					if(isGate) {
 						// 게이트 노드면 모든 엣지 제공 (다른 계층 진출 가능)
-						connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+						connectedEdges = getConnectedEdgesByNodeId(edgeList,minNodeId);
 					} else {
 						// 게이트가 아니면 L0 엣지만 제공 (같은 계층 유지)
-						connectedEdges = getConnectedLevelEdges(edgeList,minRoute.getNode(), RoadLevel.L0);
+						connectedEdges = getConnectedLevelEdgesByNodeId(edgeList, minNodeId, RoadLevel.L0);
 						// L0 엣지가 없으면 모든 엣지 (고속도로 끝나는 지점)
-						if(connectedEdges.isEmpty()) {
-							connectedEdges =  getConnectedEdges(edgeList, minRoute.getNode());
+						if(connectedEdges.length == 0) {
+							connectedEdges =  getConnectedEdgesByNodeId(edgeList, minNodeId);
 						}
 					}
 				}
 				else if(currentLevel == RoadLevel.L1) {
 					// 만약 거리가 10키로 안쪽이라면 L1에서 바로 L2로 나갈 수 있도록 모든 엣지 제공
-					if(distToTarget <= 10) {
-						connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+					double distToTarget = getHeuristicCost(searchBuffer, minNodeId, endLon, endLat);
+					if(distToTarget <= 0.1) {
+						connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
 					}
 					else {
-						connectedEdges = getConnectedLevelEdgesWithExit(edgeList, minRoute.getNode(), currentLevel);
+						connectedEdges = getConnectedLevelEdgesWithExitByNodeId(edgeList, minNodeId, currentLevel);
 					}
 				}
 				else {
 					// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
-					connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+					connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
 				}		 
 			}
 			else {
 				// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
-				connectedEdges = getConnectedEdges(edgeList, minRoute.getNode());
+				connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
 			}
-			// log.info("엣지 개수 - {}/ nodeId - {}", connectedEdges.size(), minRoute.getNode().getId());
-			// connectedEdges.forEach((i) -> log.info("엣지 - {}", i.getTo()));
+			connectedEdgeTimeNanos += System.nanoTime() - profileStart;
 
- 			for(Edge edge : connectedEdges) {
-				Node toNode = nodeList.get(edge.getTo());
-				if(toNode == null) {
-					toNode = store.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
-					nodeList.put(toNode.getId(), toNode);
+
+			for(int edge : connectedEdges) {
+				connectedEdgeCount++;
+				profileStart = System.nanoTime();
+				boolean hotEdge = hotRoadCache.containsEdge(edge);
+				hotEdgeCheckTimeNanos += System.nanoTime() - profileStart;
+				if(hotEdge) {
+					hotEdgeHitCount++;
+				} else {
+					coldEdgeReadCount++;
 				}
 
-				//
-				int toNodeId = edge.getTo();
-
+				profileStart = System.nanoTime();
+				int toNodeId = hotEdge ? hotRoadCache.getEdgeTo(edge) : getEdgeTo(edge, edgeList);
+				edgeToTimeNanos += System.nanoTime() - profileStart;
+				searchBuffer.ensureCapacity(toNodeId);
 
 				// 이미 방문한 노드는 건너뜀
-				if(closeList.contains(toNode)) {
+				if(searchBuffer.isVisited(toNodeId)) {
 					continue;
 				}
 
 				if(routeTracker != null && traceRoute != null) {
-					traceRoute.addChild(toNode.getCoordinate());
+					traceRoute.addChild(getNodeCoordinate(toNodeId));
 				}
 
 				// 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산 - roadLevel 가중치 적용
-				double newDist = minRoute.getNode().getgCost() + getWeightedDistance(edge);
-				
+				profileStart = System.nanoTime();
+				double edgeCost = hotEdge ? hotRoadCache.getWeightedDistance(edge) : getWeightedDistance(edge, edgeList);
+				edgeCostTimeNanos += System.nanoTime() - profileStart;
+				double newDist = minGCost + edgeCost;
+				double currentGCost = searchBuffer.getCurrentGCost(toNodeId);
+
 				// 더 짧은 경로를 발견한 경우
-				if(newDist < toNode.getgCost()) {
-					// 처음 발견한 노드인지 확인
-					boolean isNewNode = !openList.contains(toNode);
-
-					// hCost(이웃 노드에서 목적지까지의 하버사인 거리) 계산
-					double hCost = (PathUtil.haversineDistance(toNode.getCoordinate(), endNode.getCoordinate()) / 100);
-					double fCost = newDist + (hCost * 1.5);
-					toNode.sethCost(hCost);
-					toNode.setgCost(newDist);
-					toNode.setfCost(fCost);
+				if(newDist < currentGCost) {
+					heuristicCallCount++;
+					if(!searchBuffer.hasHeuristic(toNodeId)) {
+						heuristicMissCount++;
+					}
+					profileStart = System.nanoTime();
+					double hCost = getHeuristicCost(searchBuffer, toNodeId, endLon, endLat);
+					heuristicTimeNanos += System.nanoTime() - profileStart;
+					double calFCost = newDist + (hCost * 1.5);
+					searchBuffer.updateCost(toNodeId, minNodeId, newDist);
 					c++;
-					// if(!isNewNode) {
-					// 	// 이미 openList에 있으면 제거 (우선순위 재계산을 위해)
-					// 	openList.remove(toNode);
-					// }
-					// log.info("test - {}/{}/{}/{}/{}", toNodeId, hCost, fCost, newDist, edge.getId());
-					openList.add(new SearchRoute(toNode, edge));
-					// 경로 역추적을 위해 이전 노드 저장
-					location.put(toNode, minRoute.getNode());
-
+					
+					profileStart = System.nanoTime();
+					nodeQueue.add(new SearchState(toNodeId, edge, newDist, calFCost));
+					queueOfferTimeNanos += System.nanoTime() - profileStart;
 				}
 			}
 		}
 
 		// 탐색 결과를 역추적하여 경로 리스트 생성
 	    ArrayList<Node> path = new ArrayList<Node>();
-	    // Node node = location.get(endNode);
-	    // while(node != null) {
-	    //     path.add(node);
-	    //     node = location.get(node);
-	    // }
 
-	    // // 경로를 올바른 순서로 뒤집음
-	    // Collections.reverse(path);
+		log.info("횟수 {}/{}/{}, edge cache hot/cold/total = {}/{}/{}", a,b,c, hotEdgeHitCount, coldEdgeReadCount, connectedEdgeCount);
+		log.info(
+				"findtest profile ms - poll: {}, connected: {}, edgeTo: {}, edgeCost: {}, heuristic: {} (calls/miss={}/{}), offer: {}",
+				nanosToMillis(queuePollTimeNanos),
+				nanosToMillis(connectedEdgeTimeNanos),
+				nanosToMillis(edgeToTimeNanos),
+				nanosToMillis(edgeCostTimeNanos),
+				nanosToMillis(heuristicTimeNanos),
+				heuristicCallCount,
+				heuristicMissCount,
+				nanosToMillis(queueOfferTimeNanos));
 
-		// path.add(endNode);
+		if(!found) {
+			return null;
+		}
 
-		// if(path.isEmpty() || path.get(0) != startNode) {
-		// 	// 연결된 노드가 없는 경우
-		// 	return null;
-		// }
-		log.info("횟수 {}/{}/{}", a,b,c);
+		long pathBuildStartTimeNanos = System.nanoTime();
+		int nodeId = endNodeId;
+		int hopCount = 0;
+		while(nodeId != startNodeId) {
+			if(!searchBuffer.hasCost(nodeId) || hopCount++ > searchBuffer.capacity()) {
+				return null;
+			}
+			path.add(store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)));
+			nodeId = searchBuffer.getPreviousNode(nodeId);
+		}
+
+		path.add(startNode);
+		Collections.reverse(path);
+		pathBuildTimeNanos = System.nanoTime() - pathBuildStartTimeNanos;
+
+		long measuredTimeNanos = queuePollTimeNanos
+				+ currentLevelTimeNanos
+				+ connectedEdgeTimeNanos
+				+ hotEdgeCheckTimeNanos
+				+ edgeToTimeNanos
+				+ edgeCostTimeNanos
+				+ heuristicTimeNanos
+				+ queueOfferTimeNanos
+				+ pathBuildTimeNanos;
+		long totalTimeNanos = System.nanoTime() - findtestStartTimeNanos;
+		log.info(
+				"findtest profile detail ms - total: {}, measured: {}, other: {}, currentLevel: {}, hotCheck: {}, pathBuild: {}",
+				nanosToMillis(totalTimeNanos),
+				nanosToMillis(measuredTimeNanos),
+				nanosToMillis(totalTimeNanos - measuredTimeNanos),
+				nanosToMillis(currentLevelTimeNanos),
+				nanosToMillis(hotEdgeCheckTimeNanos),
+				nanosToMillis(pathBuildTimeNanos));
+
 	    return path;
 	}
 
@@ -519,7 +470,6 @@ public class Engine {
 		PriorityQueue<SearchState> reverseQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
 		HashMap<Long, Edge> edgeList = new HashMap<>();
 		HashMap<Long, Edge> reverseEdgeList = new HashMap<>();
-		boolean useMappedViews = canUseMappedViews();
 
 		int startNodeId = startNode.getId();
 		int endNodeId = endNode.getId();
@@ -569,7 +519,6 @@ public class Engine {
 						false,
 						forwardTargetLon,
 						forwardTargetLat,
-						useMappedViews,
 						profile,
 						meeting);
 			}
@@ -582,7 +531,6 @@ public class Engine {
 						true,
 						reverseTargetLon,
 						reverseTargetLat,
-						useMappedViews,
 						profile,
 						meeting);
 			}
@@ -651,7 +599,6 @@ public class Engine {
 			boolean reverseSide,
 			double targetLon,
 			double targetLat,
-			boolean useMappedViews,
 			SearchProfile profile,
 			MeetingState meeting) throws IOException {
 		long profileStart = System.nanoTime();
@@ -684,7 +631,7 @@ public class Engine {
 		RoadLevel currentLevel = null;
 		if(minEdge != -1) {
 			profileStart = System.nanoTime();
-			currentLevel = getSearchEdgeRoadLevel(minEdge, edgeList, useMappedViews, reverseSide);
+			currentLevel = getSearchEdgeRoadLevel(minEdge, edgeList, reverseSide);
 			profile.currentLevelTimeNanos += System.nanoTime() - profileStart;
 		}
 
@@ -697,7 +644,6 @@ public class Engine {
 				reverseSide,
 				targetLon,
 				targetLat,
-				useMappedViews,
 				profile);
 		profile.connectedEdgeTimeNanos += System.nanoTime() - profileStart;
 
@@ -714,7 +660,7 @@ public class Engine {
 			}
 
 			profileStart = System.nanoTime();
-			int toNodeId = getSearchEdgeNextNode(edge, edgeList, useMappedViews, reverseSide, hotEdge);
+			int toNodeId = getSearchEdgeNextNode(edge, edgeList, reverseSide, hotEdge);
 			profile.edgeToTimeNanos += System.nanoTime() - profileStart;
 			ownBuffer.ensureCapacity(toNodeId);
 
@@ -723,7 +669,7 @@ public class Engine {
 			}
 
 			profileStart = System.nanoTime();
-			double edgeCost = getSearchWeightedDistance(edge, edgeList, useMappedViews, reverseSide, hotEdge);
+			double edgeCost = getSearchWeightedDistance(edge, edgeList, reverseSide, hotEdge);
 			profile.edgeCostTimeNanos += System.nanoTime() - profileStart;
 			double newDist = minGCost + edgeCost;
 
@@ -735,7 +681,7 @@ public class Engine {
 					profile.heuristicMissCount++;
 				}
 				profileStart = System.nanoTime();
-				double heuristic = getMinimumWeightedHeuristicCost(ownBuffer, toNodeId, targetLon, targetLat, useMappedViews);
+				double heuristic = getMinimumWeightedHeuristicCost(ownBuffer, toNodeId, targetLon, targetLat);
 				profile.heuristicTimeNanos += System.nanoTime() - profileStart;
 
 				profileStart = System.nanoTime();
@@ -758,7 +704,6 @@ public class Engine {
 			boolean reverseSide,
 			double targetLon,
 			double targetLat,
-			boolean useMappedViews,
 			SearchProfile profile) throws IOException {
 		if(currentLevel == null) {
 			return getConnectedEdgesByNodeId(edgeList, nodeId, reverseSide);
@@ -774,7 +719,7 @@ public class Engine {
 		}
 
 		if(currentLevel == RoadLevel.L1) {
-			double distToTarget = getDistanceToTargetCost(nodeId, targetLon, targetLat, useMappedViews);
+			double distToTarget = getDistanceToTargetCost(nodeId, targetLon, targetLat);
 			if(distToTarget <= 0.1) {
 				return getConnectedEdgesByNodeId(edgeList, nodeId, reverseSide);
 			}
@@ -855,262 +800,16 @@ public class Engine {
 		private long meetingCandidateCount;
 	}
 
-	private ArrayList<Node> findtest(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
-		long findtestStartTimeNanos = System.nanoTime();
-		SearchBuffers searchBuffer = searchBuffers.get();
-		searchBuffer.prepare(Math.max(startNode.getId(), endNode.getId()));
-
-		PriorityQueue<SearchState> nodeQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
-
-		// 노드와 엣지 캐싱 맵
-		// HashMap<Integer, Node> nodeList = new HashMap<>();
-		HashMap<Long, Edge> edgeList = new HashMap<>();
-		boolean useMappedViews = canUseMappedViews();
-
-		int a = 0;
-		int b = 0;
-		int c = 0;
-		long connectedEdgeCount = 0;
-		long hotEdgeHitCount = 0;
-		long coldEdgeReadCount = 0;
-		long queuePollTimeNanos = 0;
-		long connectedEdgeTimeNanos = 0;
-		long edgeToTimeNanos = 0;
-		long edgeCostTimeNanos = 0;
-		long heuristicTimeNanos = 0;
-		long queueOfferTimeNanos = 0;
-		long currentLevelTimeNanos = 0;
-		long hotEdgeCheckTimeNanos = 0;
-		long pathBuildTimeNanos = 0;
-		long heuristicCallCount = 0;
-		long heuristicMissCount = 0;
-
-		int startNodeId = startNode.getId();
-		int endNodeId = endNode.getId();
-		double endLon = endNode.getCoordinate().getLongitude();
-		double endLat = endNode.getCoordinate().getLatitude();
-
-		if(startNodeId == endNodeId) {
-			ArrayList<Node> path = new ArrayList<Node>();
-			path.add(startNode);
-			return path;
-		}
-
-		// 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
-		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate().getLongitude(), startNode.getCoordinate().getLatitude(), endLon, endLat) / 100;
-		a++;
-		// 첫 노드 설정
-		searchBuffer.initializeStartNode(startNodeId, heuristic);
-		nodeQueue.add(new SearchState(startNodeId, -1L, 0, heuristic));
-
-		boolean found = false;
-
-		while(!nodeQueue.isEmpty()) {
-			// //
-			long profileStart = System.nanoTime();
-		 	SearchState min = nodeQueue.poll();
-			queuePollTimeNanos += System.nanoTime() - profileStart;
-			int minNodeId = min.getNodeId();
-			long minEdge = min.getEdgeOffset();
-			searchBuffer.ensureCapacity(minNodeId);
-			if(!searchBuffer.hasCost(minNodeId)) {
-				continue;
-			}
-
-			double minGCost = searchBuffer.getCurrentGCost(minNodeId);
-			if(min.getgCost() > minGCost) {
-				continue;
-			}
-
-			TraceRoute traceRoute = null;
-			if(routeTracker != null) {
-				traceRoute = new TraceRoute(getNodeCoordinate(minNodeId, useMappedViews));
-				routeTracker.addTraceRoute(traceRoute);
-			}
-
-			// // 이미 방문한 노드는 건너뜀
-			if(searchBuffer.isVisited(minNodeId)) {
-				continue;
-			}
-
-			if(minNodeId == endNodeId) {
-				found = true;
-				break;
-			}
-
-			searchBuffer.markVisited(minNodeId);
-
-			//
-			b++;
-			
-			// 현재 노드에 도달한 엣지의 계층으로 매번 업데이트
-			// (L2 → L1 → L0 → L1 → L2 등 자유롭게 이동 가능
-			RoadLevel currentLevel = null; // 현재 진행 중인 도로 계층 (null이면 모든 계층)
-			if(minEdge != -1) {
-				profileStart = System.nanoTime();
-				currentLevel = getEdgeRoadLevel(minEdge, edgeList, useMappedViews);
-				currentLevelTimeNanos += System.nanoTime() - profileStart;
-			}
-			
-			// EdgeIndexEntry entry = edgeIndex.get(minRoute.getNode().getId());
-			int[] connectedEdges;
-
-			profileStart = System.nanoTime();
-			// 현재 계층에 따른 엣지 제공
-			if(currentLevel != null) {
-				boolean isGate = false;
-				if(currentLevel == RoadLevel.L0) {
-					// L0(고속도로)에서는 게이트 노드에서만 다른 계층으로 전환 가능
-					if(isGate) {
-						// 게이트 노드면 모든 엣지 제공 (다른 계층 진출 가능)
-						connectedEdges = getConnectedEdgesByNodeId(edgeList,minNodeId);
-					} else {
-						// 게이트가 아니면 L0 엣지만 제공 (같은 계층 유지)
-						connectedEdges = getConnectedLevelEdgesByNodeId(edgeList, minNodeId, RoadLevel.L0);
-						// L0 엣지가 없으면 모든 엣지 (고속도로 끝나는 지점)
-						if(connectedEdges.length == 0) {
-							connectedEdges =  getConnectedEdgesByNodeId(edgeList, minNodeId);
-						}
-					}
-				}
-				else if(currentLevel == RoadLevel.L1) {
-					// 만약 거리가 10키로 안쪽이라면 L1에서 바로 L2로 나갈 수 있도록 모든 엣지 제공
-					double distToTarget = getHeuristicCost(searchBuffer, minNodeId, endLon, endLat, useMappedViews);
-					if(distToTarget <= 0.1) {
-						connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
-					}
-					else {
-						connectedEdges = getConnectedLevelEdgesWithExitByNodeId(edgeList, minNodeId, currentLevel);
-					}
-				}
-				else {
-					// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
-					connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
-				}		 
-			}
-			else {
-				// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
-				connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
-			}
-			connectedEdgeTimeNanos += System.nanoTime() - profileStart;
-
-
-			for(int edge : connectedEdges) {
-				connectedEdgeCount++;
-				profileStart = System.nanoTime();
-				boolean hotEdge = hotRoadCache.containsEdge(edge);
-				hotEdgeCheckTimeNanos += System.nanoTime() - profileStart;
-				if(hotEdge) {
-					hotEdgeHitCount++;
-				} else {
-					coldEdgeReadCount++;
-				}
-
-				profileStart = System.nanoTime();
-				int toNodeId = hotEdge ? hotRoadCache.getEdgeTo(edge) : getEdgeTo(edge, edgeList, useMappedViews);
-				edgeToTimeNanos += System.nanoTime() - profileStart;
-				searchBuffer.ensureCapacity(toNodeId);
-
-				// 이미 방문한 노드는 건너뜀
-				if(searchBuffer.isVisited(toNodeId)) {
-					continue;
-				}
-
-				if(routeTracker != null && traceRoute != null) {
-					traceRoute.addChild(getNodeCoordinate(toNodeId, useMappedViews));
-				}
-
-				// 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산 - roadLevel 가중치 적용
-				profileStart = System.nanoTime();
-				double edgeCost = hotEdge ? hotRoadCache.getWeightedDistance(edge) : getWeightedDistance(edge, edgeList, useMappedViews);
-				edgeCostTimeNanos += System.nanoTime() - profileStart;
-				double newDist = minGCost + edgeCost;
-				double currentGCost = searchBuffer.getCurrentGCost(toNodeId);
-
-				// 더 짧은 경로를 발견한 경우
-				if(newDist < currentGCost) {
-					heuristicCallCount++;
-					if(!searchBuffer.hasHeuristic(toNodeId)) {
-						heuristicMissCount++;
-					}
-					profileStart = System.nanoTime();
-					double hCost = getHeuristicCost(searchBuffer, toNodeId, endLon, endLat, useMappedViews);
-					heuristicTimeNanos += System.nanoTime() - profileStart;
-					double calFCost = newDist + (hCost * 1.5);
-					searchBuffer.updateCost(toNodeId, minNodeId, newDist);
-					c++;
-					
-					profileStart = System.nanoTime();
-					nodeQueue.add(new SearchState(toNodeId, edge, newDist, calFCost));
-					queueOfferTimeNanos += System.nanoTime() - profileStart;
-				}
-			}
-		}
-
-		// 탐색 결과를 역추적하여 경로 리스트 생성
-	    ArrayList<Node> path = new ArrayList<Node>();
-
-		log.info("횟수 {}/{}/{}, edge cache hot/cold/total = {}/{}/{}", a,b,c, hotEdgeHitCount, coldEdgeReadCount, connectedEdgeCount);
-		log.info(
-				"findtest profile ms - poll: {}, connected: {}, edgeTo: {}, edgeCost: {}, heuristic: {} (calls/miss={}/{}), offer: {}",
-				nanosToMillis(queuePollTimeNanos),
-				nanosToMillis(connectedEdgeTimeNanos),
-				nanosToMillis(edgeToTimeNanos),
-				nanosToMillis(edgeCostTimeNanos),
-				nanosToMillis(heuristicTimeNanos),
-				heuristicCallCount,
-				heuristicMissCount,
-				nanosToMillis(queueOfferTimeNanos));
-
-		if(!found) {
-			return null;
-		}
-
-		long pathBuildStartTimeNanos = System.nanoTime();
-		int nodeId = endNodeId;
-		int hopCount = 0;
-		while(nodeId != startNodeId) {
-			if(!searchBuffer.hasCost(nodeId) || hopCount++ > searchBuffer.capacity()) {
-				return null;
-			}
-			path.add(store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)));
-			nodeId = searchBuffer.getPreviousNode(nodeId);
-		}
-
-		path.add(startNode);
-		Collections.reverse(path);
-		pathBuildTimeNanos = System.nanoTime() - pathBuildStartTimeNanos;
-
-		long measuredTimeNanos = queuePollTimeNanos
-				+ currentLevelTimeNanos
-				+ connectedEdgeTimeNanos
-				+ hotEdgeCheckTimeNanos
-				+ edgeToTimeNanos
-				+ edgeCostTimeNanos
-				+ heuristicTimeNanos
-				+ queueOfferTimeNanos
-				+ pathBuildTimeNanos;
-		long totalTimeNanos = System.nanoTime() - findtestStartTimeNanos;
-		log.info(
-				"findtest profile detail ms - total: {}, measured: {}, other: {}, currentLevel: {}, hotCheck: {}, pathBuild: {}",
-				nanosToMillis(totalTimeNanos),
-				nanosToMillis(measuredTimeNanos),
-				nanosToMillis(totalTimeNanos - measuredTimeNanos),
-				nanosToMillis(currentLevelTimeNanos),
-				nanosToMillis(hotEdgeCheckTimeNanos),
-				nanosToMillis(pathBuildTimeNanos));
-
-	    return path;
-	}
+	
 
 	private double nanosToMillis(long nanos) {
 		return nanos / 1_000_000.0;
 	}
 
-	private double getHeuristicCost(SearchBuffers searchBuffer, int nodeId, double endLon, double endLat, boolean useMappedViews) throws IOException {
+	private double getHeuristicCost(SearchBuffers searchBuffer, int nodeId, double endLon, double endLat) throws IOException {
 		searchBuffer.ensureCapacity(nodeId);
 		if(!searchBuffer.hasHeuristic(nodeId)) {
-			Coordinate coordinate = getNodeCoordinate(nodeId, useMappedViews);
+			Coordinate coordinate = getNodeCoordinate(nodeId);
 			double x = coordinate.getLongitude();
 			double y = coordinate.getLatitude();
 			searchBuffer.setHeuristic(nodeId, PathUtil.haversineDistance(x, y, endLon, endLat) / 100);
@@ -1119,8 +818,8 @@ public class Engine {
 		return searchBuffer.getHeuristic(nodeId);
 	}
 
-	private double getDistanceToTargetCost(int nodeId, double endLon, double endLat, boolean useMappedViews) throws IOException {
-		Coordinate coordinate = getNodeCoordinate(nodeId, useMappedViews);
+	private double getDistanceToTargetCost(int nodeId, double endLon, double endLat) throws IOException {
+		Coordinate coordinate = getNodeCoordinate(nodeId);
 		return PathUtil.haversineDistance(
 				coordinate.getLongitude(),
 				coordinate.getLatitude(),
@@ -1128,10 +827,10 @@ public class Engine {
 				endLat) / 100;
 	}
 
-	private double getMinimumWeightedHeuristicCost(SearchBuffers searchBuffer, int nodeId, double endLon, double endLat, boolean useMappedViews) throws IOException {
+	private double getMinimumWeightedHeuristicCost(SearchBuffers searchBuffer, int nodeId, double endLon, double endLat) throws IOException {
 		searchBuffer.ensureCapacity(nodeId);
 		if(!searchBuffer.hasHeuristic(nodeId)) {
-			Coordinate coordinate = getNodeCoordinate(nodeId, useMappedViews);
+			Coordinate coordinate = getNodeCoordinate(nodeId);
 			searchBuffer.setHeuristic(nodeId, getMinimumWeightedHeuristicCost(
 					coordinate.getLongitude(),
 					coordinate.getLatitude(),
@@ -1146,113 +845,97 @@ public class Engine {
 		return (PathUtil.haversineDistance(startLon, startLat, endLon, endLat) / 100) * 1.5;
 	}
 
-	private boolean canUseMappedViews() {
-		EdgeIndex index = store.getEdgeIndex();
-		if(index instanceof FileBasedEdgeIndex) {
-			if(!((FileBasedEdgeIndex)index).isMappingMode()) {
-				return false;
-			}
-		}
-
-		EdgeIndex reverseIndex = store.getReverseEdgeIndex();
-		if(reverseIndex instanceof FileBasedEdgeIndex) {
-			return ((FileBasedEdgeIndex)reverseIndex).isMappingMode();
-		}
-
-		return true;
-	}
-
-	private Coordinate getNodeCoordinate(int nodeId, boolean useMappedViews) throws IOException {
+	private Coordinate getNodeCoordinate(int nodeId) throws IOException {
 		Coordinate cachedCoordinate = hotRoadCache.getNodeCoordinate(nodeId);
 		if(cachedCoordinate != null) {
 			return cachedCoordinate;
 		}
 
-		if(useMappedViews) {
+		if(store.canUseMappedViews()) {
 			return new Coordinate(store.viewNodeYCoordinate(nodeId), store.viewNodeXCoordinate(nodeId));
 		}
 
 		return store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)).getCoordinate();
 	}
 
-	private int getEdgeTo(long edgeOffset, Map<Long, Edge> edgeList, boolean useMappedViews) throws IOException {
+	private int getEdgeTo(long edgeOffset, Map<Long, Edge> edgeList) throws IOException {
 		if(hotRoadCache.containsEdge(edgeOffset)) {
 			return hotRoadCache.getEdgeTo(edgeOffset);
 		}
 
-		if(useMappedViews) {
+		if(store.canUseMappedViews()) {
 			return store.viewEdgeTo(edgeOffset);
 		}
 
 		return getCachedEdge(edgeList, edgeOffset).getTo();
 	}
 
-	private int getSearchEdgeNextNode(long edgeOffset, Map<Long, Edge> edgeList, boolean useMappedViews, boolean reverseSide, boolean hotEdge) throws IOException {
+	private int getSearchEdgeNextNode(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
 		if(hotEdge) {
 			return hotRoadCache.getEdgeTo(edgeOffset);
 		}
 
 		if(reverseSide) {
-			if(useMappedViews) {
+			if(store.canUseMappedViews()) {
 				return store.viewReverseEdgeFrom(edgeOffset);
 			}
 
 			return getCachedReverseEdge(edgeList, edgeOffset).getFrom();
 		}
 
-		return getEdgeTo(edgeOffset, edgeList, useMappedViews);
+		return getEdgeTo(edgeOffset, edgeList);
 	}
 
-	private RoadLevel getEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList, boolean useMappedViews) throws IOException {
+	private RoadLevel getEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList) throws IOException {
 		if(hotRoadCache.containsEdge(edgeOffset)) {
 			return hotRoadCache.getEdgeRoadLevel(edgeOffset);
 		}
 
-		if(useMappedViews) {
+		if(store.canUseMappedViews()) {
 			return store.viewEdgeRoadLevel(edgeOffset);
 		}
 
 		return getCachedEdge(edgeList, edgeOffset).getRoadLevel();
 	}
 
-	private RoadLevel getSearchEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList, boolean useMappedViews, boolean reverseSide) throws IOException {
+	private RoadLevel getSearchEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide) throws IOException {
 		if(!reverseSide) {
-			return getEdgeRoadLevel(edgeOffset, edgeList, useMappedViews);
+			return getEdgeRoadLevel(edgeOffset, edgeList);
 		}
 
-		if(useMappedViews) {
+		if(store.canUseMappedViews()) {
 			return store.viewReverseEdgeRoadLevel(edgeOffset);
 		}
 
 		return getCachedReverseEdge(edgeList, edgeOffset).getRoadLevel();
 	}
 
-	private double getWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean useMappedViews) throws IOException {
+	private double getWeightedDistance(long offset, Map<Long, Edge> edgeList) throws IOException {
 		if(hotRoadCache.containsEdge(offset)) {
 			return hotRoadCache.getWeightedDistance(offset);
 		}
 
-		if(useMappedViews) {
+		if(store.canUseMappedViews()) {
 			return getWeightedDistance(offset);
 		}
 
 		return getWeightedDistance(getCachedEdge(edgeList, offset));
 	}
 
-	private double getSearchWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean useMappedViews, boolean reverseSide, boolean hotEdge) throws IOException {
+	private double getSearchWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
 		if(hotEdge) {
 			return hotRoadCache.getWeightedDistance(offset);
 		}
 
 		if(reverseSide) {
-			if(useMappedViews) {
+			if(store.canUseMappedViews()) {
 				return getWeightedDistance(store.viewReverseEdgeDistance(offset), store.viewReverseEdgeRoadLevel(offset));
 			}
 
 			return getWeightedDistance(getCachedReverseEdge(edgeList, offset));
 		}
 
-		return getWeightedDistance(offset, edgeList, useMappedViews);
+		return getWeightedDistance(offset, edgeList);
 	}
 
 	private double getWeightedDistance(double baseDistance, RoadLevel roadLevel) {

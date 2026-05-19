@@ -86,4 +86,6 @@ public interface DataStore {
     int viewReverseEdgeNextEdgeOffset(long offset);
     int viewReverseEdgeSpeed(long offset);
     RoadLevel viewReverseEdgeRoadLevel(long offset);
+
+    boolean canUseMappedViews();
 }

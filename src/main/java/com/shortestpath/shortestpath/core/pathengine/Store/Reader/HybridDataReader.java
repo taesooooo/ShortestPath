@@ -343,6 +343,13 @@ public class HybridDataReader implements MappableDataReader {
         return reverseEdgeViewer;
     }
 
+    public boolean isMappingMode() {
+        return graphRead
+                && nodeMappedBuffer != null
+                && edgeMappedBuffer != null
+                && reverseEdgeMappedBuffer != null;
+    }
+
     private FileChannel getReverseEdgeFileChannel() throws IOException {
         if (reverseEdgeFileChannel == null || !reverseEdgeFileChannel.isOpen()) {
             if (!Files.exists(reverseEdgeFilePath)) {
