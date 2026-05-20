@@ -9,6 +9,7 @@ build/
 src/**/**.properties
 src/test/resources/shp/
 src/**/sample/**
+docs/**
 
 ### STS ###
 .apt_generated
