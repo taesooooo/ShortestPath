@@ -124,22 +124,22 @@ public class Engine {
 		return timeCost;
 	}
 
-	// /**
-	//  * 저장소에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
-	//  *
-	//  * @param startNode
-	//  * @param endNode
-	//  * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
-	//  * @throws NullPointerException
-	//  * @throws IOException
-	//  */
-	// public ArrayList<Node> shortestPathFind(Node startNode, Node endNode) throws NullPointerException, IOException {
-	// 	if (startNode == null || endNode == null) {
-	// 		throw new NullPointerException("탐색에 필요한 노드가 없습니다.");
-	// 	}
+	/**
+	 * 저장소에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
+	 *
+	 * @param startNode
+	 * @param endNode
+	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
+	 * @throws NullPointerException
+	 * @throws IOException
+	 */
+	public RouteSearchResult shortestPathFind(Node startNode, Node endNode, boolean trackRoute) throws NullPointerException, IOException {
+		if (startNode == null || endNode == null) {
+			throw new NullPointerException("탐색에 필요한 노드가 없습니다.");
+		}
 
-	// 	return findPath(startNode, endNode, null);
-	// }
+		return shortestPathFind(startNode.getCoordinate(), endNode.getCoordinate(), trackRoute);
+	}
 
 	/**
 	 * 좌표를 이용하여 경로를 탐색하고 탐색 경로를 리스트로 반환합니다.
@@ -187,10 +187,10 @@ public class Engine {
 
 		ArrayList<Node> resultPath = null;
 
-		// resultPath = findPath(startNode, endNode, routeTracker);
 		long st = System.currentTimeMillis();
 
 		resultPath = findBidirectionalPath(startNode, endNode);
+
 
 		long et = System.currentTimeMillis();
 		double searchTime = (et - st) / 1000.0;
