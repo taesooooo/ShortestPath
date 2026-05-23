@@ -14,11 +14,13 @@ import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
+import com.shortestpath.shortestpath.core.pathengine.RouteStep;
 import com.shortestpath.shortestpath.dto.request.RequestBBox;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponseRestaurantsDto;
+import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
 import com.shortestpath.shortestpath.entity.Restaurants;
 import com.shortestpath.shortestpath.repository.RestaurantsRepository;
 
@@ -51,6 +53,7 @@ public class MapServiceImpl implements MapService {
 					.start(startCoordinate)
 					.end(endCoordinate)
 					.routeList(getNodeCoordinate(pathList))
+					.routeSteps(getRouteStepDto(searchResult.getRouteSteps()))
 					.build());
 			}
 			catch(EmptyGeometryListException e) {
@@ -60,6 +63,7 @@ public class MapServiceImpl implements MapService {
 					.start(startCoordinate)
 					.end(endCoordinate)
 					.routeList(getNodeCoordinate(null))
+					.routeSteps(getRouteStepDto(null))
 					.build());
 			}
 		}
@@ -90,6 +94,19 @@ public class MapServiceImpl implements MapService {
 
 		return pathList.stream().map(node -> node.getCoordinate())
 			.collect(Collectors.toCollection(ArrayList::new));
+	}
+
+	private ArrayList<ResponseRouteStepDto> getRouteStepDto(List<RouteStep> routeSteps) {
+		if(routeSteps == null || routeSteps.isEmpty()) {
+			return new ArrayList<ResponseRouteStepDto>();
+		}
+
+		return routeSteps.stream()
+				.map(routeStep -> ResponseRouteStepDto.builder()
+						.coordinate(routeStep.getCoordinate())
+						.turnDirection(routeStep.getTurnDirection())
+						.build())
+				.collect(Collectors.toCollection(ArrayList::new));
 	}
 
 

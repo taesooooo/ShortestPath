@@ -25,9 +25,11 @@ import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.RouteTracker;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
+import com.shortestpath.shortestpath.core.pathengine.TurnDirection;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
+import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
 import com.shortestpath.shortestpath.service.MapServiceImpl;
 
 class MapServiceTest {
@@ -73,6 +75,15 @@ class MapServiceTest {
                         new Coordinate(2, 2),
                         new Coordinate(3, 3));
 
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
+                .as("정상적인 경로 안내 정보를 반환하지 못했습니다.")
+                .extracting(ResponseRouteStepDto::getTurnDirection)
+                .containsExactly(
+                        TurnDirection.START,
+                        TurnDirection.STRAIGHT,
+                        TurnDirection.STRAIGHT,
+                        TurnDirection.END);
+
         // 시작점과 도착점 검증
         assertThat(responseFindPathDto.get(0).getStart())
                 .isEqualTo(new Coordinate(0, 0));
@@ -98,6 +109,8 @@ class MapServiceTest {
 
         assertThat(responseFindPathDto.get(0).getRouteList())
                 .isEmpty();
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
+                .isEmpty();
     }
 
     @Test
@@ -116,6 +129,8 @@ class MapServiceTest {
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
 
         assertThat(responseFindPathDto.get(0).getRouteList())
+                .isEmpty();
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
                 .isEmpty();
     }
 
@@ -204,6 +219,9 @@ class MapServiceTest {
         assertThat(responseFindPathDto.get(0).getRouteList())
                 .hasSize(1)
                 .containsExactly(new Coordinate(2, 2));
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
+                .extracting(ResponseRouteStepDto::getTurnDirection)
+                .containsExactly(TurnDirection.START);
     }
 
     @Test

@@ -1,8 +1,7 @@
 package com.shortestpath.shortestpath.dto.response;
 
-import java.util.ArrayList;
-
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.TurnDirection;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,9 +12,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
-public class ResponseFindPathDto {
-	private Coordinate start;
-	private Coordinate end;
-	private ArrayList<Coordinate> routeList;
-	private ArrayList<ResponseRouteStepDto> routeSteps;
+public class ResponseRouteStepDto {
+    private Coordinate coordinate;
+    private TurnDirection turnDirection;
 }

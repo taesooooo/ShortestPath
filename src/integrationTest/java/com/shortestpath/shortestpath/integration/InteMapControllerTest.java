@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shortestpath.shortestpath.DBHelper;
 import com.shortestpath.shortestpath.IntegrationTestHelper;
@@ -75,7 +76,7 @@ class InteMapControllerTest {
 		// 33.2403307/126.5624673|33.2417782/126.5647375
 		// 33.2417782/126.5647375|33.2573009/126.574876
 
-		this.mockMvc.perform(get("/api/map/find-path")
+		MvcResult mvcResult = this.mockMvc.perform(get("/api/map/find-path")
 				.queryParam("coordinates",
 						"33.2403307/126.5624673|33.2417782/126.5647375,33.2417782/126.5647375|33.2573009/126.574876")
 				.accept(MediaType.APPLICATION_JSON_VALUE)
@@ -86,7 +87,16 @@ class InteMapControllerTest {
 				.andExpect(jsonPath("$.[0].routeList").isNotEmpty())
 				.andExpect(jsonPath("$.[0].routeList").isArray())
 				.andExpect(jsonPath("$.[0].routeList[0].latitude").isNumber())
-				.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber());
+				.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber())
+				.andExpect(jsonPath("$.[0].routeSteps").isArray())
+				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.latitude").isNumber())
+				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.longitude").isNumber())
+				.andExpect(jsonPath("$.[0].routeSteps[0].turnDirection").value("START"))
+				.andReturn();
+
+		JsonNode response = om.readTree(mvcResult.getResponse().getContentAsString());
+		assertRouteGuide(response.get(0));
+		assertRouteGuide(response.get(1));
 	}
 
 	@Test
@@ -94,7 +104,7 @@ class InteMapControllerTest {
 	public void findMapTest() throws Exception {
 		// 33.2403307/126.5624673|33.2417782/126.5647375
 
-		this.mockMvc.perform(get("/api/map/find-path")
+		MvcResult mvcResult = this.mockMvc.perform(get("/api/map/find-path")
 				.queryParam("coordinates", "33.2403307/126.5624673|33.2417782/126.5647375")
 				.accept(MediaType.APPLICATION_JSON_VALUE)
 				.characterEncoding("UTF-8"))
@@ -104,7 +114,15 @@ class InteMapControllerTest {
 				.andExpect(jsonPath("$.[0].routeList").isNotEmpty())
 				.andExpect(jsonPath("$.[0].routeList").isArray())
 				.andExpect(jsonPath("$.[0].routeList[0].latitude").isNumber())
-				.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber());
+				.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber())
+				.andExpect(jsonPath("$.[0].routeSteps").isArray())
+				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.latitude").isNumber())
+				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.longitude").isNumber())
+				.andExpect(jsonPath("$.[0].routeSteps[0].turnDirection").value("START"))
+				.andReturn();
+
+		JsonNode response = om.readTree(mvcResult.getResponse().getContentAsString());
+		assertRouteGuide(response.get(0));
 	}
 
 	@ParameterizedTest()
@@ -187,6 +205,44 @@ class InteMapControllerTest {
 		assertThat(responseDto.getTraceRoutes()).as("예상한 방문 좌표가 없습니다.")
 		.flatExtracting(TraceRoute::getVisitedCoordinates)
 				.containsExactlyInAnyOrderElementsOf(visitedCoordinates);
+	}
+
+	private void assertRouteGuide(JsonNode routeResult) {
+		JsonNode routeList = routeResult.get("routeList");
+		JsonNode routeSteps = routeResult.get("routeSteps");
+
+		assertThat(routeSteps).as("경로 안내 정보가 없습니다.").isNotNull();
+		assertThat(routeSteps.size()).as("경로 좌표와 안내 정보 개수가 일치하지 않습니다.")
+				.isEqualTo(routeList.size());
+
+		if (routeList.isEmpty()) {
+			assertThat(routeSteps.isEmpty()).isTrue();
+			return;
+		}
+
+		assertRouteStepMatchesCoordinate(routeSteps.get(0), routeList.get(0));
+		assertThat(routeSteps.get(0).get("turnDirection").asText()).isEqualTo("START");
+
+		if (routeSteps.size() > 1) {
+			JsonNode lastStep = routeSteps.get(routeSteps.size() - 1);
+			JsonNode lastCoordinate = routeList.get(routeList.size() - 1);
+			assertRouteStepMatchesCoordinate(lastStep, lastCoordinate);
+			assertThat(lastStep.get("turnDirection").asText()).isEqualTo("END");
+		}
+
+		for (JsonNode routeStep : routeSteps) {
+			assertThat(routeStep.get("turnDirection").asText())
+					.isIn("START", "STRAIGHT", "LEFT", "RIGHT", "U_TURN", "END");
+		}
+	}
+
+	private void assertRouteStepMatchesCoordinate(JsonNode routeStep, JsonNode coordinate) {
+		JsonNode stepCoordinate = routeStep.get("coordinate");
+
+		assertThat(stepCoordinate.get("latitude").asDouble())
+				.isEqualTo(coordinate.get("latitude").asDouble());
+		assertThat(stepCoordinate.get("longitude").asDouble())
+				.isEqualTo(coordinate.get("longitude").asDouble());
 	}
 
 	// @Test
