@@ -32,7 +32,6 @@ public class Engine {
 	private DataStore store;
 	private NodeProvider dataProvider;
 	private HotRoadCache hotRoadCache;
-	private final Object checkListLock = new Object(); // 🔥 양방향 탐색의 Race Condition 방지
 	private static final int SEARCH_BUFFER_INITIAL_CAPACITY = 1024;
 	private final ThreadLocal<SearchBuffers> searchBuffers = ThreadLocal.withInitial(() -> new SearchBuffers(SEARCH_BUFFER_INITIAL_CAPACITY));
 	private final ThreadLocal<SearchBuffers> reverseSearchBuffers = ThreadLocal.withInitial(() -> new SearchBuffers(SEARCH_BUFFER_INITIAL_CAPACITY));
@@ -138,7 +137,14 @@ public class Engine {
 			throw new NullPointerException("탐색에 필요한 노드가 없습니다.");
 		}
 
-		return shortestPathFind(startNode.getCoordinate(), endNode.getCoordinate(), trackRoute);
+		long st = System.currentTimeMillis();
+		RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
+		long et = System.currentTimeMillis();
+		result.setSearchTime((et - st) / 1000.0);
+		log.info("경로 탐색 완료 - startNodeId: {}, endNodeId: {}, trackRoute: {}, searchTime: {}초",
+				startNode.getId(), endNode.getId(), trackRoute, result.getSearchTime());
+
+		return result;
 	}
 
 	/**
@@ -180,22 +186,12 @@ public class Engine {
 		}
 		log.info("노드 탐색 완료 / 경로 탐색 시작");
 
-		RouteTracker routeTracker = null;
-		if (trackRoute) {
-			routeTracker = new RouteTracker();
-		}
-
-		ArrayList<Node> resultPath = null;
-
 		long st = System.currentTimeMillis();
-
-		resultPath = findBidirectionalPath(startNode, endNode);
-
-
+		RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
 		long et = System.currentTimeMillis();
-		double searchTime = (et - st) / 1000.0;
-
-		RouteSearchResult result = new RouteSearchResult(resultPath, routeTracker, searchTime);
+		result.setSearchTime((et - st) / 1000.0);
+		log.info("경로 탐색 완료 - start: {}, end: {}, startNodeId: {}, endNodeId: {}, trackRoute: {}, searchTime: {}초",
+				startCoordinate, endCoordinate, startNode.getId(), endNode.getId(), trackRoute, result.getSearchTime());
 
 		return result;
 	}
@@ -211,8 +207,11 @@ public class Engine {
 	 * @return 최단 경로에 포함된 노드 리스트(순서대로)
 	 * @throws IOException
 	 */
-	private ArrayList<Node> findPath(Node startNode, Node endNode, RouteTracker routeTracker) throws IOException {
+	private RouteSearchResult findPath(Node startNode, Node endNode, boolean trackRoute) throws IOException {
 		log.info("싱글 탐색 시작");
+		RouteTracker routeTracker = trackRoute ? new RouteTracker() : null;
+		RouteSearchResult result = new RouteSearchResult();
+		result.setRouteTracker(routeTracker);
 		SearchBuffers searchBuffer = searchBuffers.get();
 		searchBuffer.prepare(Math.max(startNode.getId(), endNode.getId()));
 
@@ -229,7 +228,8 @@ public class Engine {
 		if (startNodeId == endNodeId) {
 			ArrayList<Node> path = new ArrayList<Node>();
 			path.add(startNode);
-			return path;
+			result.setRouteNode(path);
+			return result;
 		}
 
 		// 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
@@ -257,7 +257,7 @@ public class Engine {
 
 			TraceRoute traceRoute = null;
 			if (routeTracker != null) {
-				traceRoute = new TraceRoute(getNodeCoordinate(minNodeId));
+				traceRoute = new TraceRoute(getNodeCoordinate(minNodeId), SearchSide.FORWARD);
 				routeTracker.addTraceRoute(traceRoute);
 			}
 
@@ -348,14 +348,14 @@ public class Engine {
 		// 탐색 결과를 역추적하여 경로 리스트 생성
 		ArrayList<Node> path = new ArrayList<Node>();
 		if (!found) {
-			return null;
+			return result;
 		}
 
 		int nodeId = endNodeId;
 		int hopCount = 0;
 		while (nodeId != startNodeId) {
 			if (!searchBuffer.hasCost(nodeId) || hopCount++ > searchBuffer.capacity()) {
-				return null;
+				return result;
 			}
 			path.add(store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)));
 			nodeId = searchBuffer.getPreviousNode(nodeId);
@@ -364,11 +364,15 @@ public class Engine {
 		path.add(startNode);
 		Collections.reverse(path);
 	
-		return path;
+		result.setRouteNode(path);
+		return result;
 	}
 
-	private ArrayList<Node> findBidirectionalPath(Node startNode, Node endNode) throws IOException {
+	private RouteSearchResult findBidirectionalPath(Node startNode, Node endNode, boolean trackRoute) throws IOException {
 		log.info("양방향 탐색 시작");
+		RouteTracker routeTracker = trackRoute ? new RouteTracker() : null;
+		RouteSearchResult result = new RouteSearchResult();
+		result.setRouteTracker(routeTracker);
 		SearchBuffers forwardBuffer = searchBuffers.get();
 		SearchBuffers reverseBuffer = reverseSearchBuffers.get();
 		int maxEndpointId = Math.max(startNode.getId(), endNode.getId());
@@ -390,7 +394,8 @@ public class Engine {
 		if (startNodeId == endNodeId) {
 			ArrayList<Node> path = new ArrayList<Node>();
 			path.add(startNode);
-			return path;
+			result.setRouteNode(path);
+			return result;
 		}
 
 		double forwardStartHeuristic = getWeightedHeuristicCost(reverseTargetLon, reverseTargetLat, forwardTargetLon, forwardTargetLat);
@@ -413,19 +418,20 @@ public class Engine {
 
 			boolean expandForward = forwardQueue.peek().getfCost() <= reverseQueue.peek().getfCost();
 			if (expandForward) {
-				expandBidirectionalSide(forwardQueue, forwardBuffer, reverseBuffer, edgeList, false, forwardTargetLon, forwardTargetLat, meeting);
+				expandBidirectionalSide(forwardQueue, forwardBuffer, reverseBuffer, edgeList, false, forwardTargetLon, forwardTargetLat, meeting, routeTracker);
 			} else {
-				expandBidirectionalSide(reverseQueue, forwardBuffer, reverseBuffer, reverseEdgeList, true, reverseTargetLon, reverseTargetLat, meeting);
+				expandBidirectionalSide(reverseQueue, forwardBuffer, reverseBuffer, reverseEdgeList, true, reverseTargetLon, reverseTargetLat, meeting, routeTracker);
 			}
 		}
 
 		if (!meeting.hasMeeting()) {
-			return null;
+			return result;
 		}
 
 		ArrayList<Node> path = buildBidirectionalPath(startNode, endNode, meeting.nodeId, forwardBuffer, reverseBuffer);
 
-		return path;
+		result.setRouteNode(path);
+		return result;
 	}
 
 	private void expandBidirectionalSide(
@@ -436,7 +442,8 @@ public class Engine {
 			boolean reverseSide,
 			double targetLon,
 			double targetLat,
-			MeetingState meeting) throws IOException {
+			MeetingState meeting,
+			RouteTracker routeTracker) throws IOException {
 		SearchBuffers activeBuffer = reverseSide ? endBuffer : startBuffer;
 		SearchBuffers oppositeBuffer = reverseSide ? startBuffer : endBuffer;
 		SearchState min = queue.poll();
@@ -453,6 +460,13 @@ public class Engine {
 		}
 
 		activeBuffer.markVisited(minNodeId);
+		TraceRoute traceRoute = null;
+		if (routeTracker != null) {
+			SearchSide searchSide = reverseSide ? SearchSide.REVERSE : SearchSide.FORWARD;
+			traceRoute = new TraceRoute(getNodeCoordinate(minNodeId), searchSide);
+			routeTracker.addTraceRoute(traceRoute);
+		}
+
 		if (oppositeBuffer.hasCost(minNodeId)) {
 			meeting.accept(minNodeId, minGCost + oppositeBuffer.getCurrentGCost(minNodeId));
 		}
@@ -472,6 +486,10 @@ public class Engine {
 
 			if (activeBuffer.isVisited(toNodeId)) {
 				continue;
+			}
+
+			if (traceRoute != null) {
+				traceRoute.addChild(getNodeCoordinate(toNodeId));
 			}
 
 			double edgeCost = getSearchWeightedDistance(edge, edgeList, reverseSide, hotEdge);

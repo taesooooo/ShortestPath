@@ -37,6 +37,7 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
+import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
 
 import jakarta.transaction.Transactional;
 
@@ -84,10 +85,6 @@ class InteMapControllerTest {
 				.andDo(print())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$").isArray())
-				.andExpect(jsonPath("$.[0].routeList").isNotEmpty())
-				.andExpect(jsonPath("$.[0].routeList").isArray())
-				.andExpect(jsonPath("$.[0].routeList[0].latitude").isNumber())
-				.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber())
 				.andExpect(jsonPath("$.[0].routeSteps").isArray())
 				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.latitude").isNumber())
 				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.longitude").isNumber())
@@ -111,10 +108,6 @@ class InteMapControllerTest {
 				.andDo(print())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$").isArray())
-				.andExpect(jsonPath("$.[0].routeList").isNotEmpty())
-				.andExpect(jsonPath("$.[0].routeList").isArray())
-				.andExpect(jsonPath("$.[0].routeList[0].latitude").isNumber())
-				.andExpect(jsonPath("$.[0].routeList[0].longitude").isNumber())
 				.andExpect(jsonPath("$.[0].routeSteps").isArray())
 				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.latitude").isNumber())
 				.andExpect(jsonPath("$.[0].routeSteps[0].coordinate.longitude").isNumber())
@@ -193,9 +186,12 @@ class InteMapControllerTest {
 		String contentAsString = mvcResult.getResponse().getContentAsString();
 		ResponeseRouteSearchTraceDto responseDto = om.readValue(contentAsString, ResponeseRouteSearchTraceDto.class);
 
-		responseDto.getRouteCoordinates().forEach(item -> System.out.println(item.toWKT()));
+		responseDto.getRouteSteps().stream()
+				.map(ResponseRouteStepDto::getCoordinate)
+				.forEach(item -> System.out.println(item.toWKT()));
 
-		assertThat(responseDto.getRouteCoordinates()).as("예상한 탐색 경로 좌표가 일치하지 않습니다.")
+		assertThat(responseDto.getRouteSteps()).as("예상한 탐색 경로 좌표가 일치하지 않습니다.")
+				.extracting(ResponseRouteStepDto::getCoordinate)
 				.containsExactlyElementsOf(routeCoordinates);
 
 		assertThat(responseDto.getTraceRoutes()).as("예상한 탐색 부모 좌표가 없습니다.")
@@ -208,41 +204,36 @@ class InteMapControllerTest {
 	}
 
 	private void assertRouteGuide(JsonNode routeResult) {
-		JsonNode routeList = routeResult.get("routeList");
 		JsonNode routeSteps = routeResult.get("routeSteps");
 
 		assertThat(routeSteps).as("경로 안내 정보가 없습니다.").isNotNull();
-		assertThat(routeSteps.size()).as("경로 좌표와 안내 정보 개수가 일치하지 않습니다.")
-				.isEqualTo(routeList.size());
 
-		if (routeList.isEmpty()) {
-			assertThat(routeSteps.isEmpty()).isTrue();
+		if (routeSteps.isEmpty()) {
 			return;
 		}
 
-		assertRouteStepMatchesCoordinate(routeSteps.get(0), routeList.get(0));
+		assertRouteStepHasCoordinate(routeSteps.get(0));
 		assertThat(routeSteps.get(0).get("turnDirection").asText()).isEqualTo("START");
 
 		if (routeSteps.size() > 1) {
 			JsonNode lastStep = routeSteps.get(routeSteps.size() - 1);
-			JsonNode lastCoordinate = routeList.get(routeList.size() - 1);
-			assertRouteStepMatchesCoordinate(lastStep, lastCoordinate);
+			assertRouteStepHasCoordinate(lastStep);
 			assertThat(lastStep.get("turnDirection").asText()).isEqualTo("END");
 		}
 
 		for (JsonNode routeStep : routeSteps) {
+			assertRouteStepHasCoordinate(routeStep);
 			assertThat(routeStep.get("turnDirection").asText())
 					.isIn("START", "STRAIGHT", "LEFT", "RIGHT", "U_TURN", "END");
 		}
 	}
 
-	private void assertRouteStepMatchesCoordinate(JsonNode routeStep, JsonNode coordinate) {
+	private void assertRouteStepHasCoordinate(JsonNode routeStep) {
 		JsonNode stepCoordinate = routeStep.get("coordinate");
 
-		assertThat(stepCoordinate.get("latitude").asDouble())
-				.isEqualTo(coordinate.get("latitude").asDouble());
-		assertThat(stepCoordinate.get("longitude").asDouble())
-				.isEqualTo(coordinate.get("longitude").asDouble());
+		assertThat(stepCoordinate).isNotNull();
+		assertThat(stepCoordinate.get("latitude").isNumber()).isTrue();
+		assertThat(stepCoordinate.get("longitude").isNumber()).isTrue();
 	}
 
 	// @Test

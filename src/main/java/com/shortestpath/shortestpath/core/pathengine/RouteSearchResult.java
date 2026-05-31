@@ -7,7 +7,11 @@ public class RouteSearchResult {
     private ArrayList<RouteStep> routeSteps;
     private RouteTracker routeTracker;
     private double searchTime;
-    
+
+    public RouteSearchResult() {
+        setRouteNode(null);
+    }
+
     public RouteSearchResult(ArrayList<Node> routeNode, double searchTime) {
         setRouteNode(routeNode);
         this.searchTime = searchTime;
@@ -50,5 +54,5 @@ public class RouteSearchResult {
 
     public void setSearchTime(double searchTime) {
         this.searchTime = searchTime;
-    }    
+    }
 }

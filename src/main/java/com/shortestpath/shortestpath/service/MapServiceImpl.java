@@ -5,16 +5,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
-import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.RouteStep;
+import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
 import com.shortestpath.shortestpath.dto.request.RequestBBox;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
@@ -29,13 +27,11 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class MapServiceImpl implements MapService {
-	private static final Logger log = LoggerFactory.getLogger(MapServiceImpl.class);
-
 	private final Engine engine;
 	private final RestaurantsRepository restaurantsRepository;
 
 	@Override
-	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> coordinateList) throws IOException {
+	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> coordinateList) throws IOException, EmptyGeometryListException {
 		
 		ArrayList<ResponseFindPathDto> resultList = new ArrayList<ResponseFindPathDto>();
 		
@@ -44,28 +40,13 @@ public class MapServiceImpl implements MapService {
 			Coordinate startCoordinate = route.getStart();
 			Coordinate endCoordinate = route.getEnd();
 			
-			try {
-				RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
-			
-				List<Node> pathList = searchResult.getRouteNode();
-				
-				resultList.add(ResponseFindPathDto.builder()
-					.start(startCoordinate)
-					.end(endCoordinate)
-					.routeList(getNodeCoordinate(pathList))
-					.routeSteps(getRouteStepDto(searchResult.getRouteSteps()))
-					.build());
-			}
-			catch(EmptyGeometryListException e) {
-				log.info(e.getMessage());
-
-				resultList.add(ResponseFindPathDto.builder()
-					.start(startCoordinate)
-					.end(endCoordinate)
-					.routeList(getNodeCoordinate(null))
-					.routeSteps(getRouteStepDto(null))
-					.build());
-			}
+			RouteSearchResult searchResult = engine.shortestPathFind(startCoordinate, endCoordinate, false);
+			resultList.add(ResponseFindPathDto.builder()
+				.start(startCoordinate)
+				.end(endCoordinate)
+				.routeSteps(getRouteStepDto(searchResult.getRouteSteps()))
+				.searchTime(searchResult.getSearchTime())
+				.build());
 		}
 		
 		return resultList;
@@ -82,18 +63,10 @@ public class MapServiceImpl implements MapService {
 		return ResponeseRouteSearchTraceDto.builder()
 				.start(startCoordinate)
 				.end(endCoordinate)
-				.routeCoordinates(getNodeCoordinate(searchResult.getRouteNode()))
-				.traceRoutes(searchResult.getRouteTracker().getTrackRoutes())
+				.routeSteps(getRouteStepDto(searchResult.getRouteSteps()))
+				.traceRoutes(getTraceRoutes(searchResult))
+				.searchTime(searchResult.getSearchTime())
 				.build();
-	}
-
-	private ArrayList<Coordinate> getNodeCoordinate(List<Node> pathList) {
-		if(pathList == null || pathList.isEmpty()) {
-			return new ArrayList<Coordinate>();
-		}
-
-		return pathList.stream().map(node -> node.getCoordinate())
-			.collect(Collectors.toCollection(ArrayList::new));
 	}
 
 	private ArrayList<ResponseRouteStepDto> getRouteStepDto(List<RouteStep> routeSteps) {
@@ -107,6 +80,14 @@ public class MapServiceImpl implements MapService {
 						.turnDirection(routeStep.getTurnDirection())
 						.build())
 				.collect(Collectors.toCollection(ArrayList::new));
+	}
+
+	private List<TraceRoute> getTraceRoutes(RouteSearchResult searchResult) {
+		if(searchResult.getRouteTracker() == null) {
+			return new ArrayList<TraceRoute>();
+		}
+
+		return searchResult.getRouteTracker().getTrackRoutes();
 	}
 
 

@@ -1,6 +1,7 @@
 package com.shortestpath.shortestpath.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -67,8 +68,9 @@ class MapServiceTest {
                 .hasSize(1);
 
         // 경로의 좌표 리스트 검증
-        assertThat(responseFindPathDto.get(0).getRouteList())
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
                 .as("정상적인 경로 반환을 하지 못했습니다.")
+                .extracting(ResponseRouteStepDto::getCoordinate)
                 .containsExactly(
                         new Coordinate(0, 0),
                         new Coordinate(1, 1),
@@ -107,8 +109,6 @@ class MapServiceTest {
 
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
 
-        assertThat(responseFindPathDto.get(0).getRouteList())
-                .isEmpty();
         assertThat(responseFindPathDto.get(0).getRouteSteps())
                 .isEmpty();
     }
@@ -126,12 +126,9 @@ class MapServiceTest {
         when(engine.shortestPathFind(any(Coordinate.class), any(Coordinate.class), eq(false)))
                 .thenThrow(new EmptyGeometryListException("지오메트리를 가져올 수 없습니다."));
 
-        List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
-
-        assertThat(responseFindPathDto.get(0).getRouteList())
-                .isEmpty();
-        assertThat(responseFindPathDto.get(0).getRouteSteps())
-                .isEmpty();
+        assertThatThrownBy(() -> mapService.findPath(testRequestList))
+                .isInstanceOf(EmptyGeometryListException.class)
+                .hasMessage("지오메트리를 가져올 수 없습니다.");
     }
 
     @Test
@@ -160,9 +157,9 @@ class MapServiceTest {
 
         assertThat(responseFindPathDto)
                 .hasSize(2);
-        assertThat(responseFindPathDto.get(0).getRouteList())
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
                 .hasSize(4);
-        assertThat(responseFindPathDto.get(1).getRouteList())
+        assertThat(responseFindPathDto.get(1).getRouteSteps())
                 .hasSize(4);
     }
 
@@ -188,11 +185,9 @@ class MapServiceTest {
                 .thenReturn(new RouteSearchResult(testNodes1, 0.0))
                 .thenThrow(new EmptyGeometryListException("지오메트리를 가져올 수 없습니다."));
 
-        List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
-
-        assertThat(responseFindPathDto).hasSize(2);
-        assertThat(responseFindPathDto.get(0).getRouteList()).hasSize(4);
-        assertThat(responseFindPathDto.get(1).getRouteList()).isEmpty();
+        assertThatThrownBy(() -> mapService.findPath(testRequestList))
+                .isInstanceOf(EmptyGeometryListException.class)
+                .hasMessage("지오메트리를 가져올 수 없습니다.");
     }
 
     @Test
@@ -216,8 +211,9 @@ class MapServiceTest {
         List<ResponseFindPathDto> responseFindPathDto = mapService.findPath(testRequestList);
 
         // Then
-        assertThat(responseFindPathDto.get(0).getRouteList())
+        assertThat(responseFindPathDto.get(0).getRouteSteps())
                 .hasSize(1)
+                .extracting(ResponseRouteStepDto::getCoordinate)
                 .containsExactly(new Coordinate(2, 2));
         assertThat(responseFindPathDto.get(0).getRouteSteps())
                 .extracting(ResponseRouteStepDto::getTurnDirection)
@@ -246,8 +242,9 @@ class MapServiceTest {
 
         ResponeseRouteSearchTraceDto responseDto = mapService.searchRouteTrack(requestDto);
 
-        assertThat(responseDto.getRouteCoordinates())
+        assertThat(responseDto.getRouteSteps())
                 .as("정상적인 경로 반환을 하지 못했습니다.")
+                .extracting(ResponseRouteStepDto::getCoordinate)
                 .containsExactly(
                         new Coordinate(0, 0),
                         new Coordinate(1, 1),

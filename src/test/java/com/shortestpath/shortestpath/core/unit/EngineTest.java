@@ -25,6 +25,7 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
+import com.shortestpath.shortestpath.core.pathengine.SearchSide;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
 import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
@@ -489,7 +490,17 @@ class EngineTest {
 		assertThat(path).extracting(Node::getId)
 				.containsExactly(1, 3, 4);
 
-		assertThat(traceRoutes).isEmpty();
+		assertThat(traceRoutes).isNotEmpty();
+		assertThat(traceRoutes)
+				.extracting(TraceRoute::getSearchSide)
+				.doesNotContainNull()
+				.contains(SearchSide.FORWARD);
+		assertThat(traceRoutes)
+				.extracting(TraceRoute::getParentCoordinate)
+				.doesNotContainNull();
+		assertThat(traceRoutes)
+				.flatExtracting(TraceRoute::getVisitedCoordinates)
+				.isNotEmpty();
 	}
 
 	// @Test

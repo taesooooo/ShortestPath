@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 public class ResponeseRouteSearchTraceDto {
     private Coordinate start;
     private Coordinate end;
-    private ArrayList<Coordinate> routeCoordinates;
+    private ArrayList<ResponseRouteStepDto> routeSteps;
     private List<TraceRoute> traceRoutes; 
     private double searchTime;
 }

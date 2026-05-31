@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.EmptyGeometryListException;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.exception.InvalidCoordinateException;
 import com.shortestpath.shortestpath.service.MapService;
@@ -24,7 +25,7 @@ public class MapController {
 	private final MapService mapService;
 
 	@GetMapping("/find-path")
-	public ResponseEntity<Object> findPath(@RequestParam("coordinates") List<String> list) throws IOException {
+	public ResponseEntity<Object> findPath(@RequestParam("coordinates") List<String> list) throws IOException, EmptyGeometryListException {
 		List<RequestFindPathDto> coordinateList = list.stream().map(item -> {
 			boolean check = validCoordinate(item);
 			if(!check) {
