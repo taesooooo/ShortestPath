@@ -34,6 +34,12 @@ public class RootContext implements WebMvcConfigurer {
 	@Value("${findpath.node-db-save}")
 	private boolean isNodeDbSave;
 
+	@Value("${findpath.search-buffer-pool-size:1}")
+	private int searchBufferPoolSize;
+
+	@Value("${findpath.hot-road-cache-mode:index-only}")
+	private String hotRoadCacheMode;
+
 	@Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(new PageInfoArgumentResolver());
@@ -55,7 +61,7 @@ public class RootContext implements WebMvcConfigurer {
 		dataStore.switchToMappingMode();
 		dataStore.switchEdgeIndexToMappingMode();
 		
-		return new Engine(dataStore, dataProvider);
+		return new Engine(dataStore, dataProvider, searchBufferPoolSize, hotRoadCacheMode);
 	}
 
 	@Bean

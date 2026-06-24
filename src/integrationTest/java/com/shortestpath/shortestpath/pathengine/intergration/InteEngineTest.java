@@ -137,10 +137,15 @@ public class InteEngineTest {
         }
 
         @Bean
-        public Engine engine(DataStore dataStore, NodeProvider nodeProvider, Loader loader) throws IOException {
+        public Engine engine(
+                DataStore dataStore,
+                NodeProvider nodeProvider,
+                Loader loader,
+                @Value("${findpath.search-buffer-pool-size:1}") int searchBufferPoolSize,
+                @Value("${findpath.hot-road-cache-mode:index-only}") String hotRoadCacheMode) throws IOException {
             loader.extractData(false);
             ((HybridDataStore) dataStore).switchToMappingMode();
-            return new Engine(dataStore, nodeProvider);
+            return new Engine(dataStore, nodeProvider, searchBufferPoolSize, hotRoadCacheMode);
         }
     }
     

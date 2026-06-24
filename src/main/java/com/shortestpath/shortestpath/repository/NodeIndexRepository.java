@@ -24,7 +24,7 @@ public interface NodeIndexRepository extends JpaRepository<NodeIndex, Integer> {
         """
         SELECT id, coordinate, ST_Distance_Sphere(coordinate, ST_SRID(POINT(:#{#coordinate.longitude},:#{#coordinate.latitude}), 4326)) AS distance, offset 
         FROM node_index 
-        WHERE ST_Within(coordinate, ST_GeomFromText(:bbox, 4326, 'axis-order=long-lat')) 
+        WHERE MBRContains(ST_GeomFromText(:bbox, 4326, 'axis-order=long-lat'), coordinate) 
         ORDER BY distance 
         LIMIT 5;
         """, nativeQuery = true)

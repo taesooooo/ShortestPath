@@ -23,6 +23,7 @@ import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.SearchBufferPool.SearchBufferPair;
 import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -33,10 +34,21 @@ public class Engine {
 	private NodeProvider dataProvider;
 	private HotRoadCache hotRoadCache;
 	private static final int SEARCH_BUFFER_INITIAL_CAPACITY = 1024;
-	private final ThreadLocal<SearchBuffers> searchBuffers = ThreadLocal.withInitial(() -> new SearchBuffers(SEARCH_BUFFER_INITIAL_CAPACITY));
-	private final ThreadLocal<SearchBuffers> reverseSearchBuffers = ThreadLocal.withInitial(() -> new SearchBuffers(SEARCH_BUFFER_INITIAL_CAPACITY));
+	private final SearchBufferPool searchBufferPool;
 
 	public Engine(DataStore store, NodeProvider dataProvider) throws IOException {
+		this(store, dataProvider, 1);
+	}
+
+	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize) throws IOException {
+		this(store, dataProvider, searchBufferPoolSize, HotRoadCacheMode.INDEX_ONLY);
+	}
+
+	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize, String hotRoadCacheMode) throws IOException {
+		this(store, dataProvider, searchBufferPoolSize, HotRoadCacheMode.fromProperty(hotRoadCacheMode));
+	}
+
+	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize, HotRoadCacheMode hotRoadCacheMode) throws IOException {
 		if (store == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataStore가 null입니다..");
 		}
@@ -47,13 +59,19 @@ public class Engine {
 
 		this.store = store;
 		this.dataProvider = dataProvider;
-		this.hotRoadCache = HotRoadCache.load(store, store.canUseMappedViews());
+		this.hotRoadCache = HotRoadCache.load(store, store.canUseMappedViews(), hotRoadCacheMode);
+		this.searchBufferPool = new SearchBufferPool(searchBufferPoolSize, getInitialSearchBufferCapacity());
 
-		log.info("엔진 초기화 완료");
+		log.info("엔진 초기화 완료 - searchBufferPoolSize: {}, searchBufferCapacity: {}, hotRoadCacheMode: {}",
+				searchBufferPoolSize, searchBufferPool.bufferCapacity(), hotRoadCacheMode);
 	}
 
 	public DataStore getStore() {
 		return store;
+	}
+
+	private int getInitialSearchBufferCapacity() throws IOException {
+		return Math.max(SEARCH_BUFFER_INITIAL_CAPACITY, store.getTotalNodes());
 	}
 
 	/**
@@ -188,6 +206,7 @@ public class Engine {
 
 		long st = System.currentTimeMillis();
 		RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
+		// RouteSearchResult result = findPath(startNode, endNode, trackRoute);
 		long et = System.currentTimeMillis();
 		result.setSearchTime((et - st) / 1000.0);
 		log.info("경로 탐색 완료 - start: {}, end: {}, startNodeId: {}, endNodeId: {}, trackRoute: {}, searchTime: {}초",
@@ -212,7 +231,9 @@ public class Engine {
 		RouteTracker routeTracker = trackRoute ? new RouteTracker() : null;
 		RouteSearchResult result = new RouteSearchResult();
 		result.setRouteTracker(routeTracker);
-		SearchBuffers searchBuffer = searchBuffers.get();
+		SearchBufferPair bufferPair = searchBufferPool.take();
+		try {
+		SearchBuffers searchBuffer = bufferPair.forwardBuffer();
 		searchBuffer.prepare(Math.max(startNode.getId(), endNode.getId()));
 
 		PriorityQueue<SearchState> nodeQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
@@ -236,7 +257,7 @@ public class Engine {
 		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate().getLongitude(), startNode.getCoordinate().getLatitude(), endLon, endLat) / 100;
 
 		// 첫 노드 설정
-		searchBuffer.initializeStartNode(startNodeId, heuristic);
+		searchBuffer.initializeStartNode(startNodeId);
 		nodeQueue.add(new SearchState(startNodeId, -1L, 0, heuristic));
 
 		boolean found = false;
@@ -300,7 +321,7 @@ public class Engine {
 					}
 				} else if (currentLevel == RoadLevel.L1) {
 					// 만약 거리가 10키로 안쪽이라면 L1에서 바로 L2로 나갈 수 있도록 모든 엣지 제공
-					double distToTarget = getHeuristicCost(searchBuffer, minNodeId, endLon, endLat);
+					double distToTarget = getHeuristicCost(minNodeId, endLon, endLat);
 					if (distToTarget <= 0.1) {
 						connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
 					} else {
@@ -336,7 +357,7 @@ public class Engine {
 
 				// 더 짧은 경로를 발견한 경우
 				if (newDist < currentGCost) {
-					double hCost = getHeuristicCost(searchBuffer, toNodeId, endLon, endLat);
+					double hCost = getHeuristicCost(toNodeId, endLon, endLat);
 					double calFCost = newDist + (hCost * 1.5);
 					searchBuffer.updateCost(toNodeId, minNodeId, newDist);
 
@@ -366,6 +387,10 @@ public class Engine {
 	
 		result.setRouteNode(path);
 		return result;
+		} 
+		finally {
+			searchBufferPool.release(bufferPair);
+		}
 	}
 
 	private RouteSearchResult findBidirectionalPath(Node startNode, Node endNode, boolean trackRoute) throws IOException {
@@ -373,8 +398,10 @@ public class Engine {
 		RouteTracker routeTracker = trackRoute ? new RouteTracker() : null;
 		RouteSearchResult result = new RouteSearchResult();
 		result.setRouteTracker(routeTracker);
-		SearchBuffers forwardBuffer = searchBuffers.get();
-		SearchBuffers reverseBuffer = reverseSearchBuffers.get();
+		SearchBufferPair bufferPair = searchBufferPool.take();
+		try {
+		SearchBuffers forwardBuffer = bufferPair.forwardBuffer();
+		SearchBuffers reverseBuffer = bufferPair.reverseBuffer();
 		int maxEndpointId = Math.max(startNode.getId(), endNode.getId());
 		forwardBuffer.prepare(maxEndpointId);
 		reverseBuffer.prepare(maxEndpointId);
@@ -401,8 +428,8 @@ public class Engine {
 		double forwardStartHeuristic = getWeightedHeuristicCost(reverseTargetLon, reverseTargetLat, forwardTargetLon, forwardTargetLat);
 		double reverseStartHeuristic = getWeightedHeuristicCost(forwardTargetLon, forwardTargetLat, reverseTargetLon, reverseTargetLat);
 
-		forwardBuffer.initializeStartNode(startNodeId, forwardStartHeuristic);
-		reverseBuffer.initializeStartNode(endNodeId, reverseStartHeuristic);
+		forwardBuffer.initializeStartNode(startNodeId);
+		reverseBuffer.initializeStartNode(endNodeId);
 
 		forwardQueue.add(new SearchState(startNodeId, -1L, 0, forwardStartHeuristic));
 		reverseQueue.add(new SearchState(endNodeId, -1L, 0, reverseStartHeuristic));
@@ -432,6 +459,10 @@ public class Engine {
 
 		result.setRouteNode(path);
 		return result;
+		} 
+		finally {
+			searchBufferPool.release(bufferPair);
+		}
 	}
 
 	private void expandBidirectionalSide(
@@ -479,7 +510,7 @@ public class Engine {
 		int[] connectedEdges = getSearchConnectedEdges(edgeList, minNodeId, currentLevel, activeBuffer, reverseSide, targetLon, targetLat);
 
 		for (int edge : connectedEdges) {
-			boolean hotEdge = !reverseSide && hotRoadCache.containsEdge(edge);
+			boolean hotEdge = hotRoadCache.containsEdge(edge, reverseSide);
 
 			int toNodeId = getSearchEdgeNextNode(edge, edgeList, reverseSide, hotEdge);
 			activeBuffer.ensureCapacity(toNodeId);
@@ -498,7 +529,7 @@ public class Engine {
 			if (newDist < activeBuffer.getCurrentGCost(toNodeId)) {
 				activeBuffer.updateCost(toNodeId, minNodeId, newDist);
 
-				double heuristic = getWeightedHeuristicCost(activeBuffer, toNodeId, targetLon, targetLat);
+				double heuristic = getWeightedHeuristicCost(toNodeId, targetLon, targetLat);
 
 				queue.add(new SearchState(toNodeId, edge, newDist, newDist + heuristic));
 
@@ -588,16 +619,11 @@ public class Engine {
 		}
 	}
 
-	private double getHeuristicCost(SearchBuffers searchBuffer, int nodeId, double endLon, double endLat) throws IOException {
-		searchBuffer.ensureCapacity(nodeId);
-		if (!searchBuffer.hasHeuristic(nodeId)) {
-			Coordinate coordinate = getNodeCoordinate(nodeId);
-			double x = coordinate.getLongitude();
-			double y = coordinate.getLatitude();
-			searchBuffer.setHeuristic(nodeId, PathUtil.haversineDistance(x, y, endLon, endLat) / 100);
-		}
-
-		return searchBuffer.getHeuristic(nodeId);
+	private double getHeuristicCost(int nodeId, double endLon, double endLat) throws IOException {
+		Coordinate coordinate = getNodeCoordinate(nodeId);
+		double x = coordinate.getLongitude();
+		double y = coordinate.getLatitude();
+		return PathUtil.haversineDistance(x, y, endLon, endLat) / 100;
 	}
 
 	private double getDistanceToTargetCost(int nodeId, double endLon, double endLat) throws IOException {
@@ -605,15 +631,9 @@ public class Engine {
 		return PathUtil.haversineDistance(coordinate.getLongitude(), coordinate.getLatitude(), endLon, endLat) / 100;
 	}
 
-	private double getWeightedHeuristicCost(SearchBuffers searchBuffer, int nodeId, double targetLon, double targetLat)
-			throws IOException {
-		searchBuffer.ensureCapacity(nodeId);
-		if (!searchBuffer.hasHeuristic(nodeId)) {
-			Coordinate coordinate = getNodeCoordinate(nodeId);
-			searchBuffer.setHeuristic(nodeId, getWeightedHeuristicCost(coordinate.getLongitude(), coordinate.getLatitude(), targetLon, targetLat));
-		}
-
-		return searchBuffer.getHeuristic(nodeId);
+	private double getWeightedHeuristicCost(int nodeId, double targetLon, double targetLat) throws IOException {
+		Coordinate coordinate = getNodeCoordinate(nodeId);
+		return getWeightedHeuristicCost(coordinate.getLongitude(), coordinate.getLatitude(), targetLon, targetLat);
 	}
 
 	private double getWeightedHeuristicCost(double fromLon, double fromLat, double targetLon, double targetLat) {
@@ -647,7 +667,7 @@ public class Engine {
 
 	private int getSearchEdgeNextNode(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
 		if (hotEdge) {
-			return hotRoadCache.getEdgeTo(edgeOffset);
+			return hotRoadCache.getEdgeTo(edgeOffset, reverseSide);
 		}
 
 		if (reverseSide) {
@@ -674,15 +694,19 @@ public class Engine {
 	}
 
 	private RoadLevel getSearchEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide) throws IOException {
-		if (!reverseSide) {
-			return getEdgeRoadLevel(edgeOffset, edgeList);
+		if (hotRoadCache.containsEdge(edgeOffset, reverseSide)) {
+			return hotRoadCache.getEdgeRoadLevel(edgeOffset, reverseSide);
 		}
 
-		if (store.canUseMappedViews()) {
+		if (reverseSide && store.canUseMappedViews()) {
 			return store.viewReverseEdgeRoadLevel(edgeOffset);
 		}
 
-		return getCachedReverseEdge(edgeList, edgeOffset).getRoadLevel();
+		if (reverseSide) {
+			return getCachedReverseEdge(edgeList, edgeOffset).getRoadLevel();
+		}
+
+		return getEdgeRoadLevel(edgeOffset, edgeList);
 	}
 
 	private double getWeightedDistance(long offset, Map<Long, Edge> edgeList) throws IOException {
@@ -699,7 +723,7 @@ public class Engine {
 
 	private double getSearchWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
 		if (hotEdge) {
-			return hotRoadCache.getWeightedDistance(offset);
+			return hotRoadCache.getWeightedDistance(offset, reverseSide);
 		}
 
 		if (reverseSide) {
@@ -801,8 +825,8 @@ public class Engine {
 	}
 
 	private int[] getConnectedLevelEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
-		if (!reverseSide && hotRoadCache.supportsLevel(level)) {
-			return hotRoadCache.getConnectedLevelEdges(nodeId, level);
+		if (hotRoadCache.supportsLevel(level, reverseSide)) {
+			return hotRoadCache.getConnectedLevelEdges(nodeId, level, reverseSide);
 		}
 
 		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
@@ -897,16 +921,16 @@ public class Engine {
 		// currentLevel.ordinal() : currentLevel.ordinal() + 1;
 		RoadLevel nextRoadLevel = getNextLevel(currentLevel);
 
-		int count = !reverseSide && hotRoadCache.supportsLevel(currentLevel)
-				? hotRoadCache.getLevelEdgeCount(nodeId, currentLevel)
+		int count = hotRoadCache.supportsLevel(currentLevel, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, currentLevel, reverseSide)
 				: getIndexEdgeCount(index, nodeId, currentLevel);
 		int nextEdgeCount = nextRoadLevel != null
 				? getCachedOrIndexEdgeCount(index, nodeId, nextRoadLevel, reverseSide)
 				: 0;
 
 		int[] levelEdgeArray = new int[count + nextEdgeCount];
-		long startOffset = !reverseSide && hotRoadCache.supportsLevel(currentLevel)
-				? hotRoadCache.getLevelStartOffset(nodeId, currentLevel)
+		long startOffset = hotRoadCache.supportsLevel(currentLevel, reverseSide)
+				? hotRoadCache.getLevelStartOffset(nodeId, currentLevel, reverseSide)
 				: getIndexStartOffset(index, nodeId, currentLevel);
 
 		// 지정된 현재 계층의 엣지 추가
@@ -1030,14 +1054,14 @@ public class Engine {
 
 		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
 
-		int level0Count = !reverseSide && hotRoadCache.supportsLevel(RoadLevel.L0)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L0)
+		int level0Count = hotRoadCache.supportsLevel(RoadLevel.L0, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L0, reverseSide)
 				: getIndexEdgeCount(index, nodeId, RoadLevel.L0);
-		int level1Count = !reverseSide && hotRoadCache.supportsLevel(RoadLevel.L1)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L1)
+		int level1Count = hotRoadCache.supportsLevel(RoadLevel.L1, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L1, reverseSide)
 				: getIndexEdgeCount(index, nodeId, RoadLevel.L1);
-		int level2Count = !reverseSide && hotRoadCache.supportsLevel(RoadLevel.L2)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L2)
+		int level2Count = hotRoadCache.supportsLevel(RoadLevel.L2, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L2, reverseSide)
 				: getIndexEdgeCount(index, nodeId, RoadLevel.L2);
 		int edgeCount = level0Count + level1Count + level2Count;
 		int[] edgeArray = new int[edgeCount];
@@ -1049,16 +1073,16 @@ public class Engine {
 		long startOffset = 0;
 
 		if (level0Count > 0) {
-			startOffset = !reverseSide && hotRoadCache.supportsLevel(RoadLevel.L0)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L0)
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L0, reverseSide)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L0, reverseSide)
 					: getIndexStartOffset(index, nodeId, RoadLevel.L0);
 		} else if (level1Count > 0) {
-			startOffset = !reverseSide && hotRoadCache.supportsLevel(RoadLevel.L1)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L1)
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L1, reverseSide)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L1, reverseSide)
 					: getIndexStartOffset(index, nodeId, RoadLevel.L1);
 		} else {
-			startOffset = !reverseSide && hotRoadCache.supportsLevel(RoadLevel.L2)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L2)
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L2, reverseSide)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L2, reverseSide)
 					: getIndexStartOffset(index, nodeId, RoadLevel.L2);
 		}
 
@@ -1078,8 +1102,8 @@ public class Engine {
 	}
 
 	private int getCachedOrIndexEdgeCount(FileBasedEdgeIndex index, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
-		return !reverseSide && hotRoadCache.supportsLevel(level)
-				? hotRoadCache.getLevelEdgeCount(nodeId, level)
+		return hotRoadCache.supportsLevel(level, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, level, reverseSide)
 				: getIndexEdgeCount(index, nodeId, level);
 	}
 
@@ -1088,8 +1112,8 @@ public class Engine {
 	}
 
 	private long getCachedOrIndexStartOffset(FileBasedEdgeIndex index, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
-		return !reverseSide && hotRoadCache.supportsLevel(level)
-				? hotRoadCache.getLevelStartOffset(nodeId, level)
+		return hotRoadCache.supportsLevel(level, reverseSide)
+				? hotRoadCache.getLevelStartOffset(nodeId, level, reverseSide)
 				: getIndexStartOffset(index, nodeId, level);
 	}
 

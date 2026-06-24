@@ -19,6 +19,12 @@ public class TestRootContext {
 	@Value("${findpath.shp-path}")
 	private String shpFilePath;
 
+	@Value("${findpath.search-buffer-pool-size:1}")
+	private int searchBufferPoolSize;
+
+	@Value("${findpath.hot-road-cache-mode:index-only}")
+	private String hotRoadCacheMode;
+
 	@Bean
 	public Engine pathEngine(NodeProvider dataProvider, DataPersistence dataPersistence) throws Exception {
 		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent());
@@ -33,6 +39,6 @@ public class TestRootContext {
 			dataStore.setPersistence(dataPersistence);
 		}
 		
-		return new Engine(dataStore, dataProvider);
+		return new Engine(dataStore, dataProvider, searchBufferPoolSize, hotRoadCacheMode);
 	}
 }
