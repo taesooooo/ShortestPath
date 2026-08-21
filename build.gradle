@@ -13,21 +13,40 @@ java {
 	}
 }
 
+// 소스셋 설정
+sourceSets {
+	integrationTest {
+		java.srcDir 'src/integrationTest/java'
+		resources.srcDir 'src/integrationTest/resources'
+		compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+	}
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
 repositories {
-	mavenCentral()
 	maven {
 		url "https://repo.osgeo.org/repository/release"
 	}
+	mavenCentral()
 }
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
 	implementation group: 'org.hibernate.orm', name: 'hibernate-spatial', version: '6.6.13.Final'
 	// implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.projectlombok:lombok'
-	runtimeOnly 'com.mysql:mysql-connector-j'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	implementation 'com.mysql:mysql-connector-j'
+	implementation 'org.postgresql:postgresql'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	// testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -35,6 +54,36 @@ dependencies {
 	implementation group:'org.geotools', name:'gt-main', version: '33.0'
 	implementation group:'org.geotools', name:'gt-referencing', version: '33.0'
 	implementation group:'org.geotools', name:'gt-shapefile', version: '33.0'
+	// Source: https://mvnrepository.com/artifact/org.geotools/gt-cql
+	implementation 'org.geotools:gt-cql:33.2'
+	// Source: https://mvnrepository.com/artifact/org.geotools/gt-epsg-hsql
+	implementation 'org.geotools:gt-epsg-hsql:33.0'
+}
+
+
+tasks.register('integrationTest', Test) {
+	description = '통합 테스트 실행'
+	group = 'verification'
+
+	// 통합 테스트 소스 설정
+
+	// 통합 테스트 클래스가 컴파일된 위치 설정
+	testClassesDirs = sourceSets.integrationTest.output.classesDirs
+	// 테스트에 필요한 컴파일된 클래스들 위치 설정
+	classpath = sourceSets.integrationTest.runtimeClasspath
+
+	mustRunAfter tasks.test
+
+	useJUnitPlatform()
+}
+
+tasks.named('processIntegrationTestResources') {
+    // 중복 파일이 있어도 오류 발생하지 않도록 설정
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+tasks.check {
+    dependsOn tasks.integrationTest
 }
 
 tasks.named('test') {

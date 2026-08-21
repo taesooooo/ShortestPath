@@ -2,265 +2,1295 @@ package com.shortestpath.shortestpath.core.pathengine;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.locationtech.jts.geom.Envelope;
-import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.index.strtree.STRtree;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.util.comparator.Comparators;
 
-import com.shortestpath.shortestpath.repository.MapRepository;
-import com.shortestpath.shortestpath.util.PathUtil;
+import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
+import com.shortestpath.shortestpath.core.pathengine.SearchBufferPool.SearchBufferPair;
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
-import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class Engine {
-	private static final Logger log = LoggerFactory.getLogger(Engine.class);
-	
-	@Getter
-	private Graph graph;
-	private Loader loader;
-	private STRtree stRtree;
-	private final DataProvider dataProvider;
-//	private PriorityQueue<Node> openList;
-//	private HashSet<Node> closeList;
-//	private HashMap<Node, Node> location;
-		
-	public Engine(Loader loader, DataProvider dataProvider) throws IOException {
-		if(loader == null) {
-			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. 로더가 null입니다..");
+	private DataStore store;
+	private NodeProvider dataProvider;
+	private HotRoadCache hotRoadCache;
+	private static final int SEARCH_BUFFER_INITIAL_CAPACITY = 1024;
+	private final SearchBufferPool searchBufferPool;
+
+	public Engine(DataStore store, NodeProvider dataProvider) throws IOException {
+		this(store, dataProvider, 1);
+	}
+
+	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize) throws IOException {
+		this(store, dataProvider, searchBufferPoolSize, HotRoadCacheMode.INDEX_ONLY);
+	}
+
+	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize, String hotRoadCacheMode) throws IOException {
+		this(store, dataProvider, searchBufferPoolSize, HotRoadCacheMode.fromProperty(hotRoadCacheMode));
+	}
+
+	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize, HotRoadCacheMode hotRoadCacheMode) throws IOException {
+		if (store == null) {
+			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataStore가 null입니다..");
 		}
-		
-		if(dataProvider == null) {
+
+		if (dataProvider == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataProvider가 null입니다.");
 		}
-		
-		this.loader = loader;
+
+		this.store = store;
 		this.dataProvider = dataProvider;
-		try {
-			log.info("지도 링크 데이터 로드 시작");
-	        this.graph = this.loader.loadData();
-	        this.loader.dispose();
-	    } catch (IOException e) {
-	        log.error("로드 중 오류 발생: {}", e.getMessage(), e);
-	        throw e; // 예외를 다시 던져서 상위에서 처리하도록 함
-	    }
-		log.info("엔진 초기화 완료");
+		this.hotRoadCache = HotRoadCache.load(store, store.canUseMappedViews(), hotRoadCacheMode);
+		this.searchBufferPool = new SearchBufferPool(searchBufferPoolSize, getInitialSearchBufferCapacity());
+
+		log.info("엔진 초기화 완료 - searchBufferPoolSize: {}, searchBufferCapacity: {}, hotRoadCacheMode: {}",
+				searchBufferPoolSize, searchBufferPool.bufferCapacity(), hotRoadCacheMode);
 	}
-	
+
+	public DataStore getStore() {
+		return store;
+	}
+
+	private int getInitialSearchBufferCapacity() throws IOException {
+		return Math.max(SEARCH_BUFFER_INITIAL_CAPACITY, store.getTotalNodes());
+	}
+
 	/**
-	 * 그래프에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
+	 *
+	 * L0 (고속도로): 100 km/h, 가중치 0.8 → 선호 (시간 0.8배 + 가중치 할인)
+	 * L1 (일반도로): 60 km/h, 가중치 1.0 → 표준
+	 * L2 (지방도로): 40 km/h, 가중치 1.2 → 회피 (시간 느림 + 가중치 페널티)
+	 *
+	 * @param edge 엣지
+	 * @return 속도와 가중치를 고려한 비용 (거리/속도) × 가중치
+	 */
+	private double getWeightedDistance(long offset) {
+		double baseDistance = store.viewEdgeDistance(offset);
+		double speed; // km/h
+		double weight; // 추가 가중치
+
+		switch (store.viewEdgeRoadLevel(offset)) {
+			case L0:
+				speed = 100; // 고속도로
+				weight = 0.5; // 선호 (할인)
+				break;
+			case L1:
+				speed = 60; // 일반도로
+				weight = 1.0; // 표준
+				break;
+			case L2:
+				speed = 30; // 지방도로
+				weight = 1.5; // 회피 (페널티)
+				break;
+			default:
+				speed = 20;
+				weight = 2.5;
+		}
+
+		// 최종 비용 = (거리 / 속도) × 가중치
+		double timeCost = (baseDistance / speed) * weight;
+
+		return timeCost;
+	}
+
+	private double getWeightedDistance(Edge edge) {
+		double baseDistance = edge.getDistance();
+		double speed; // km/h
+		double weight; // 추가 가중치
+
+		switch (edge.getRoadLevel()) {
+			case L0:
+				speed = 100; // 고속도로
+				weight = 0.5; // 선호 (할인)
+				break;
+			case L1:
+				speed = 60; // 일반도로
+				weight = 1.0; // 표준
+				break;
+			case L2:
+				speed = 30; // 지방도로
+				weight = 1.5; // 회피 (페널티)
+				break;
+			default:
+				speed = 20;
+				weight = 2.5;
+		}
+
+		// 최종 비용 = (거리 / 속도) × 가중치
+		double timeCost = (baseDistance / speed) * weight;
+
+		return timeCost;
+	}
+
+	/**
+	 * 저장소에 있는 노드를 이용하여 경로를 탐색하여 리스트로 반환합니다.
+	 *
 	 * @param startNode
 	 * @param endNode
-	 * @return 탐색된 최단 경로 리스트
+	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
 	 * @throws NullPointerException
+	 * @throws IOException
 	 */
-	public ArrayList<Node> shortestPathFind(Node startNode, Node endNode) throws NullPointerException {
-		if(startNode == null || endNode == null) {
+	public RouteSearchResult shortestPathFind(Node startNode, Node endNode, boolean trackRoute) throws NullPointerException, IOException {
+		if (startNode == null || endNode == null) {
 			throw new NullPointerException("탐색에 필요한 노드가 없습니다.");
 		}
-		
-		return findPath(startNode, endNode);
+
+		long st = System.currentTimeMillis();
+		RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
+		long et = System.currentTimeMillis();
+		result.setSearchTime((et - st) / 1000.0);
+		log.info("경로 탐색 완료 - startNodeId: {}, endNodeId: {}, trackRoute: {}, searchTime: {}초",
+				startNode.getId(), endNode.getId(), trackRoute, result.getSearchTime());
+
+		return result;
 	}
-	
+
 	/**
 	 * 좌표를 이용하여 경로를 탐색하고 탐색 경로를 리스트로 반환합니다.
-	 * 주어진 좌표가 그래프에 없는 좌표 또는 이어진 좌표가 아니라면 주어진 좌표에서
+	 * 주어진 좌표가 저장소에 없는 좌표 또는 이어진 좌표가 아니라면 주어진 좌표에서
 	 * 가까운 라인의 좌표가 생성되어 경로를 탐색합니다.
+	 *
 	 * @param startCoordinate
 	 * @param endCoordinate
-	 * @return 탐색된 최단 경로 리스트
+	 * @return 탐색된 최단 경로 리스트, null은 연결된 노드가 없어 탐색이 불가능한 경우
+	 * @throws IOException
 	 */
-	public ArrayList<Node> shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate) {
-		Node startNode = graph.getNode(startCoordinate);
-		Node endNode = graph.getNode(endCoordinate);
+	public RouteSearchResult shortestPathFind(Coordinate startCoordinate, Coordinate endCoordinate, boolean trackRoute) throws IOException, EmptyGeometryListException {
+		Node startNode = null;
+		Node endNode = null;
 		Coordinate startNearestPoint = null;
 		Coordinate endNearestPoint = null;
-		
-		if(startNode == null) {
+
+		if (startNode == null) {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
-			Coordinate[] linePoints = findNearestLineCoordinate(startCoordinate);
-			startNearestPoint = calculateNearestPointOnLine(linePoints[0], linePoints[1], startCoordinate); 
-			startNode = findNearestNode(linePoints, startNearestPoint);
+			Node nearestNode = findNearestNode(startCoordinate);
+			Edge nearestEdge = findNearestEdge(nearestNode, startCoordinate);
+			Node fromNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getFrom()));
+			Node toNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getTo()));
+			startNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), startCoordinate);
+
+			startNode = nearestNode;
 		}
-		
-		if(endNode == null) {
+
+		if (endNode == null) {
 			// 가까운 라인의 시작 과 끝 좌표를 가져온다.
-			Coordinate[] linePoints = findNearestLineCoordinate(endCoordinate);
-			endNearestPoint = calculateNearestPointOnLine(linePoints[0], linePoints[1], endCoordinate); 
-			endNode = findNearestNode(linePoints, endNearestPoint);
+			Node nearestNode = findNearestNode(endCoordinate);
+			Edge nearestEdge = findNearestEdge(nearestNode, endCoordinate);
+			Node fromNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getFrom()));
+			Node toNode = store.readNode(DataStructureSizes.calculateNodeOffset(nearestEdge.getTo()));
+			endNearestPoint = calculateNearestPointOnLine(fromNode.getCoordinate(), toNode.getCoordinate(), endCoordinate);
+			// endNode = findNearestNode(fromNode, toNode, endNearestPoint);
+			endNode = nearestNode;
 		}
+		log.info("노드 탐색 완료 / 경로 탐색 시작");
+
 		long st = System.currentTimeMillis();
-		
-		ArrayList<Node> resultPath = findPath(startNode, endNode);
-		
+		RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
+		// RouteSearchResult result = findPath(startNode, endNode, trackRoute);
 		long et = System.currentTimeMillis();
-		
-		log.info("탐색 완료 시간 - " + (et-st) / 1000.0);
-		
-		if(startNearestPoint != null) {
-			Node node = new Node();
-			node.setCoordinate(startNearestPoint);
-			resultPath.add(0, node);
-		}
-		
-		if(endNearestPoint != null) {
-			Node node = new Node();
-			node.setCoordinate(endNearestPoint);
-			resultPath.add(node);
-		}
-		
-		return resultPath;
+		result.setSearchTime((et - st) / 1000.0);
+		log.info("경로 탐색 완료 - start: {}, end: {}, startNodeId: {}, endNodeId: {}, trackRoute: {}, searchTime: {}초",
+				startCoordinate, endCoordinate, startNode.getId(), endNode.getId(), trackRoute, result.getSearchTime());
+
+		return result;
 	}
-	
+
 	/**
-	 * 좌표 배열에서 목표 좌표에 가장 가까운 좌표를 찾고 찾은 좌표를 이용해 그래프에서 좌표에 해당하는 노드를 찾아 반환합니다.
-	 * 가장 가까운 좌표인지 비교하는 방법은 유클리드 거리 공식을 이용하여 배열에 있는 좌표들을 모두 비교합니다.
-	 * @param coordinateArray
-	 * @param targetCoordinate
-	 * @return 그래프에서 노드를 찾아 반환
+	 * A* 알고리즘을 이용해 시작 노드에서 종료 노드까지의 최단 경로를 탐색합니다.
+	 * 각 노드의 gCost(시작점부터 현재 노드까지의 거리), hCost(목적지까지의 휴리스틱, 하버사인 거리), fCost(gCost +
+	 * hCost)를 계산하여
+	 * 우선순위 큐를 사용해 가장 fCost가 낮은 노드를 우선적으로 탐색합니다.
+	 *
+	 * @param startNode 출발 노드
+	 * @param endNode   도착 노드
+	 * @return 최단 경로에 포함된 노드 리스트(순서대로)
+	 * @throws IOException
 	 */
-	private Node findNearestNode(Coordinate[] coordinateArray, Coordinate targetCoordinate) {
-		double minDistance = Double.MAX_VALUE;
-		Coordinate minCoordinate = null;
-		
-		for(Coordinate coordinate : coordinateArray) {
-			double distance = coordinate.calculateDistanceToTarget(targetCoordinate);
-			if(distance < minDistance) {
-				minCoordinate = coordinate;
-				minDistance = distance; 
-			}
+	private RouteSearchResult findPath(Node startNode, Node endNode, boolean trackRoute) throws IOException {
+		log.info("싱글 탐색 시작");
+		RouteTracker routeTracker = trackRoute ? new RouteTracker() : null;
+		RouteSearchResult result = new RouteSearchResult();
+		result.setRouteTracker(routeTracker);
+		SearchBufferPair bufferPair = searchBufferPool.take();
+		try {
+		SearchBuffers searchBuffer = bufferPair.forwardBuffer();
+		searchBuffer.prepare(Math.max(startNode.getId(), endNode.getId()));
+
+		PriorityQueue<SearchState> nodeQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
+
+		// 노드와 엣지 캐싱 맵
+		HashMap<Long, Edge> edgeList = new HashMap<>();
+
+		int startNodeId = startNode.getId();
+		int endNodeId = endNode.getId();
+		double endLon = endNode.getCoordinate().getLongitude();
+		double endLat = endNode.getCoordinate().getLatitude();
+
+		if (startNodeId == endNodeId) {
+			ArrayList<Node> path = new ArrayList<Node>();
+			path.add(startNode);
+			result.setRouteNode(path);
+			return result;
 		}
-		
-		return graph.getNode(minCoordinate);
-	}
-	
-	private ArrayList<Node> findPath(Node startNode, Node endNode) {
-		PriorityQueue<Cost> openList = new PriorityQueue<Cost>(Comparator.comparingDouble(c -> c.getFCost()));
-		HashSet<Cost> closeList = new HashSet<Cost>();
-		HashMap<Node, Node> location = new HashMap<Node, Node>();
-		HashMap<Node, Cost> costList = new HashMap<Node, Cost>();
-		
-		//		for(Node node : graph.getAllNodes()) {  
-		//		node.calculateHeuristic(endNode);  // 목적지로 휴리스틱 선계산
-		//	}
 
-		// AStar
-		double heuristic = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
-		Cost startCost = new Cost(startNode, 0, heuristic, 0 + heuristic);
-		openList.add(startCost);
-		costList.put(startNode, startCost);
+		// 시작 노드의 휴리스틱(목적지까지의 하버사인 거리) 계산
+		double heuristic = PathUtil.haversineDistance(startNode.getCoordinate().getLongitude(), startNode.getCoordinate().getLatitude(), endLon, endLat) / 100;
 
-		while(!openList.isEmpty()) {
-			Cost minNode = openList.poll();
-			Cost minNodeCost = costList.get(minNode.getNode());
+		// 첫 노드 설정
+		searchBuffer.initializeStartNode(startNodeId);
+		nodeQueue.add(new SearchState(startNodeId, -1L, 0, heuristic));
 
-			if(minNode.getNode().equals(endNode)) {
-				log.info("경로 탐색 종료");
+		boolean found = false;
+
+		while (!nodeQueue.isEmpty()) {
+			SearchState min = nodeQueue.poll();
+			int minNodeId = min.getNodeId();
+			long minEdge = min.getEdgeOffset();
+			searchBuffer.ensureCapacity(minNodeId);
+			if (!searchBuffer.hasCost(minNodeId)) {
+				continue;
+			}
+
+			double minGCost = searchBuffer.getCurrentGCost(minNodeId);
+			if (min.getgCost() > minGCost) {
+				continue;
+			}
+
+			TraceRoute traceRoute = null;
+			if (routeTracker != null) {
+				traceRoute = new TraceRoute(getNodeCoordinate(minNodeId), SearchSide.FORWARD);
+				routeTracker.addTraceRoute(traceRoute);
+			}
+
+			// // 이미 방문한 노드는 건너뜀
+			if (searchBuffer.isVisited(minNodeId)) {
+				continue;
+			}
+
+			if (minNodeId == endNodeId) {
+				found = true;
 				break;
 			}
 
-			closeList.add(minNode);
+			searchBuffer.markVisited(minNodeId);
 
-			for(Edge edge : minNode.getNode().getEdge().values()) {
-				Cost toCost = costList.get(edge.getTo());
-				if(toCost == null) {
-					toCost = new Cost(edge.getTo(), Double.MAX_VALUE, 0, 0);
-					costList.put(edge.getTo(), toCost);
+			// 현재 노드에 도달한 엣지의 계층으로 매번 업데이트
+			// (L2 → L1 → L0 → L1 → L2 등 자유롭게 이동 가능
+			RoadLevel currentLevel = null; // 현재 진행 중인 도로 계층 (null이면 모든 계층)
+			if (minEdge != -1) {
+				currentLevel = getEdgeRoadLevel(minEdge, edgeList);
+			}
+
+			int[] connectedEdges;
+
+			// 현재 계층에 따른 엣지 제공
+			if (currentLevel != null) {
+				boolean isGate = false;
+				if (currentLevel == RoadLevel.L0) {
+					// L0(고속도로)에서는 게이트 노드에서만 다른 계층으로 전환 가능
+					if (isGate) {
+						// 게이트 노드면 모든 엣지 제공 (다른 계층 진출 가능)
+						connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
+					} else {
+						// 게이트가 아니면 L0 엣지만 제공 (같은 계층 유지)
+						connectedEdges = getConnectedLevelEdgesByNodeId(edgeList, minNodeId, RoadLevel.L0);
+						// L0 엣지가 없으면 모든 엣지 (고속도로 끝나는 지점)
+						if (connectedEdges.length == 0) {
+							connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
+						}
+					}
+				} else if (currentLevel == RoadLevel.L1) {
+					// 만약 거리가 10키로 안쪽이라면 L1에서 바로 L2로 나갈 수 있도록 모든 엣지 제공
+					double distToTarget = getHeuristicCost(minNodeId, endLon, endLat);
+					if (distToTarget <= 0.1) {
+						connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
+					} else {
+						connectedEdges = getConnectedLevelEdgesWithExitByNodeId(edgeList, minNodeId, currentLevel);
+					}
+				} else {
+					// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
+					connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
 				}
-				
-				if(closeList.contains(toCost)) {
+			} else {
+				// 초기 상태면 모든 엣지 사용 (모든 계층 탐색)
+				connectedEdges = getConnectedEdgesByNodeId(edgeList, minNodeId);
+			}
+
+			for (int edge : connectedEdges) {
+				boolean hotEdge = hotRoadCache.containsEdge(edge);
+				int toNodeId = hotEdge ? hotRoadCache.getEdgeTo(edge) : getEdgeTo(edge, edgeList);
+				searchBuffer.ensureCapacity(toNodeId);
+
+				// 이미 방문한 노드는 건너뜀
+				if (searchBuffer.isVisited(toNodeId)) {
 					continue;
 				}
-				
-				
-				double newDist = minNodeCost.getGCost() + edge.getDistance();
-				if(!openList.contains(toCost) && newDist < toCost.getGCost()) {
-					double hCost = PathUtil.haversine(edge.getTo().getCoordinate(), endNode.getCoordinate());
-					double fCost = newDist + hCost;
-					Cost c = new Cost(edge.getTo(), newDist, hCost, fCost);
-					costList.put(edge.getTo(), c);
-					
-					openList.add(c);
-					location.put(edge.getTo(), minNode.getNode());
+
+				if (routeTracker != null && traceRoute != null) {
+					traceRoute.addChild(getNodeCoordinate(toNodeId));
+				}
+
+				// 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산 - roadLevel 가중치 적용
+				double edgeCost = hotEdge ? hotRoadCache.getWeightedDistance(edge) : getWeightedDistance(edge, edgeList);
+				double newDist = minGCost + edgeCost;
+				double currentGCost = searchBuffer.getCurrentGCost(toNodeId);
+
+				// 더 짧은 경로를 발견한 경우
+				if (newDist < currentGCost) {
+					double hCost = getHeuristicCost(toNodeId, endLon, endLat);
+					double calFCost = newDist + (hCost * 1.5);
+					searchBuffer.updateCost(toNodeId, minNodeId, newDist);
+
+					nodeQueue.add(new SearchState(toNodeId, edge, newDist, calFCost));
 				}
 			}
 		}
-		
-		// 탐색 결과 역추적
+
+		// 탐색 결과를 역추적하여 경로 리스트 생성
 		ArrayList<Node> path = new ArrayList<Node>();
-		Node node = location.get(endNode);
-		while(node != null) {
-			path.add(node);
-			node = location.get(node);
+		if (!found) {
+			return result;
 		}
-		
-		Collections.reverse(path);
-		
-		// 마지막 좌표 추가
-		path.add(endNode);
-		
-		return path;
-	}
-	
-	/**
-	 * 주어진 좌표와 거리가 가까운 라인의 시작과 끝 좌표를 찾아 반환합니다.
-	 * @param coordinate
-	 * @return 배열 첫 번째는 시작 좌표 마지막 배열 값은 마지막 좌표
-	 */
-	private Coordinate[] findNearestLineCoordinate(Coordinate coordinate) {
-		org.locationtech.jts.geom.Coordinate convertCoordinate = new org.locationtech.jts.geom.Coordinate(coordinate.getLongitude(), coordinate.getLatitude());
-		Point point = new GeometryFactory().createPoint(convertCoordinate);
 
-		List<Geometry> geoList = dataProvider.findNearestLine(point.getX(), point.getY(), 0.001);
-		
-		if(geoList.isEmpty()) {
-			throw new EmptyGeometryListException("지오메트리 리스트가 비어있습니다. 데이터베이스 또는 DataProvider를 확인해주세요.");
+		int nodeId = endNodeId;
+		int hopCount = 0;
+		while (nodeId != startNodeId) {
+			if (!searchBuffer.hasCost(nodeId) || hopCount++ > searchBuffer.capacity()) {
+				return result;
+			}
+			path.add(store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)));
+			nodeId = searchBuffer.getPreviousNode(nodeId);
 		}
-		
-		// 후보 라인 중 거리가 제일 가까운 라인 검색
-		Geometry nearestGeoLine = null;
-		double minDistance = Double.MAX_VALUE;
-		
-		for(Geometry geo : geoList) {
-			double distance = geo.distance(point);
-			if(distance < minDistance) {
-				minDistance = distance;
-				nearestGeoLine = geo;
+
+		path.add(startNode);
+		Collections.reverse(path);
+	
+		result.setRouteNode(path);
+		return result;
+		} 
+		finally {
+			searchBufferPool.release(bufferPair);
+		}
+	}
+
+	private RouteSearchResult findBidirectionalPath(Node startNode, Node endNode, boolean trackRoute) throws IOException {
+		log.info("양방향 탐색 시작");
+		RouteTracker routeTracker = trackRoute ? new RouteTracker() : null;
+		RouteSearchResult result = new RouteSearchResult();
+		result.setRouteTracker(routeTracker);
+		SearchBufferPair bufferPair = searchBufferPool.take();
+		try {
+		SearchBuffers forwardBuffer = bufferPair.forwardBuffer();
+		SearchBuffers reverseBuffer = bufferPair.reverseBuffer();
+		int maxEndpointId = Math.max(startNode.getId(), endNode.getId());
+		forwardBuffer.prepare(maxEndpointId);
+		reverseBuffer.prepare(maxEndpointId);
+
+		PriorityQueue<SearchState> forwardQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
+		PriorityQueue<SearchState> reverseQueue = new PriorityQueue<SearchState>(Comparator.comparingDouble(SearchState::getfCost));
+		HashMap<Long, Edge> edgeList = new HashMap<>();
+		HashMap<Long, Edge> reverseEdgeList = new HashMap<>();
+
+		int startNodeId = startNode.getId();
+		int endNodeId = endNode.getId();
+		double forwardTargetLon = endNode.getCoordinate().getLongitude();
+		double forwardTargetLat = endNode.getCoordinate().getLatitude();
+		double reverseTargetLon = startNode.getCoordinate().getLongitude();
+		double reverseTargetLat = startNode.getCoordinate().getLatitude();
+
+		if (startNodeId == endNodeId) {
+			ArrayList<Node> path = new ArrayList<Node>();
+			path.add(startNode);
+			result.setRouteNode(path);
+			return result;
+		}
+
+		double forwardStartHeuristic = getWeightedHeuristicCost(reverseTargetLon, reverseTargetLat, forwardTargetLon, forwardTargetLat);
+		double reverseStartHeuristic = getWeightedHeuristicCost(forwardTargetLon, forwardTargetLat, reverseTargetLon, reverseTargetLat);
+
+		forwardBuffer.initializeStartNode(startNodeId);
+		reverseBuffer.initializeStartNode(endNodeId);
+
+		forwardQueue.add(new SearchState(startNodeId, -1L, 0, forwardStartHeuristic));
+		reverseQueue.add(new SearchState(endNodeId, -1L, 0, reverseStartHeuristic));
+
+		MeetingState meeting = new MeetingState();
+
+		while (!forwardQueue.isEmpty() && !reverseQueue.isEmpty()) {
+			if (meeting.hasMeeting()
+					&& forwardQueue.peek().getfCost() >= meeting.bestCost
+					&& reverseQueue.peek().getfCost() >= meeting.bestCost) {
+				break;
+			}
+
+			boolean expandForward = forwardQueue.peek().getfCost() <= reverseQueue.peek().getfCost();
+			if (expandForward) {
+				expandBidirectionalSide(forwardQueue, forwardBuffer, reverseBuffer, edgeList, false, forwardTargetLon, forwardTargetLat, meeting, routeTracker);
+			} else {
+				expandBidirectionalSide(reverseQueue, forwardBuffer, reverseBuffer, reverseEdgeList, true, reverseTargetLon, reverseTargetLat, meeting, routeTracker);
 			}
 		}
 
-		org.locationtech.jts.geom.Coordinate[] lines = nearestGeoLine.getCoordinates();
+		if (!meeting.hasMeeting()) {
+			return result;
+		}
+
+		ArrayList<Node> path = buildBidirectionalPath(startNode, endNode, meeting.nodeId, forwardBuffer, reverseBuffer);
+
+		result.setRouteNode(path);
+		return result;
+		} 
+		finally {
+			searchBufferPool.release(bufferPair);
+		}
+	}
+
+	private void expandBidirectionalSide(
+			PriorityQueue<SearchState> queue,
+			SearchBuffers startBuffer,
+			SearchBuffers endBuffer,
+			Map<Long, Edge> edgeList,
+			boolean reverseSide,
+			double targetLon,
+			double targetLat,
+			MeetingState meeting,
+			RouteTracker routeTracker) throws IOException {
+		SearchBuffers activeBuffer = reverseSide ? endBuffer : startBuffer;
+		SearchBuffers oppositeBuffer = reverseSide ? startBuffer : endBuffer;
+		SearchState min = queue.poll();
+		int minNodeId = min.getNodeId();
+		long minEdge = min.getEdgeOffset();
+		activeBuffer.ensureCapacity(minNodeId);
+		if (!activeBuffer.hasCost(minNodeId)) {
+			return;
+		}
+
+		double minGCost = activeBuffer.getCurrentGCost(minNodeId);
+		if (min.getgCost() > minGCost || activeBuffer.isVisited(minNodeId)) {
+			return;
+		}
+
+		activeBuffer.markVisited(minNodeId);
+		TraceRoute traceRoute = null;
+		if (routeTracker != null) {
+			SearchSide searchSide = reverseSide ? SearchSide.REVERSE : SearchSide.FORWARD;
+			traceRoute = new TraceRoute(getNodeCoordinate(minNodeId), searchSide);
+			routeTracker.addTraceRoute(traceRoute);
+		}
+
+		if (oppositeBuffer.hasCost(minNodeId)) {
+			meeting.accept(minNodeId, minGCost + oppositeBuffer.getCurrentGCost(minNodeId));
+		}
+
+		RoadLevel currentLevel = null;
+		if (minEdge != -1) {
+			currentLevel = getSearchEdgeRoadLevel(minEdge, edgeList, reverseSide);
+		}
+
+		int[] connectedEdges = getSearchConnectedEdges(edgeList, minNodeId, currentLevel, activeBuffer, reverseSide, targetLon, targetLat);
+
+		for (int edge : connectedEdges) {
+			boolean hotEdge = hotRoadCache.containsEdge(edge, reverseSide);
+
+			int toNodeId = getSearchEdgeNextNode(edge, edgeList, reverseSide, hotEdge);
+			activeBuffer.ensureCapacity(toNodeId);
+
+			if (activeBuffer.isVisited(toNodeId)) {
+				continue;
+			}
+
+			if (traceRoute != null) {
+				traceRoute.addChild(getNodeCoordinate(toNodeId));
+			}
+
+			double edgeCost = getSearchWeightedDistance(edge, edgeList, reverseSide, hotEdge);
+			double newDist = minGCost + edgeCost;
+
+			if (newDist < activeBuffer.getCurrentGCost(toNodeId)) {
+				activeBuffer.updateCost(toNodeId, minNodeId, newDist);
+
+				double heuristic = getWeightedHeuristicCost(toNodeId, targetLon, targetLat);
+
+				queue.add(new SearchState(toNodeId, edge, newDist, newDist + heuristic));
+
+				if (oppositeBuffer.hasCost(toNodeId)) {
+					meeting.accept(toNodeId, newDist + oppositeBuffer.getCurrentGCost(toNodeId));
+				}
+			}
+		}
+	}
+
+	private int[] getSearchConnectedEdges(
+			Map<Long, Edge> edgeList,
+			int nodeId,
+			RoadLevel currentLevel,
+			SearchBuffers searchBuffer,
+			boolean reverseSide,
+			double targetLon,
+			double targetLat) throws IOException {
+		if (currentLevel == null) {
+			return getConnectedEdgesByNodeId(edgeList, nodeId, reverseSide);
+		}
+
+		if (currentLevel == RoadLevel.L0) {
+			int[] levelEdges = getConnectedLevelEdgesByNodeId(edgeList, nodeId, RoadLevel.L0, reverseSide);
+			if (levelEdges.length == 0) {
+				return getConnectedEdgesByNodeId(edgeList, nodeId, reverseSide);
+			}
+
+			return levelEdges;
+		}
+
+		if (currentLevel == RoadLevel.L1) {
+			double distToTarget = getDistanceToTargetCost(nodeId, targetLon, targetLat);
+			if (distToTarget <= 0.1) {
+				return getConnectedEdgesByNodeId(edgeList, nodeId, reverseSide);
+			}
+
+			return getConnectedLevelEdgesWithExitByNodeId(edgeList, nodeId, currentLevel, reverseSide);
+		}
+
+		return getConnectedEdgesByNodeId(edgeList, nodeId, reverseSide);
+	}
+
+	private ArrayList<Node> buildBidirectionalPath(Node startNode, Node endNode, int meetingNodeId, SearchBuffers forwardBuffer, SearchBuffers reverseBuffer) throws IOException {
+		ArrayList<Node> forwardPath = new ArrayList<Node>();
+		int nodeId = meetingNodeId;
+		int hopCount = 0;
+		while (nodeId != startNode.getId()) {
+			if (!forwardBuffer.hasCost(nodeId) || hopCount++ > forwardBuffer.capacity()) {
+				return null;
+			}
+			forwardPath.add(store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)));
+			nodeId = forwardBuffer.getPreviousNode(nodeId);
+		}
+		forwardPath.add(startNode);
+		Collections.reverse(forwardPath);
+
+		nodeId = reverseBuffer.getPreviousNode(meetingNodeId);
+		hopCount = 0;
+		while (nodeId != -1 && nodeId != endNode.getId()) {
+			if (!reverseBuffer.hasCost(nodeId) || hopCount++ > reverseBuffer.capacity()) {
+				return null;
+			}
+			forwardPath.add(store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)));
+			nodeId = reverseBuffer.getPreviousNode(nodeId);
+		}
+		if (forwardPath.isEmpty() || forwardPath.get(forwardPath.size() - 1).getId() != endNode.getId()) {
+			forwardPath.add(endNode);
+		}
+
+		return forwardPath;
+	}
+
+	private static final class MeetingState {
+		private int nodeId = -1;
+		private double bestCost = Double.MAX_VALUE;
+
+		private boolean hasMeeting() {
+			return nodeId != -1;
+		}
+
+		private void accept(int candidateNodeId, double candidateCost) {
+			if (candidateCost < bestCost) {
+				nodeId = candidateNodeId;
+				bestCost = candidateCost;
+			}
+		}
+	}
+
+	private double getHeuristicCost(int nodeId, double endLon, double endLat) throws IOException {
+		Coordinate coordinate = getNodeCoordinate(nodeId);
+		double x = coordinate.getLongitude();
+		double y = coordinate.getLatitude();
+		return PathUtil.haversineDistance(x, y, endLon, endLat) / 100;
+	}
+
+	private double getDistanceToTargetCost(int nodeId, double endLon, double endLat) throws IOException {
+		Coordinate coordinate = getNodeCoordinate(nodeId);
+		return PathUtil.haversineDistance(coordinate.getLongitude(), coordinate.getLatitude(), endLon, endLat) / 100;
+	}
+
+	private double getWeightedHeuristicCost(int nodeId, double targetLon, double targetLat) throws IOException {
+		Coordinate coordinate = getNodeCoordinate(nodeId);
+		return getWeightedHeuristicCost(coordinate.getLongitude(), coordinate.getLatitude(), targetLon, targetLat);
+	}
+
+	private double getWeightedHeuristicCost(double fromLon, double fromLat, double targetLon, double targetLat) {
+		return (PathUtil.haversineDistance(fromLon, fromLat, targetLon, targetLat) / 100) * 1.5;
+	}
+
+	private Coordinate getNodeCoordinate(int nodeId) throws IOException {
+		Coordinate cachedCoordinate = hotRoadCache.getNodeCoordinate(nodeId);
+		if (cachedCoordinate != null) {
+			return cachedCoordinate;
+		}
+
+		if (store.canUseMappedViews()) {
+			return new Coordinate(store.viewNodeYCoordinate(nodeId), store.viewNodeXCoordinate(nodeId));
+		}
+
+		return store.readNode(DataStructureSizes.calculateNodeOffset(nodeId)).getCoordinate();
+	}
+
+	private int getEdgeTo(long edgeOffset, Map<Long, Edge> edgeList) throws IOException {
+		if (hotRoadCache.containsEdge(edgeOffset)) {
+			return hotRoadCache.getEdgeTo(edgeOffset);
+		}
+
+		if (store.canUseMappedViews()) {
+			return store.viewEdgeTo(edgeOffset);
+		}
+
+		return getCachedEdge(edgeList, edgeOffset).getTo();
+	}
+
+	private int getSearchEdgeNextNode(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
+		if (hotEdge) {
+			return hotRoadCache.getEdgeTo(edgeOffset, reverseSide);
+		}
+
+		if (reverseSide) {
+			if (store.canUseMappedViews()) {
+				return store.viewReverseEdgeFrom(edgeOffset);
+			}
+
+			return getCachedReverseEdge(edgeList, edgeOffset).getFrom();
+		}
+
+		return getEdgeTo(edgeOffset, edgeList);
+	}
+
+	private RoadLevel getEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList) throws IOException {
+		if (hotRoadCache.containsEdge(edgeOffset)) {
+			return hotRoadCache.getEdgeRoadLevel(edgeOffset);
+		}
+
+		if (store.canUseMappedViews()) {
+			return store.viewEdgeRoadLevel(edgeOffset);
+		}
+
+		return getCachedEdge(edgeList, edgeOffset).getRoadLevel();
+	}
+
+	private RoadLevel getSearchEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide) throws IOException {
+		if (hotRoadCache.containsEdge(edgeOffset, reverseSide)) {
+			return hotRoadCache.getEdgeRoadLevel(edgeOffset, reverseSide);
+		}
+
+		if (reverseSide && store.canUseMappedViews()) {
+			return store.viewReverseEdgeRoadLevel(edgeOffset);
+		}
+
+		if (reverseSide) {
+			return getCachedReverseEdge(edgeList, edgeOffset).getRoadLevel();
+		}
+
+		return getEdgeRoadLevel(edgeOffset, edgeList);
+	}
+
+	private double getWeightedDistance(long offset, Map<Long, Edge> edgeList) throws IOException {
+		if (hotRoadCache.containsEdge(offset)) {
+			return hotRoadCache.getWeightedDistance(offset);
+		}
+
+		if (store.canUseMappedViews()) {
+			return getWeightedDistance(offset);
+		}
+
+		return getWeightedDistance(getCachedEdge(edgeList, offset));
+	}
+
+	private double getSearchWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
+		if (hotEdge) {
+			return hotRoadCache.getWeightedDistance(offset, reverseSide);
+		}
+
+		if (reverseSide) {
+			if (store.canUseMappedViews()) {
+				return getWeightedDistance(store.viewReverseEdgeDistance(offset), store.viewReverseEdgeRoadLevel(offset));
+			}
+
+			return getWeightedDistance(getCachedReverseEdge(edgeList, offset));
+		}
+
+		return getWeightedDistance(offset, edgeList);
+	}
+
+	private double getWeightedDistance(double baseDistance, RoadLevel roadLevel) {
+		double speed;
+		double weight;
+
+		switch (roadLevel) {
+			case L0:
+				speed = 100;
+				weight = 0.5;
+				break;
+			case L1:
+				speed = 60;
+				weight = 1.0;
+				break;
+			case L2:
+				speed = 30;
+				weight = 1.5;
+				break;
+			default:
+				speed = 20;
+				weight = 2.5;
+		}
+
+		return (baseDistance / speed) * weight;
+	}
+
+	private Edge getCachedEdge(Map<Long, Edge> edgeList, long edgeOffset) throws IOException {
+		Edge edge = edgeList.get(edgeOffset);
+		if (edge == null) {
+			edge = store.readEdge(edgeOffset);
+			edgeList.put(edgeOffset, edge);
+		}
+
+		return edge;
+	}
+
+	private Edge getCachedReverseEdge(Map<Long, Edge> edgeList, long edgeOffset) throws IOException {
+		Edge edge = edgeList.get(edgeOffset);
+		if (edge == null) {
+			edge = store.readReverseEdge(edgeOffset);
+			edgeList.put(edgeOffset, edge);
+		}
+
+		return edge;
+	}
+
+	private ArrayList<Edge> getConnectedLevelEdges(Map<Long, Edge> edgeList, Node node, RoadLevel level) throws IOException {
+		ArrayList<Edge> levelEdges = new ArrayList<Edge>();
+
+		// 지정된 계층의 엣지만 필터링해서 반환
+		ArrayList<Edge> allEdges = getConnectedEdges(edgeList, node);
+		for (Edge edge : allEdges) {
+			if (edge.getRoadLevel() == level) {
+				levelEdges.add(edge);
+			}
+		}
+
+		return levelEdges;
+	}
+
+	private int[] getConnectedLevelEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel level) throws IOException {
+		// if(hotRoadCache.supportsLevel(level)) {
+		// 	return hotRoadCache.getConnectedLevelEdges(nodeId, level);
+		// }
+
+		// FileBasedEdgeIndex index = (FileBasedEdgeIndex)store.getEdgeIndex();
+
+		// int count = getIndexEdgeCount(index, nodeId, level);
+		// int[] edgeArray = new int[count];
+		// long startOffset = getIndexStartOffset(index, nodeId, level);
+
+		// for(int i = 0; i<count; i++) {
+		// 	edgeArray[i] = (int)startOffset + (i * DataStructureSizes.EDGE_SIZE);
+		// }
+		// edgeArray[count] = -1;
+
+		// // 지정된 계층의 엣지만 필터링해서 반환
+		// // ArrayList<Integer> allEdges = getConnectedEdgesByNodeId(edgeList, nodeId);
+		// // for(Integer edge : allEdges) {
+		// // 	if(store.viewEdgeRoadLevel(edge) == level) {
+		// // 		levelEdges.add(edge);
+		// // 	}
+		// // }
 		
-		if(nearestGeoLine.getNumPoints() > 2) {
-			for(int i=0;i< nearestGeoLine.getNumPoints();i++) {
-				for(int j=0;j< nearestGeoLine.getNumPoints() - 1 - i; j++) {
-					if(lines[j].distance(convertCoordinate) > lines[j + 1].distance(convertCoordinate)) {
-						org.locationtech.jts.geom.Coordinate temp = lines[j];
-						lines[j] = lines[j + 1];
-						lines[j + 1] = temp;
-					}
+		// return edgeArray;
+		return getConnectedLevelEdgesByNodeId(edgeList, nodeId, level, false);
+	}
+
+	private int[] getConnectedLevelEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
+		if (hotRoadCache.supportsLevel(level, reverseSide)) {
+			return hotRoadCache.getConnectedLevelEdges(nodeId, level, reverseSide);
+		}
+
+		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
+
+		int count = getIndexEdgeCount(index, nodeId, level);
+		int[] edgeArray = new int[count];
+		long startOffset = getIndexStartOffset(index, nodeId, level);
+
+		for (int i = 0; i < count; i++) {
+			edgeArray[i] = (int) startOffset + (i * DataStructureSizes.EDGE_SIZE);
+		}
+
+		// 지정된 계층의 엣지만 필터링해서 반환
+		// ArrayList<Integer> allEdges = getConnectedEdgesByNodeId(edgeList, nodeId);
+		// for(Integer edge : allEdges) {
+		// if(store.viewEdgeRoadLevel(edge) == level) {
+		// levelEdges.add(edge);
+		// }
+		// }
+
+		return edgeArray;
+	}
+
+	/**
+	 * 현재 계층의 엣지 + 다음 레벨 엣지를 함께 반환
+	 * L0이면 L0 + L1, L1이면 L1 + L2 등의 방식으로 나갈 출구 제공
+	 */
+	private ArrayList<Edge> getConnectedLevelEdgesWithExit(Map<Long, Edge> edgeList, Node node, RoadLevel currentLevel) throws IOException {
+		ArrayList<Edge> levelEdges = new ArrayList<Edge>();
+
+		// 지정된 현재 계층의 엣지 추가
+		ArrayList<Edge> allEdges = getConnectedEdges(edgeList, node);
+		for (Edge edge : allEdges) {
+			if (edge.getRoadLevel() == currentLevel) {
+				levelEdges.add(edge);
+			}
+		}
+
+		// 다음 레벨 엣지도 추가 (나갈 출구)
+		RoadLevel nextLevel = getNextLevel(currentLevel);
+		if (nextLevel != null) {
+			for (Edge edge : allEdges) {
+				if (edge.getRoadLevel() == nextLevel) {
+					levelEdges.add(edge);
 				}
 			}
 		}
 
-		org.locationtech.jts.geom.Coordinate start = lines[0];
-		org.locationtech.jts.geom.Coordinate end = lines[1];
-		
-		return new Coordinate[] {new Coordinate(start.y, start.x), new Coordinate(end.y, end.x)};
+		return levelEdges;
 	}
+
+	private int[] getConnectedLevelEdgesWithExitByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel currentLevel) throws IOException {
+		// // ArrayList<Integer> levelEdges = new ArrayList<Integer>();
+		// FileBasedEdgeIndex index = (FileBasedEdgeIndex)store.getEdgeIndex();
+		
+		// // int nextRoadLevelOrdinal = currentLevel.ordinal() + 1 > 2 ? currentLevel.ordinal() : currentLevel.ordinal() + 1;
+		// RoadLevel nextRoadLevel = getNextLevel(currentLevel);
 	
+		// int count = hotRoadCache.supportsLevel(currentLevel)
+		// 		? hotRoadCache.getLevelEdgeCount(nodeId, currentLevel)
+		// 		: getIndexEdgeCount(index, nodeId, currentLevel);
+		// int nextEdgeCount = nextRoadLevel != null ? getIndexEdgeCount(index, nodeId, nextRoadLevel) : 0;
+
+		// int[] levelEdgeArray = new int[count + nextEdgeCount];
+		// long startOffset = hotRoadCache.supportsLevel(currentLevel)
+		// 		? hotRoadCache.getLevelStartOffset(nodeId, currentLevel)
+		// 		: getIndexStartOffset(index, nodeId, currentLevel);
+
+		// // 지정된 현재 계층의 엣지 추가
+		// // int[] allEdges = getConnectedEdgesByNodeId(edgeList, nodeId);
+		// for(int i=0; i < count; i++) {
+		// 	levelEdgeArray[i] = (int)startOffset + (i * DataStructureSizes.EDGE_SIZE);
+		// }
+		
+		// if(nextRoadLevel != null) {
+		// 	// 다음 레벨 엣지도 추가 (나갈 출구)
+		// 	startOffset = getIndexStartOffset(index, nodeId, nextRoadLevel);
+		// 	for(int i=0; i< nextEdgeCount; i++) {
+		// 		levelEdgeArray[i + count] = (int)startOffset + (i * DataStructureSizes.EDGE_SIZE);
+		// 	}
+		// }
+		
+		// return levelEdgeArray;
+		return getConnectedLevelEdgesWithExitByNodeId(edgeList, nodeId, currentLevel, false);
+	}
+
+	private int[] getConnectedLevelEdgesWithExitByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel currentLevel, boolean reverseSide) throws IOException {
+		// ArrayList<Integer> levelEdges = new ArrayList<Integer>();
+		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
+
+		// int nextRoadLevelOrdinal = currentLevel.ordinal() + 1 > 2 ?
+		// currentLevel.ordinal() : currentLevel.ordinal() + 1;
+		RoadLevel nextRoadLevel = getNextLevel(currentLevel);
+
+		int count = hotRoadCache.supportsLevel(currentLevel, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, currentLevel, reverseSide)
+				: getIndexEdgeCount(index, nodeId, currentLevel);
+		int nextEdgeCount = nextRoadLevel != null
+				? getCachedOrIndexEdgeCount(index, nodeId, nextRoadLevel, reverseSide)
+				: 0;
+
+		int[] levelEdgeArray = new int[count + nextEdgeCount];
+		long startOffset = hotRoadCache.supportsLevel(currentLevel, reverseSide)
+				? hotRoadCache.getLevelStartOffset(nodeId, currentLevel, reverseSide)
+				: getIndexStartOffset(index, nodeId, currentLevel);
+
+		// 지정된 현재 계층의 엣지 추가
+		// int[] allEdges = getConnectedEdgesByNodeId(edgeList, nodeId);
+		for (int i = 0; i < count; i++) {
+			levelEdgeArray[i] = (int) startOffset + (i * DataStructureSizes.EDGE_SIZE);
+		}
+
+		if (nextRoadLevel != null) {
+			// 다음 레벨 엣지도 추가 (나갈 출구)
+			startOffset = getCachedOrIndexStartOffset(index, nodeId, nextRoadLevel, reverseSide);
+			for (int i = 0; i < nextEdgeCount; i++) {
+				levelEdgeArray[i + count] = (int) startOffset + (i * DataStructureSizes.EDGE_SIZE);
+			}
+		}
+
+		return levelEdgeArray;
+	}
+
+	/**
+	 * 다음 레벨 계층을 반환 (L0 → L1, L1 → L2, L2 → null)
+	 */
+	private RoadLevel getNextLevel(RoadLevel currentLevel) {
+		if (currentLevel == null) {
+			return null;
+		}
+
+		switch (currentLevel) {
+			case L0:
+				return RoadLevel.L1;
+			case L1:
+				return RoadLevel.L2;
+			case L2:
+				return null; // 최하단 계층
+			default:
+				return null;
+		}
+	}
+
+	/**
+	 * 노드와 연결된 엣지를 모두 반환합니다. edgeList에 없는 엣지는 store에서 읽어와 추가합니다.
+	 *
+	 * @param Node
+	 * @return List<Edge>
+	 * @throws IOException
+	 */
+	private ArrayList<Edge> getConnectedEdges(Map<Long, Edge> edgeList, Node node) throws IOException {
+		ArrayList<Edge> edges = new ArrayList<Edge>();
+
+		EdgeIndex index = store.getEdgeIndex();
+
+		EdgeIndexEntry entry = index.get(node.getId());
+		int edgeCount = entry.getLevel0EdgeIndex().getEdgeCount() + entry.getLevel1EdgeIndex().getEdgeCount()
+				+ entry.getLevel2EdgeIndex().getEdgeCount();
+
+		long startOffset = getStartOffset(entry);
+		for (int i = 0; i < edgeCount; i++) {
+			long edgeOffset = startOffset + (i * DataStructureSizes.EDGE_SIZE);
+
+			// 캐시에서 먼저 확인
+			Edge cachedEdge = edgeList.get(edgeOffset);
+			if (cachedEdge != null) {
+				edges.add(cachedEdge);
+			} else {
+				Edge edge = store.readEdge(edgeOffset);
+				edgeList.put(edgeOffset, edge);
+				edges.add(edge);
+			}
+		}
+
+		return edges;
+	}
+
+	private int[] getConnectedEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId) throws IOException {
+		// ArrayList<Integer> edges = new ArrayList<Integer>();
+
+		FileBasedEdgeIndex index = (FileBasedEdgeIndex)store.getEdgeIndex();
+
+		int level0Count = hotRoadCache.supportsLevel(RoadLevel.L0)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L0)
+				: getIndexEdgeCount(index, nodeId, RoadLevel.L0);
+		int level1Count = hotRoadCache.supportsLevel(RoadLevel.L1)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L1)
+				: getIndexEdgeCount(index, nodeId, RoadLevel.L1);
+		int level2Count = getIndexEdgeCount(index, nodeId, RoadLevel.L2);
+		int edgeCount = level0Count + level1Count + level2Count;
+		int[] edgeArray = new int[edgeCount];
+		
+		if(edgeCount == 0) {
+			// return edgeArray;
+			Arrays.fill(edgeArray, -1);
+			return edgeArray;
+		}
+
+        long startOffset = 0;
+
+		if (level0Count > 0) {
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L0)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L0)
+					: getIndexStartOffset(index, nodeId, RoadLevel.L0);
+		}
+		 else if (level1Count > 0) {
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L1)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L1)
+					: getIndexStartOffset(index, nodeId, RoadLevel.L1);
+		} 
+		else {
+			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L2);
+		}
+
+        for(int i = 0; i<edgeCount; i++) {
+            edgeArray[i] = (int)startOffset + (i * DataStructureSizes.EDGE_SIZE);
+        }
+		
+		return edgeArray;
+		// return getConnectedEdgesByNodeId(edgeList, nodeId, false);
+	}
+
+	private int[] getConnectedEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId, boolean reverseSide) throws IOException {
+		// ArrayList<Integer> edges = new ArrayList<Integer>();
+
+		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
+
+		int level0Count = hotRoadCache.supportsLevel(RoadLevel.L0, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L0, reverseSide)
+				: getIndexEdgeCount(index, nodeId, RoadLevel.L0);
+		int level1Count = hotRoadCache.supportsLevel(RoadLevel.L1, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L1, reverseSide)
+				: getIndexEdgeCount(index, nodeId, RoadLevel.L1);
+		int level2Count = hotRoadCache.supportsLevel(RoadLevel.L2, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L2, reverseSide)
+				: getIndexEdgeCount(index, nodeId, RoadLevel.L2);
+		int edgeCount = level0Count + level1Count + level2Count;
+		int[] edgeArray = new int[edgeCount];
+
+		if (edgeCount == 0) {
+			return edgeArray;
+		}
+
+		long startOffset = 0;
+
+		if (level0Count > 0) {
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L0, reverseSide)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L0, reverseSide)
+					: getIndexStartOffset(index, nodeId, RoadLevel.L0);
+		} else if (level1Count > 0) {
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L1, reverseSide)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L1, reverseSide)
+					: getIndexStartOffset(index, nodeId, RoadLevel.L1);
+		} else {
+			startOffset = hotRoadCache.supportsLevel(RoadLevel.L2, reverseSide)
+					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L2, reverseSide)
+					: getIndexStartOffset(index, nodeId, RoadLevel.L2);
+		}
+
+		for (int i = 0; i < edgeCount; i++) {
+			edgeArray[i] = (int) startOffset + (i * DataStructureSizes.EDGE_SIZE);
+		}
+
+		return edgeArray;
+	}
+
+	private FileBasedEdgeIndex getSearchEdgeIndex(boolean reverseSide) {
+		return (FileBasedEdgeIndex) (reverseSide ? store.getReverseEdgeIndex() : store.getEdgeIndex());
+	}
+
+	private int getCachedOrIndexEdgeCount(FileBasedEdgeIndex index, int nodeId, RoadLevel level) throws IOException {
+		return getCachedOrIndexEdgeCount(index, nodeId, level, false);
+	}
+
+	private int getCachedOrIndexEdgeCount(FileBasedEdgeIndex index, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
+		return hotRoadCache.supportsLevel(level, reverseSide)
+				? hotRoadCache.getLevelEdgeCount(nodeId, level, reverseSide)
+				: getIndexEdgeCount(index, nodeId, level);
+	}
+
+	private long getCachedOrIndexStartOffset(FileBasedEdgeIndex index, int nodeId, RoadLevel level) throws IOException {
+		return getCachedOrIndexStartOffset(index, nodeId, level, false);
+	}
+
+	private long getCachedOrIndexStartOffset(FileBasedEdgeIndex index, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
+		return hotRoadCache.supportsLevel(level, reverseSide)
+				? hotRoadCache.getLevelStartOffset(nodeId, level, reverseSide)
+				: getIndexStartOffset(index, nodeId, level);
+	}
+
+	private int getIndexEdgeCount(FileBasedEdgeIndex index, int nodeId, RoadLevel level) throws IOException {
+		if (index.isMappingMode()) {
+			return index.viewEdgeCount(nodeId, level);
+		}
+
+		EdgeIndexEntry entry = index.get(nodeId);
+		if (entry == null) {
+			return 0;
+		}
+
+		switch (level) {
+			case L0:
+				return entry.getLevel0EdgeIndex().getEdgeCount();
+			case L1:
+				return entry.getLevel1EdgeIndex().getEdgeCount();
+			case L2:
+				return entry.getLevel2EdgeIndex().getEdgeCount();
+			default:
+				return 0;
+		}
+	}
+
+	private long getIndexStartOffset(FileBasedEdgeIndex index, int nodeId, RoadLevel level) throws IOException {
+		if (index.isMappingMode()) {
+			return index.viewStartOffset(nodeId, level);
+		}
+
+		EdgeIndexEntry entry = index.get(nodeId);
+		if (entry == null) {
+			return 0;
+		}
+
+		switch (level) {
+			case L0:
+				return entry.getLevel0EdgeIndex().getStartOffset();
+			case L1:
+				return entry.getLevel1EdgeIndex().getStartOffset();
+			case L2:
+				return entry.getLevel2EdgeIndex().getStartOffset();
+			default:
+				return 0;
+		}
+	}
+
+	/**
+	 * 노드와 연결된 엣지를 모두 반환합니다.
+	 *
+	 * @param edgeList
+	 * @return 연결된 모든 엣지
+	 * @throws IOException
+	 */
+	private ArrayList<Edge> getConnectedEdges(Node node) throws IOException {
+		ArrayList<Edge> edges = new ArrayList<Edge>();
+
+		EdgeIndex index = store.getEdgeIndex();
+
+		EdgeIndexEntry entry = index.get(node.getId());
+		int edgeCount = entry.getLevel0EdgeIndex().getEdgeCount() + entry.getLevel1EdgeIndex().getEdgeCount()
+				+ entry.getLevel2EdgeIndex().getEdgeCount();
+
+		long startOffset = getStartOffset(entry);
+		for (int i = 0; i < edgeCount; i++) {
+			Edge edge = store.readEdge(startOffset + (i * DataStructureSizes.EDGE_SIZE));
+			edges.add(edge);
+		}
+
+		return edges;
+	}
+
+	private long getStartOffset(EdgeIndexEntry entry) {
+		if (entry.getLevel0EdgeIndex().getEdgeCount() > 0) {
+			return entry.getLevel0EdgeIndex().getStartOffset();
+		} else if (entry.getLevel1EdgeIndex().getEdgeCount() > 0) {
+			return entry.getLevel1EdgeIndex().getStartOffset();
+		} else {
+			return entry.getLevel2EdgeIndex().getStartOffset();
+		}
+	}
+
+	/**
+	 * 주어진 좌표와 거리가 가까운 노드들을 찾고 그 중 가장 가까운 노드를 반환합니다.
+	 *
+	 * @param coordinate
+	 * @return 가까운 노드 좌표
+	 * @throws IOException
+	 */
+	private Node findNearestNode(Coordinate coordinate) throws IOException {
+		// 주어진 좌표에서 가까운 노드 오프셋을 가져온다. 30미터 이내
+		Envelope envelope = createSearchEnvelope(coordinate, 100);
+		List<Integer> nodeIdList = dataProvider.findNearestNodeId(envelope, coordinate);
+		ArrayList<Node> nodeList = new ArrayList<Node>();
+		Node n = null;
+
+		if (nodeIdList.isEmpty()) {
+			throw new EmptyGeometryListException("해당 좌표에 가까운 노드 데이터를 찾을 수 없습니다. 좌표 : " + coordinate.toString());
+		}
+
+		for (Integer nodeId : nodeIdList) {
+			Node node = store.readNode(DataStructureSizes.calculateNodeOffset(nodeId));
+			nodeList.add(node);
+		}
+
+		// 후보 노드 중 거리가 제일 가까운 라인 검색
+		if (nodeList.size() >= 2) {
+			double minDistance = Double.MAX_VALUE;
+			Node minNode = null;
+			for (Node node : nodeList) {
+				double distance = node.getCoordinate().calculateDistanceToTarget(coordinate);
+				if (distance < minDistance) {
+					minDistance = distance;
+					minNode = node;
+				}
+			}
+
+			n = minNode;
+		} else {
+			n = nodeList.get(0);
+		}
+
+		log.debug("가장 가까운 노드 ID : " + (n != null ? n.getId() : "null") + " / 좌표 : " + (n != null ? n.getCoordinate().toString() : "null"));
+
+		return n;
+	}
+
+	private Envelope createSearchEnvelope(Coordinate coordinate, double distance) {
+		double latDiff = distance / 111111.0; // 위도 1도는 약 111km
+		double lonDiff = distance / (111111.0 * Math.cos(Math.toRadians(coordinate.getLatitude()))); // 경도 1도는 위도에 따라 다름
+
+		double minLat = coordinate.getLatitude() - latDiff;
+		double maxLat = coordinate.getLatitude() + latDiff;
+		double minLon = coordinate.getLongitude() - lonDiff;
+		double maxLon = coordinate.getLongitude() + lonDiff;
+
+		return new Envelope(minLon, maxLon, minLat, maxLat);
+	}
+
+	/**
+	 * 주어진 노드의 연결된 엣지중 주어진 좌표에 거리가 가까운 엣지를 찾아 반환합니다.
+	 *
+	 * @param edge
+	 * @return 주어진 좌표에 거리와 가장 가까운 엣지
+	 * @throws IOException
+	 */
+	private Edge findNearestEdge(Node node, Coordinate coordinate) throws IOException {
+		// 주어진 노드에 연결된 엣지들을 가져온다.
+		ArrayList<Edge> edgeList = getConnectedEdges(node);
+		if (edgeList.isEmpty()) {
+			throw new EmptyGeometryListException("노드에 연결된 엣지 데이터가 없습니다. 노드 ID : " + node.getId());
+		}
+
+		// 후보 라인 중 거리가 제일 가까운 라인 검색
+		Edge nearestEdge = null;
+		double minDistance = Double.MAX_VALUE;
+
+		// 노드에서 각 엣지의 도착 노드까지의 거리를 확인하여 가까운 엣지를 선택
+		for (Edge edge : edgeList) {
+			log.debug("엣지 - {}, {}, {}, {}", edge.getId(), edge.getFrom(), edge.getTo(), edge.getDistance());
+
+			Node toNode = store.readNode(DataStructureSizes.calculateNodeOffset(edge.getTo()));
+			double distance = coordinate.calculateDistanceToTarget(toNode.getCoordinate());
+			if (distance < minDistance) {
+				minDistance = distance;
+				nearestEdge = edge;
+			}
+		}
+
+		log.debug("이웃 엣지 - {}, {}, {}, {}", nearestEdge.getId(), nearestEdge.getFrom(), nearestEdge.getTo(), nearestEdge.getDistance());
+
+		return nearestEdge;
+	}
+
 	/**
 	 * 주어진 좌표의 라인과 주어진 점의 직선이 교차하는 점을 계산하여 반환합니다.
+	 *
 	 * @param a 라인의 첫 번째 좌표
 	 * @param b 라인의 두 번째 좌표
 	 * @param c 주어진 점
@@ -271,13 +1301,13 @@ public class Engine {
 		double bax = (b.getLongitude() - a.getLongitude());
 		double cay = (c.getLatitude() - a.getLatitude());
 		double bay = (b.getLatitude() - a.getLatitude());
-		
-		double t = ((cax * bax) + (cay * bay)) / (Math.pow(b.getLongitude() - a.getLongitude(), 2) + Math.pow(b.getLatitude() - a.getLatitude(), 2));
-		
+
+		double t = ((cax * bax) + (cay * bay))
+				/ (Math.pow(b.getLongitude() - a.getLongitude(), 2) + Math.pow(b.getLatitude() - a.getLatitude(), 2));
+
 		double x = a.getLongitude() + t * (b.getLongitude() - a.getLongitude());
 		double y = a.getLatitude() + t * (b.getLatitude() - a.getLatitude());
-		
-		
+
 		return new Coordinate(y, x);
 	}
 }

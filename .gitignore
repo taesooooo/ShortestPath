@@ -1,13 +1,16 @@
 HELP.md
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+### PROJECT ###
 *.properties
-!gradle/wrapper/gradle-wrapper.properties
+src/**/**.properties
 src/test/resources/shp/
+src/**/sample/**
+docs/**
 
 ### STS ###
 .apt_generated

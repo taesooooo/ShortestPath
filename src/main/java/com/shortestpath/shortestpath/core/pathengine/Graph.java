@@ -3,16 +3,28 @@ package com.shortestpath.shortestpath.core.pathengine;
 import java.util.Collection;
 import java.util.HashMap;
 
-import com.shortestpath.shortestpath.util.PathUtil;
+import org.locationtech.jts.geom.Geometry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
+
+import lombok.extern.log4j.Log4j;
 
 
 public class Graph {
+	private Logger logger = LoggerFactory.getLogger(getClass());
+
 	private HashMap<Coordinate, Node> graph;
 	
 	public Graph() {
 		graph = new HashMap<Coordinate, Node>();
 	}
-	
+
+	public Graph(HashMap<Coordinate, Node> graph) {
+		this.graph = graph;
+	}
+
 	public void addNode(Node node) {
 		graph.putIfAbsent(node.getCoordinate(), node);
 	}
@@ -23,10 +35,22 @@ public class Graph {
 	 * @param startNode
 	 * @param endNode
 	 */
-	public void addEdge(Node startNode, Node endNode) {
-		double distance = PathUtil.haversine(startNode.getCoordinate(), endNode.getCoordinate());
-		graph.get(startNode.getCoordinate()).getEdge().put(endNode.getId(), new Edge(endNode, distance));
-		graph.get(endNode.getCoordinate()).getEdge().put(startNode.getId(), new Edge(startNode, distance));
+	public void addEdge(Coordinate startCoordinate, Coordinate endCoordinate, Geometry geometry) {
+		double distance = PathUtil.haversineDistance(startCoordinate, endCoordinate);
+		
+		Node startNode = graph.get(startCoordinate);
+		Node endNode = graph.get(endCoordinate);
+		
+		if(startNode == null) {
+			throw new NullPointerException("해당 하는 좌표의 노드가 없습니다. - " + startCoordinate.toWKT());
+		}
+		
+		if(endNode == null) {
+			throw new NullPointerException("해당 하는 좌표의 노드가 없습니다. - " + endCoordinate.toWKT());
+		}
+		
+		// startNode.getEdge().put(endNode.getId(), new Edge(endNode, distance, geometry));
+		// endNode.getEdge().put(startNode.getId(), new Edge(startNode, distance, geometry));
 	}
 	
 	public Node getNode(Coordinate coordinate) {
@@ -44,25 +68,29 @@ public class Graph {
 	public Collection<Node> getAllNodes() {
 		return graph.values();
 	}
-	
-	public void printAll() {
-		for(Coordinate c : graph.keySet()) {
-			System.out.print("[" +  c.getLatitude() + " " + c.getLongitude() + "]");
-			for(Edge e : graph.get(c).getEdge().values()) {
-				System.out.print(e.getTo().getCoordinate().getLatitude() + " " + e.getTo().getCoordinate().getLongitude() + " ");
-			}
-			System.out.println("");
-		}
+
+	public int size() {
+		return graph.size();
 	}
 	
-	public void printMoveTo(Node checkNode) {
-		System.out.println("EndNode로 향하는 연결 목록: ");
-		for (Node node : graph.values()) {
-		    for (Edge edge : node.getEdge().values()) {
-		        if (edge.getTo().equals(checkNode)) {
-		            System.out.println("연결: " + node.getCoordinate() + " -> " + checkNode.getCoordinate() + " / 거리: " + edge.getDistance());
-		        }
-		    }
-		}
-	}
+	// public void printAll() {
+	// 	for(Coordinate c : graph.keySet()) {
+	// 		System.out.print("[" +  c.getLatitude() + " " + c.getLongitude() + "]");
+	// 		for(Edge e : graph.get(c).getEdge().values()) {
+	// 			System.out.print(e.getTo().getCoordinate().getLatitude() + " " + e.getTo().getCoordinate().getLongitude() + " ");
+	// 		}
+	// 		System.out.println("");
+	// 	}
+	// }
+	
+	// public void printMoveTo(Node checkNode) {
+	// 	System.out.println("EndNode로 향하는 연결 목록: ");
+	// 	for (Node node : graph.values()) {
+	// 	    for (Edge edge : node.getEdge().values()) {
+	// 	        if (edge.getTo().equals(checkNode)) {
+	// 	            System.out.println("연결: " + node.getCoordinate() + " -> " + checkNode.getCoordinate() + " / 거리: " + edge.getDistance());
+	// 	        }
+	// 	    }
+	// 	}
+	// }
 }

@@ -1,131 +1,153 @@
 package com.shortestpath.shortestpath.core.pathengine;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import org.geotools.api.data.DataStore;
-import org.geotools.api.data.DataStoreFinder;
-import org.geotools.api.data.FeatureSource;
-import org.geotools.api.feature.simple.SimpleFeature;
-import org.geotools.api.feature.simple.SimpleFeatureType;
-import org.geotools.feature.FeatureCollection;
-import org.geotools.feature.FeatureIterator;
-import org.locationtech.jts.geom.LineString;
-import org.locationtech.jts.geom.MultiLineString;
-import org.locationtech.jts.index.strtree.STRtree;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.geotools.filter.text.cql2.CQLException;
 
+import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.TaskType;
+
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class Loader {
-	private Logger logger = LoggerFactory.getLogger(getClass());
-	
-	private File file;
-	private DataStore store;
-	
-	public Loader(String filePath) throws IOException {
-		file = new File(filePath);
-		if(!file.exists()) {
-			throw new FileNotFoundException(filePath + " 위치에 shp파일이 존재 하지 않습니다.");
-		}
-		
-		Map<String, Object> map = new HashMap<String, Object>();
-		map.put("url", file.toURI().toURL());
-		
-		store = DataStoreFinder.getDataStore(map);
+	private Extractor extractor;
+	// @Getter
+	// private Graph mapGraph = new Graph();
+	private AtomicInteger nodeExtractCount = new AtomicInteger(0);
+	private AtomicInteger nodeSaveCount = new AtomicInteger(0);
+	private AtomicInteger edgeExtractCount = new AtomicInteger(0);
+	private AtomicInteger edgeSaveCount = new AtomicInteger(0);
+	private boolean nodeExtractCompleted = false;
+	private boolean nodeSaveCompleted = false;
+	private boolean edgeExtractCompleted = false;
+	private boolean edgeSaveCompleted = false;
+	long startTime = 0;
+	int totalNodes = 0;
+	int totalEdges = 0;
+
+	public Loader(Extractor extractor) throws IOException {
+		this.extractor = extractor;
 	}
 
-	public Graph loadData() throws IOException {
-		FeatureSource<SimpleFeatureType, SimpleFeature> source = getSource();
-		
-		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
-		FeatureIterator<SimpleFeature> iterator = collection.features();
-
-		Graph graph = new Graph();
-		long st = System.currentTimeMillis();
-		int num = 0;
-		
-		while (iterator.hasNext()) {
-			SimpleFeature feature = iterator.next();
-
-//			int id = Integer.parseInt(feature.getAttribute("id").toString());
-//			String fclass = feature.getAttribute("fclass").toString();
-			MultiLineString multiLine = (MultiLineString) feature.getAttribute("the_geom");
-			
-			Node previousNode = null;
-			
-			for (int i = 0; i < multiLine.getNumPoints(); i++) {
-				double x = multiLine.getCoordinates()[i].getX();
-				double y = multiLine.getCoordinates()[i].getY();
-
-				Node node = new Node();
-				node.setId(num++);
-//				node.setCategory(fclass);
-				node.setCoordinate(new Coordinate(y, x));
-
-				if (!graph.containsKey(node.getCoordinate())) {
-					graph.addNode(node);
-				}
-				else {
-					node = graph.getNode(node.getCoordinate());
-					if(previousNode != null) {
-						graph.addEdge(previousNode, node);
-					}
-				}
-
-				if (previousNode != null) {
-					graph.addEdge(previousNode, node);
-				}
-				
-				previousNode = node;
+	public void extractData(boolean progress) throws IOException {
+		try {
+			// 노드 및 엣지 추출
+			startTime = System.currentTimeMillis();
+			if(progress) {
+				extractor.extract((taskType, total, current) -> onPrgress(taskType, total, current));
 			}
-		}
-		
-		long et = System.currentTimeMillis();
-		double rt = (et - st) / 1000.0;
-
-		logger.info("FileLoad Excution Time - " + rt + "s");
-		
-		iterator.close();
-		
-		return graph;
-	}
-	
-	public STRtree loadRtree() throws IOException {
-		STRtree rtree = new STRtree();
-		
-		FeatureSource<SimpleFeatureType, SimpleFeature> source = getSource();
-		
-		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
-		FeatureIterator<SimpleFeature> iterator = collection.features();
-		
-		while(iterator.hasNext()) {
-			SimpleFeature feature = iterator.next();
-			MultiLineString geo = (MultiLineString) feature.getDefaultGeometry();
-			
-			for(int i=0;i< geo.getNumGeometries();i++) {
-				LineString line = (LineString)geo.getGeometryN(i);
-				rtree.insert(line.getEnvelopeInternal(), line);
+			else {
+				extractor.extract();
 			}
+			long endTime = System.currentTimeMillis();
+
+			log.info("종료 시간 - " + formatDuration(endTime - startTime));
+		} 
+		catch (IOException e) {
+			log.error("노드 및 엣지 추출 작업중 오류가 발생 했습니다.", e);
+			throw e;
 		}
-		
-		rtree.build();
-		
-		return rtree;
-	}
-	
-	private FeatureSource<SimpleFeatureType, SimpleFeature> getSource() throws IOException {
-		String typeName = store.getTypeNames()[0];
-		FeatureSource<SimpleFeatureType, SimpleFeature> source = store.getFeatureSource(typeName);
-		
-		return source;
-	}
-	
-	public void dispose() {
-		if(store != null) {
-			store.dispose();
+		catch (CQLException e) {
+			log.error("CQL 구문 분석 중 오류가 발생 했습니다.", e);
+			throw new IOException("CQL 구문 분석 중 오류가 발생 했습니다.", e);
 		}
+	}
+
+	public void createIndex() throws IOException {
+		extractor.createIndex();
+	}
+
+	public boolean isDataExtracted() {
+		return extractor.getStore().hasExtractedData();
+	}
+
+	private void onPrgress(TaskType type, int total, int current) {
+		switch(type) {
+			case NODE_EXTRACT:
+				nodeExtractCount.set(current);
+				totalNodes = total;
+				if(current >= total) {
+					nodeExtractCompleted = true;
+				}
+				break;
+			case NODE_SAVE:
+				nodeSaveCount.set(current);
+				if(current >= total) {
+					nodeSaveCompleted = true;
+				}
+				break;
+			case EDGE_EXTRACT:
+				edgeExtractCount.set(current);
+				totalEdges = total;
+				if(total > 0 && current >= total) {
+					edgeExtractCompleted = true;
+				}
+				break;
+			case EDGE_SAVE:
+				edgeSaveCount.set(current);
+				if(current >= totalEdges && totalEdges > 0) {
+					edgeSaveCompleted = true;
+				}
+				break;
+			default:
+				break;
+		}
+
+		// 진행 상황 표시
+		printProgress();
+	}
+
+	private void printProgress() {
+		// 노드 추출 개수
+		int nodeExtracted = nodeExtractCount.get();
+		
+		// 노드 저장 개수
+		int nodeSaved = nodeSaveCount.get();
+
+		// 엣지 추출 개수
+		int edgeExtracted = edgeExtractCount.get();
+
+		// 엣지 저장 개수
+		int edgeSaved = edgeSaveCount.get();
+
+		// 모든 진행 상황을 한 줄에 표시 (개수 기준)
+		System.out.printf("[노드 추출] %10d개 | [노드 저장] %10d개 | [엣지 추출] %10d개 | [엣지 저장] %10d개        \r",
+				nodeExtracted,
+				nodeSaved,
+				edgeExtracted,
+				edgeSaved);
+
+	}
+
+	private double calcProgress(int total, int current) {
+		if(current >= total) {
+			return 100.0;
+		}
+
+		return (current / (double)total) * 100;
+	}
+
+	private String calcETA(int total, int current) {
+		if(current >= total) {
+			return "00:00:00";
+		}
+
+		long elapsedTime = System.currentTimeMillis() - startTime;
+		double speed = current / (double)elapsedTime;
+		long remainingItems = total - current;
+		long remainingTime = (long)(remainingItems / speed);
+
+		return formatDuration(remainingTime);
+	}
+
+	private String formatDuration(long millis) {
+		long seconds = millis / 1000;
+		long minutes = (seconds / 60) % 60;
+		long hours = (seconds / 3600);
+		long sec = seconds % 60;
+
+		return String.format("%02d:%02d:%02d", hours, minutes, sec);
 	}
 }

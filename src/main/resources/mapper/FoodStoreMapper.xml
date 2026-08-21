@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shortestpath.shortestpath.mapper.FoodStoreMapper">
+    
+     <!-- FoodStore ResultMap -->
+    <resultMap id="foodStoreDetailResultMap" type="com.shortestpath.shortestpath.dto.response.ResponseFoodStoreDto">
+        <id column="id" property="id"/>
+        <result column="opn_std_nm_cd" property="opnStdNmCd"/>
+        <result column="mgt_no" property="mgtNo"/>
+        <result column="trd_state_nm" property="trdStateNm"/>
+        <result column="dcb_dt" property="dcbDt"/>
+        <result column="loc_post_no" property="locPostNo"/>
+        <result column="rdn_post_no" property="rdnPostNo"/>
+        <result column="bplc_nm" property="bplcNm"/>
+        <result column="uptae_gbn_nm" property="uptaeGbnNm"/>
+        <result column="dt_upd_gbn" property="dtUpdGbn"/>
+        <result column="multi_use_yn" property="multiUseYn"/>
+        <result column="dt_upd_tm" property="dtUpdTm"/>
+        <result column="rdn_whl_addr" property="rdnWhlAddr"/>
+        <result column="dtl_trd_state_nm" property="dtlTrdStateNm"/>
+        <result column="dtl_trd_state_cd" property="dtlTrdStateCd"/>
+        <result column="trd_state_cd" property="trdStateCd"/>
+        <result column="tel_no" property="telNo"/>
+        <result column="x" property="x"/>
+        <result column="y" property="y"/>
+        <result column="site_whl_addr" property="siteWhlAddr"/>
+        <result column="homepage" property="homepage"/>
+        <result column="last_mod_tm" property="lastModetm"/>
+        <result column="geometry" property="geometry" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryTypeHandler"/>
+        <result column="sido_nm" property="sidoNm"/>
+        <result column="sigungu_nm" property="sigunguNm"/>
+        <result column="lot_nm_main" property="lotNmMain"/>
+        <result column="lot_nm_sub" property="lotNmSub"/>
+        <result column="emd_nm" property="emdNm"/>
+        <result column="building_id" property="buildingId"/>
+    </resultMap>
+
+    <!-- searchByKeyword용 별도 ResultMap -->
+    <resultMap id="foodStoreListResultMap" type="com.shortestpath.shortestpath.dto.response.ResponseFoodStoreSearchDto">
+        <id column="id" property="id"/>
+        <result column="trd_state_nm" property="trdStateNm"/>
+        <result column="bplc_nm" property="bplcNm"/>
+        <result column="uptae_gbn_nm" property="uptaeGbnNm"/>
+        <result column="rdn_whl_addr" property="rdnWhlAddr"/>
+        <result column="tel_no" property="telNo"/>
+        <result column="x" property="x"/>
+        <result column="y" property="y"/>
+        <result column="homepage" property="homepage"/>
+        <result column="building_id" property="buildingId"/>
+        <!-- PostgreSQL geometry를 Point로 자동 변환 -->
+        <result column="center_cord" property="centerCord" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryTypeHandler"/>
+    </resultMap>
+    
+    <!-- SELECT 컬럼 재사용 (alias 포함) -->
+    <sql id="foodStoreColumns">
+        A.id, 
+        A.opn_std_nm_cd, 
+        A.mgt_no, 
+        A.trd_state_nm,
+        A.dcb_dt, 
+        A.loc_post_no, 
+        A.rdn_post_no,
+        A.bplc_nm, 
+        A.uptae_gbn_nm, 
+        A.dt_upd_gbn,
+        A.multi_use_yn, 
+        A.dt_upd_tm, 
+        A.rdn_whl_addr,
+        A.dtl_trd_state_nm, 
+        A.dtl_trd_state_cd,
+        A.trd_state_cd, 
+        A.tel_no, 
+        A.x, 
+        A.y,
+        A.site_whl_addr, 
+        A.homepage, 
+        A.last_mod_tm,
+        A.geometry, 
+        A.sido_nm, 
+        A.sigungu_nm,
+        A.lot_nm_main, 
+        A.lot_nm_sub,
+        A.emd_nm, 
+        A.building_id
+    </sql>
+    
+    <!-- FROM 절 재사용 - INNER JOIN 포함 -->
+    <sql id="foodStoreFrom">
+        FROM food_store AS A
+        INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
+    </sql>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*)
+        FROM food_store
+    </select>
+    
+    <!-- SELECT 쿼리 -->
+    <select id="selectById" resultMap="foodStoreDetailResultMap">
+        SELECT <include refid="foodStoreColumns"/>
+        <include refid="foodStoreFrom"/>
+        WHERE A.id = #{id}
+    </select>
+    
+    <select id="selectAll" resultMap="foodStoreListResultMap">
+        SELECT <include refid="foodStoreColumns"/>
+        <include refid="foodStoreFrom"/>
+        AND A.trd_state_nm LIKE '영업%'
+        ORDER BY id ASC
+        LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
+    </select>
+    
+    <!-- 조인이 있는 쿼리는 resultMap 사용 -->
+    <select id="searchByKeyword" parameterType="java.lang.String" resultMap="foodStoreListResultMap">
+        SELECT 
+            A.id, A.trd_state_nm, A.bplc_nm, A.rdn_whl_addr, A.tel_no, A.x, A.y, A.homepage, A.building_id, B.center_cord
+        FROM food_store AS A
+        INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
+        WHERE 
+            A.bplc_nm LIKE '%' || #{keyword} || '%'
+            AND A.trd_state_nm LIKE '영업%'
+        ORDER BY id ASC
+        LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
+    </select>
+    
+    <!-- 키워드/카테고리/Bbox 통합 검색 -->
+    <select id="search" resultMap="foodStoreListResultMap" parameterType="com.shortestpath.shortestpath.dto.request.RequestFoodStoreSearchDto">
+        SELECT 
+            A.id, A.trd_state_nm, A.bplc_nm, A.uptae_gbn_nm, A.rdn_whl_addr, A.tel_no, A.x, A.y, A.homepage, A.building_id, B.center_cord
+        FROM food_store AS A
+        INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
+        <where>
+            <!-- 키워드/카테고리 검색 -->
+            <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                A.bplc_nm LIKE '%' || #{searchDto.keyword} || '%'
+            </if>
+            <if test="searchDto.category != null and searchDto.category != ''">
+                <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                    AND
+                </if>
+                A.uptae_gbn_nm = #{searchDto.category}
+            </if>
+            
+            <!-- Bbox 검색 -->
+            <if test="searchDto.minLat != null and searchDto.minLon != null and searchDto.maxLat != null and searchDto.maxLon != null">
+                <if test="(searchDto.keyword != null and searchDto.keyword != '') or (searchDto.category != null and searchDto.category != '')">
+                    AND
+                </if>
+                ST_Intersects(A.geometry,ST_Transform(
+                    ST_MakeEnvelope(
+                        #{searchDto.minLon}, #{searchDto.minLat}, -- 좌측하단 (MinX, MinY)
+                        #{searchDto.maxLon}, #{searchDto.maxLat}, -- 우측상단 (MaxX, MaxY)
+                        4326
+                    ), 
+                    5174
+                ))
+            </if>
+        </where>
+        AND A.trd_state_nm LIKE '영업%'
+        ORDER BY id ASC
+        LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
+    </select>
+    
+    <!-- 검색 결과 총 개수 조회 -->
+    <select id="countBySearch" parameterType="com.shortestpath.shortestpath.dto.request.RequestFoodStoreSearchDto" resultType="long">
+        SELECT COUNT(*)
+        FROM food_store AS A
+        INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
+        <where>
+            <!-- 키워드/카테고리 검색 -->
+            <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                A.bplc_nm LIKE '%' || #{searchDto.keyword} || '%'
+            </if>
+            <if test="searchDto.category != null and searchDto.category != ''">
+                <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                    AND
+                </if>
+                A.uptae_gbn_nm = #{searchDto.category}
+            </if>
+            
+            <!-- Bbox 검색 -->
+            <if test="searchDto.minLat != null and searchDto.minLon != null and searchDto.maxLat != null and searchDto.maxLon != null">
+                <if test="(searchDto.keyword != null and searchDto.keyword != '') or (searchDto.category != null and searchDto.category != '')">
+                    AND
+                </if>
+                ST_Intersects(A.geometry,ST_Transform(
+                    ST_MakeEnvelope(
+                        #{searchDto.minLon}, #{searchDto.minLat}, -- 좌측하단 (MinX, MinY)
+                        #{searchDto.maxLon}, #{searchDto.maxLat}, -- 우측상단 (MaxX, MaxY)
+                        4326
+                    ), 
+                    5174
+                ))
+            </if>
+        </where>
+        AND A.trd_state_nm LIKE '영업%'
+    </select>
+
+</mapper>

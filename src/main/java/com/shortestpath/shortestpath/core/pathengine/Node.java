@@ -1,10 +1,12 @@
 package com.shortestpath.shortestpath.core.pathengine;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.shortestpath.shortestpath.util.PathUtil;
+import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,22 +14,98 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class Node implements Comparable<Node> {
 	private int id;
-	private String category;
+	// private String category;
 	private Coordinate coordinate;
-	private Map<Integer, Edge> edge = new HashMap<Integer, Edge>();
+	private int startEdgeOffset;
+	// private Map<Integer, Edge> edge = new HashMap<Integer, Edge>();
+	// 지금까지 온 비용
 	private double gCost = Double.MAX_VALUE;
+	// 앞으로 갈 비용
 	private double hCost;
+	// 총 비용
 	private double fCost;
-	
-	/**
-	 * 휴리스틱을 계산하면 fCost까지 모두 갱신됨
-	 **/
+	// 고속도로 진출입 게이트 여부 (motorway_link, primary_link, trunk_link)
+	private boolean isGate = false;
+
+	public Node(int id, Coordinate coordinate) {
+		this.id = id;
+		this.coordinate = coordinate;
+		this.isGate = false;
+	}
+
+	public Node(int id, Coordinate coordinate, int startEdgeOffset, double gCost, double hCost, double fCost) {
+		this.id = id;
+		this.coordinate = coordinate;
+		this.startEdgeOffset = startEdgeOffset;
+		this.gCost = gCost;
+		this.hCost = hCost;
+		this.fCost = fCost;
+		this.isGate = false;
+	}
+
+	public Node(int id, Coordinate coordinate, boolean isGate) {
+		this.id = id;
+		this.coordinate = coordinate;
+		this.isGate = isGate;
+	}
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
+	}
+
+	public Coordinate getCoordinate() {
+		return coordinate;
+	}
+
+	public void setCoordinate(Coordinate coordinate) {
+		this.coordinate = coordinate;
+	}
+
+	public int getStartEdgeOffset() {
+		return startEdgeOffset;
+	}
+
+	public void setStartEdgeOffset(int startEdgeOffset) {
+		this.startEdgeOffset = startEdgeOffset;
+	}
+
+	public double getgCost() {
+		return gCost;
+	}
+
+	public void setgCost(double gCost) {
+		this.gCost = gCost;
+	}
+
+	public double gethCost() {
+		return hCost;
+	}
+
+	public void sethCost(double hCost) {
+		this.hCost = hCost;
+	}
+
+	public double getfCost() {
+		return fCost;
+	}
+
+	public void setfCost(double fCost) {
+		this.fCost = fCost;
+	}
+
+	public boolean isGate() {
+		return isGate;
+	}
+
+	public void setGate(boolean gate) {
+		isGate = gate;
+	}
 	public void calculateHeuristic(Node endNode) {
 		// 맨하튼 거리 공식
 //		Coordinate currentNode = this.getCoordinate();
@@ -37,16 +115,28 @@ public class Node implements Comparable<Node> {
 //        double newDistance = dx + dy;
         
         // 하버사인 거리 공식
-        Coordinate startPoint = this.getCoordinate();
-        Coordinate endPoint = endNode.getCoordinate();
+        Coordinate startPoint = this.coordinate;
+        Coordinate endPoint = endNode.coordinate;
 
-        double newDistance = PathUtil.haversine(startPoint, endPoint);
+        double newDistance = PathUtil.haversineDistance(startPoint, endPoint);
         
 		this.hCost = newDistance;
 		
 		this.fCost = gCost + hCost;
 	}
-	
+
+	public List<Node> getAdjacentNodes() {
+		// List<Node> adjacentNodes = new ArrayList<Node>();
+		
+		// for(Edge e : edge.values()) {
+		// 	adjacentNodes.add(e.getTo());
+		// }
+		
+		// return adjacentNodes;
+
+		return null;
+	}
+
 	@Override
 	public int hashCode() {
 		return Objects.hash(coordinate);
@@ -63,8 +153,7 @@ public class Node implements Comparable<Node> {
 
 	@Override
 	public int compareTo(Node o) {
-		return Double.compare(fCost, o.getFCost());
+		return Double.compare(fCost, o.getfCost());
 	}
-	
 	
 }

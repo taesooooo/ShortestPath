@@ -1,0 +1,16 @@
+package com.shortestpath.shortestpath.core.pathengine.Provider;
+
+import java.util.HashMap;
+import java.util.List;
+
+import org.locationtech.jts.geom.Envelope;
+
+import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
+
+public interface NodeProvider {
+    public void insertNodeIndex(List<IndexInfo> indexList);
+    public int getNodeIndex(Coordinate coordinate);
+    public Coordinate getNearestNode(Envelope envelope, Coordinate coordinate);
+    public List<Integer> findNearestNodeId(Envelope envelope, Coordinate coordinate);
+}
