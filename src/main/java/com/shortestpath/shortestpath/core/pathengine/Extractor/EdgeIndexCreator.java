@@ -78,7 +78,7 @@ public class EdgeIndexCreator {
             // 노드가 바뀌면 이전 노드의 엣지 인덱스를 저장
             if (previousNodeId != -1 && previousNodeId != currentNodeId) {
                 edgeIndex.put(currentEntry);
-                log.debug("{} - 노드 {} 저장 완료", indexName, previousNodeId);
+                log.trace("{} - 노드 {} 저장 완료", indexName, previousNodeId);
                 currentEntry = null;
             }
             
