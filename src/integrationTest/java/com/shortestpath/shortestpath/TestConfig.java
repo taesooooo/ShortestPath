@@ -27,9 +27,6 @@ public class TestConfig {
     @Value("${findpath.search-buffer-pool-size:1}")
 	private int searchBufferPoolSize;
 
-    @Value("${findpath.hot-road-cache-mode:index-only}")
-	private String hotRoadCacheMode;
-    
     @Bean
     public DataStore dataStore(DataPersistence dataPersistence) throws Exception {
         String parentDir = new File(shpFilePath).getParent();
@@ -59,6 +56,6 @@ public class TestConfig {
     public Engine engine(DataStore dataStore, NodeProvider nodeIndexProvider, Loader loader) throws IOException {
         loader.extractData(false);
         ((HybridDataStore) dataStore).switchToMappingMode();
-        return new Engine(dataStore, nodeIndexProvider, searchBufferPoolSize, hotRoadCacheMode);
+        return new Engine(dataStore, nodeIndexProvider, searchBufferPoolSize);
     }
 }

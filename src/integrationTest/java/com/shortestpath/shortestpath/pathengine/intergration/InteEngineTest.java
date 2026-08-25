@@ -141,11 +141,10 @@ public class InteEngineTest {
                 DataStore dataStore,
                 NodeProvider nodeProvider,
                 Loader loader,
-                @Value("${findpath.search-buffer-pool-size:1}") int searchBufferPoolSize,
-                @Value("${findpath.hot-road-cache-mode:index-only}") String hotRoadCacheMode) throws IOException {
+                @Value("${findpath.search-buffer-pool-size:1}") int searchBufferPoolSize) throws IOException {
             loader.extractData(false);
             ((HybridDataStore) dataStore).switchToMappingMode();
-            return new Engine(dataStore, nodeProvider, searchBufferPoolSize, hotRoadCacheMode);
+            return new Engine(dataStore, nodeProvider, searchBufferPoolSize);
         }
     }
     

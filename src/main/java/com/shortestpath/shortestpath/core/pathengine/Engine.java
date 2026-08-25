@@ -32,7 +32,6 @@ import lombok.extern.slf4j.Slf4j;
 public class Engine {
 	private DataStore store;
 	private NodeProvider dataProvider;
-	private HotRoadCache hotRoadCache;
 	private static final int SEARCH_BUFFER_INITIAL_CAPACITY = 1024;
 	private final SearchBufferPool searchBufferPool;
 
@@ -41,14 +40,6 @@ public class Engine {
 	}
 
 	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize) throws IOException {
-		this(store, dataProvider, searchBufferPoolSize, HotRoadCacheMode.INDEX_ONLY);
-	}
-
-	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize, String hotRoadCacheMode) throws IOException {
-		this(store, dataProvider, searchBufferPoolSize, HotRoadCacheMode.fromProperty(hotRoadCacheMode));
-	}
-
-	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize, HotRoadCacheMode hotRoadCacheMode) throws IOException {
 		if (store == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataStore가 null입니다..");
 		}
@@ -59,11 +50,10 @@ public class Engine {
 
 		this.store = store;
 		this.dataProvider = dataProvider;
-		this.hotRoadCache = HotRoadCache.load(store, store.canUseMappedViews(), hotRoadCacheMode);
 		this.searchBufferPool = new SearchBufferPool(searchBufferPoolSize, getInitialSearchBufferCapacity());
 
-		log.info("엔진 초기화 완료 - searchBufferPoolSize: {}, searchBufferCapacity: {}, hotRoadCacheMode: {}",
-				searchBufferPoolSize, searchBufferPool.bufferCapacity(), hotRoadCacheMode);
+		log.info("엔진 초기화 완료 - searchBufferPoolSize: {}, searchBufferCapacity: {}",
+				searchBufferPoolSize, searchBufferPool.bufferCapacity());
 	}
 
 	public DataStore getStore() {
@@ -337,8 +327,7 @@ public class Engine {
 			}
 
 			for (int edge : connectedEdges) {
-				boolean hotEdge = hotRoadCache.containsEdge(edge);
-				int toNodeId = hotEdge ? hotRoadCache.getEdgeTo(edge) : getEdgeTo(edge, edgeList);
+				int toNodeId = getEdgeTo(edge, edgeList);
 				searchBuffer.ensureCapacity(toNodeId);
 
 				// 이미 방문한 노드는 건너뜀
@@ -351,7 +340,7 @@ public class Engine {
 				}
 
 				// 새로운 gCost(시작점부터 이웃 노드까지의 누적 거리) 계산 - roadLevel 가중치 적용
-				double edgeCost = hotEdge ? hotRoadCache.getWeightedDistance(edge) : getWeightedDistance(edge, edgeList);
+				double edgeCost = getWeightedDistance(edge, edgeList);
 				double newDist = minGCost + edgeCost;
 				double currentGCost = searchBuffer.getCurrentGCost(toNodeId);
 
@@ -510,9 +499,7 @@ public class Engine {
 		int[] connectedEdges = getSearchConnectedEdges(edgeList, minNodeId, currentLevel, activeBuffer, reverseSide, targetLon, targetLat);
 
 		for (int edge : connectedEdges) {
-			boolean hotEdge = hotRoadCache.containsEdge(edge, reverseSide);
-
-			int toNodeId = getSearchEdgeNextNode(edge, edgeList, reverseSide, hotEdge);
+			int toNodeId = getSearchEdgeNextNode(edge, edgeList, reverseSide);
 			activeBuffer.ensureCapacity(toNodeId);
 
 			if (activeBuffer.isVisited(toNodeId)) {
@@ -523,7 +510,7 @@ public class Engine {
 				traceRoute.addChild(getNodeCoordinate(toNodeId));
 			}
 
-			double edgeCost = getSearchWeightedDistance(edge, edgeList, reverseSide, hotEdge);
+			double edgeCost = getSearchWeightedDistance(edge, edgeList, reverseSide);
 			double newDist = minGCost + edgeCost;
 
 			if (newDist < activeBuffer.getCurrentGCost(toNodeId)) {
@@ -641,11 +628,6 @@ public class Engine {
 	}
 
 	private Coordinate getNodeCoordinate(int nodeId) throws IOException {
-		Coordinate cachedCoordinate = hotRoadCache.getNodeCoordinate(nodeId);
-		if (cachedCoordinate != null) {
-			return cachedCoordinate;
-		}
-
 		if (store.canUseMappedViews()) {
 			return new Coordinate(store.viewNodeYCoordinate(nodeId), store.viewNodeXCoordinate(nodeId));
 		}
@@ -654,10 +636,6 @@ public class Engine {
 	}
 
 	private int getEdgeTo(long edgeOffset, Map<Long, Edge> edgeList) throws IOException {
-		if (hotRoadCache.containsEdge(edgeOffset)) {
-			return hotRoadCache.getEdgeTo(edgeOffset);
-		}
-
 		if (store.canUseMappedViews()) {
 			return store.viewEdgeTo(edgeOffset);
 		}
@@ -665,11 +643,7 @@ public class Engine {
 		return getCachedEdge(edgeList, edgeOffset).getTo();
 	}
 
-	private int getSearchEdgeNextNode(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
-		if (hotEdge) {
-			return hotRoadCache.getEdgeTo(edgeOffset, reverseSide);
-		}
-
+	private int getSearchEdgeNextNode(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide) throws IOException {
 		if (reverseSide) {
 			if (store.canUseMappedViews()) {
 				return store.viewReverseEdgeFrom(edgeOffset);
@@ -682,10 +656,6 @@ public class Engine {
 	}
 
 	private RoadLevel getEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList) throws IOException {
-		if (hotRoadCache.containsEdge(edgeOffset)) {
-			return hotRoadCache.getEdgeRoadLevel(edgeOffset);
-		}
-
 		if (store.canUseMappedViews()) {
 			return store.viewEdgeRoadLevel(edgeOffset);
 		}
@@ -694,10 +664,6 @@ public class Engine {
 	}
 
 	private RoadLevel getSearchEdgeRoadLevel(long edgeOffset, Map<Long, Edge> edgeList, boolean reverseSide) throws IOException {
-		if (hotRoadCache.containsEdge(edgeOffset, reverseSide)) {
-			return hotRoadCache.getEdgeRoadLevel(edgeOffset, reverseSide);
-		}
-
 		if (reverseSide && store.canUseMappedViews()) {
 			return store.viewReverseEdgeRoadLevel(edgeOffset);
 		}
@@ -710,10 +676,6 @@ public class Engine {
 	}
 
 	private double getWeightedDistance(long offset, Map<Long, Edge> edgeList) throws IOException {
-		if (hotRoadCache.containsEdge(offset)) {
-			return hotRoadCache.getWeightedDistance(offset);
-		}
-
 		if (store.canUseMappedViews()) {
 			return getWeightedDistance(offset);
 		}
@@ -721,11 +683,7 @@ public class Engine {
 		return getWeightedDistance(getCachedEdge(edgeList, offset));
 	}
 
-	private double getSearchWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean reverseSide, boolean hotEdge) throws IOException {
-		if (hotEdge) {
-			return hotRoadCache.getWeightedDistance(offset, reverseSide);
-		}
-
+	private double getSearchWeightedDistance(long offset, Map<Long, Edge> edgeList, boolean reverseSide) throws IOException {
 		if (reverseSide) {
 			if (store.canUseMappedViews()) {
 				return getWeightedDistance(store.viewReverseEdgeDistance(offset), store.viewReverseEdgeRoadLevel(offset));
@@ -797,10 +755,6 @@ public class Engine {
 	}
 
 	private int[] getConnectedLevelEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel level) throws IOException {
-		// if(hotRoadCache.supportsLevel(level)) {
-		// 	return hotRoadCache.getConnectedLevelEdges(nodeId, level);
-		// }
-
 		// FileBasedEdgeIndex index = (FileBasedEdgeIndex)store.getEdgeIndex();
 
 		// int count = getIndexEdgeCount(index, nodeId, level);
@@ -825,10 +779,6 @@ public class Engine {
 	}
 
 	private int[] getConnectedLevelEdgesByNodeId(Map<Long, Edge> edgeList, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
-		if (hotRoadCache.supportsLevel(level, reverseSide)) {
-			return hotRoadCache.getConnectedLevelEdges(nodeId, level, reverseSide);
-		}
-
 		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
 
 		int count = getIndexEdgeCount(index, nodeId, level);
@@ -885,15 +835,9 @@ public class Engine {
 		// // int nextRoadLevelOrdinal = currentLevel.ordinal() + 1 > 2 ? currentLevel.ordinal() : currentLevel.ordinal() + 1;
 		// RoadLevel nextRoadLevel = getNextLevel(currentLevel);
 	
-		// int count = hotRoadCache.supportsLevel(currentLevel)
-		// 		? hotRoadCache.getLevelEdgeCount(nodeId, currentLevel)
-		// 		: getIndexEdgeCount(index, nodeId, currentLevel);
 		// int nextEdgeCount = nextRoadLevel != null ? getIndexEdgeCount(index, nodeId, nextRoadLevel) : 0;
 
 		// int[] levelEdgeArray = new int[count + nextEdgeCount];
-		// long startOffset = hotRoadCache.supportsLevel(currentLevel)
-		// 		? hotRoadCache.getLevelStartOffset(nodeId, currentLevel)
-		// 		: getIndexStartOffset(index, nodeId, currentLevel);
 
 		// // 지정된 현재 계층의 엣지 추가
 		// // int[] allEdges = getConnectedEdgesByNodeId(edgeList, nodeId);
@@ -921,17 +865,13 @@ public class Engine {
 		// currentLevel.ordinal() : currentLevel.ordinal() + 1;
 		RoadLevel nextRoadLevel = getNextLevel(currentLevel);
 
-		int count = hotRoadCache.supportsLevel(currentLevel, reverseSide)
-				? hotRoadCache.getLevelEdgeCount(nodeId, currentLevel, reverseSide)
-				: getIndexEdgeCount(index, nodeId, currentLevel);
+		int count = getIndexEdgeCount(index, nodeId, currentLevel);
 		int nextEdgeCount = nextRoadLevel != null
 				? getCachedOrIndexEdgeCount(index, nodeId, nextRoadLevel, reverseSide)
 				: 0;
 
 		int[] levelEdgeArray = new int[count + nextEdgeCount];
-		long startOffset = hotRoadCache.supportsLevel(currentLevel, reverseSide)
-				? hotRoadCache.getLevelStartOffset(nodeId, currentLevel, reverseSide)
-				: getIndexStartOffset(index, nodeId, currentLevel);
+		long startOffset = getIndexStartOffset(index, nodeId, currentLevel);
 
 		// 지정된 현재 계층의 엣지 추가
 		// int[] allEdges = getConnectedEdgesByNodeId(edgeList, nodeId);
@@ -1009,12 +949,8 @@ public class Engine {
 
 		FileBasedEdgeIndex index = (FileBasedEdgeIndex)store.getEdgeIndex();
 
-		int level0Count = hotRoadCache.supportsLevel(RoadLevel.L0)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L0)
-				: getIndexEdgeCount(index, nodeId, RoadLevel.L0);
-		int level1Count = hotRoadCache.supportsLevel(RoadLevel.L1)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L1)
-				: getIndexEdgeCount(index, nodeId, RoadLevel.L1);
+		int level0Count = getIndexEdgeCount(index, nodeId, RoadLevel.L0);
+		int level1Count = getIndexEdgeCount(index, nodeId, RoadLevel.L1);
 		int level2Count = getIndexEdgeCount(index, nodeId, RoadLevel.L2);
 		int edgeCount = level0Count + level1Count + level2Count;
 		int[] edgeArray = new int[edgeCount];
@@ -1028,14 +964,10 @@ public class Engine {
         long startOffset = 0;
 
 		if (level0Count > 0) {
-			startOffset = hotRoadCache.supportsLevel(RoadLevel.L0)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L0)
-					: getIndexStartOffset(index, nodeId, RoadLevel.L0);
+			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L0);
 		}
 		 else if (level1Count > 0) {
-			startOffset = hotRoadCache.supportsLevel(RoadLevel.L1)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L1)
-					: getIndexStartOffset(index, nodeId, RoadLevel.L1);
+			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L1);
 		} 
 		else {
 			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L2);
@@ -1054,15 +986,9 @@ public class Engine {
 
 		FileBasedEdgeIndex index = getSearchEdgeIndex(reverseSide);
 
-		int level0Count = hotRoadCache.supportsLevel(RoadLevel.L0, reverseSide)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L0, reverseSide)
-				: getIndexEdgeCount(index, nodeId, RoadLevel.L0);
-		int level1Count = hotRoadCache.supportsLevel(RoadLevel.L1, reverseSide)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L1, reverseSide)
-				: getIndexEdgeCount(index, nodeId, RoadLevel.L1);
-		int level2Count = hotRoadCache.supportsLevel(RoadLevel.L2, reverseSide)
-				? hotRoadCache.getLevelEdgeCount(nodeId, RoadLevel.L2, reverseSide)
-				: getIndexEdgeCount(index, nodeId, RoadLevel.L2);
+		int level0Count = getIndexEdgeCount(index, nodeId, RoadLevel.L0);
+		int level1Count = getIndexEdgeCount(index, nodeId, RoadLevel.L1);
+		int level2Count = getIndexEdgeCount(index, nodeId, RoadLevel.L2);
 		int edgeCount = level0Count + level1Count + level2Count;
 		int[] edgeArray = new int[edgeCount];
 
@@ -1073,17 +999,11 @@ public class Engine {
 		long startOffset = 0;
 
 		if (level0Count > 0) {
-			startOffset = hotRoadCache.supportsLevel(RoadLevel.L0, reverseSide)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L0, reverseSide)
-					: getIndexStartOffset(index, nodeId, RoadLevel.L0);
+			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L0);
 		} else if (level1Count > 0) {
-			startOffset = hotRoadCache.supportsLevel(RoadLevel.L1, reverseSide)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L1, reverseSide)
-					: getIndexStartOffset(index, nodeId, RoadLevel.L1);
+			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L1);
 		} else {
-			startOffset = hotRoadCache.supportsLevel(RoadLevel.L2, reverseSide)
-					? hotRoadCache.getLevelStartOffset(nodeId, RoadLevel.L2, reverseSide)
-					: getIndexStartOffset(index, nodeId, RoadLevel.L2);
+			startOffset = getIndexStartOffset(index, nodeId, RoadLevel.L2);
 		}
 
 		for (int i = 0; i < edgeCount; i++) {
@@ -1102,9 +1022,7 @@ public class Engine {
 	}
 
 	private int getCachedOrIndexEdgeCount(FileBasedEdgeIndex index, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
-		return hotRoadCache.supportsLevel(level, reverseSide)
-				? hotRoadCache.getLevelEdgeCount(nodeId, level, reverseSide)
-				: getIndexEdgeCount(index, nodeId, level);
+		return getIndexEdgeCount(index, nodeId, level);
 	}
 
 	private long getCachedOrIndexStartOffset(FileBasedEdgeIndex index, int nodeId, RoadLevel level) throws IOException {
@@ -1112,9 +1030,7 @@ public class Engine {
 	}
 
 	private long getCachedOrIndexStartOffset(FileBasedEdgeIndex index, int nodeId, RoadLevel level, boolean reverseSide) throws IOException {
-		return hotRoadCache.supportsLevel(level, reverseSide)
-				? hotRoadCache.getLevelStartOffset(nodeId, level, reverseSide)
-				: getIndexStartOffset(index, nodeId, level);
+		return getIndexStartOffset(index, nodeId, level);
 	}
 
 	private int getIndexEdgeCount(FileBasedEdgeIndex index, int nodeId, RoadLevel level) throws IOException {
