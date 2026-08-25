@@ -195,8 +195,8 @@ public class Engine {
 		log.info("노드 탐색 완료 / 경로 탐색 시작");
 
 		long st = System.currentTimeMillis();
-		RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
-		// RouteSearchResult result = findPath(startNode, endNode, trackRoute);
+		// RouteSearchResult result = findBidirectionalPath(startNode, endNode, trackRoute);
+		RouteSearchResult result = findPath(startNode, endNode, trackRoute);
 		long et = System.currentTimeMillis();
 		result.setSearchTime((et - st) / 1000.0);
 		log.info("경로 탐색 완료 - start: {}, end: {}, startNodeId: {}, endNodeId: {}, trackRoute: {}, searchTime: {}초",
