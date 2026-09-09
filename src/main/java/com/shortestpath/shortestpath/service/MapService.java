@@ -13,5 +13,4 @@ import com.shortestpath.shortestpath.dto.response.ResponseRestaurantsDto;
 public interface MapService {
 	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> findPathDto) throws IOException, EmptyGeometryListException;
 	public ResponeseRouteSearchTraceDto searchRouteTrack(RequestFindPathDto searchRouteDto) throws Exception;
-	public ResponseRestaurantsDto findRestaurantsByBBox(RequestBBox requestBBox); 
 }

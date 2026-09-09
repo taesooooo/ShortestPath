@@ -43,7 +43,7 @@ public class HybridDataStore implements MappableDataStore {
     private DataReader dataReader;
     private String fileDirectory;
     private boolean readOnlyMode;
-    private DataPersistence dataPersistence;  // DB 모드 설정
+    private NodeDataPersistence dataPersistence;  // DB 모드 설정
     private EdgeIndex edgeIndex;  // Edge 인덱스 관리
     private EdgeIndex reverseEdgeIndex;  // Reverse Edge 인덱스 관리
 
@@ -473,15 +473,7 @@ public class HybridDataStore implements MappableDataStore {
      * DataPersistence 설정 (DB 조회 및 저장 모드 활성화)
      * @param dataPersistence DataPersistence 구현체 (null이면 인메모리 모드)
      */
-    public void setPersistence(DataPersistence dataPersistence) {
-        this.dataPersistence = dataPersistence;
-    }
-    
-    /**
-     * @deprecated setPersistence() 사용 권장
-     */
-    @Deprecated
-    public void setNodeProvider(DataPersistence dataPersistence) {
+    public void setPersistence(NodeDataPersistence dataPersistence) {
         this.dataPersistence = dataPersistence;
     }
 

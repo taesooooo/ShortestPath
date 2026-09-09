@@ -5,7 +5,6 @@ import com.shortestpath.shortestpath.common.PageInfo;
 import com.shortestpath.shortestpath.dto.request.RequestFoodStoreSearchDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreSearchDto;
-import com.shortestpath.shortestpath.entity.FoodStore;
 import com.shortestpath.shortestpath.service.FoodStoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

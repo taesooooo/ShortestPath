@@ -4,7 +4,6 @@ import com.shortestpath.shortestpath.common.PageInfo;
 import com.shortestpath.shortestpath.dto.request.RequestFoodStoreSearchDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreSearchDto;
-import com.shortestpath.shortestpath.entity.FoodStore;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;

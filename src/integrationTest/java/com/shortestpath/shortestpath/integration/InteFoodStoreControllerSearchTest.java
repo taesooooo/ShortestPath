@@ -35,17 +35,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shortestpath.shortestpath.TestRootContext;
 import com.shortestpath.shortestpath.controller.MapController;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFoodStoreSearchDto;
 import com.shortestpath.shortestpath.service.MapService;
-
-import jakarta.transaction.Transactional;
 
 /**
  * FoodStoreController 통합 테스트
@@ -59,6 +59,7 @@ import jakarta.transaction.Transactional;
 @ActiveProfiles("inte")
 @SpringBootTest
 @Transactional
+@Import(TestRootContext.class)
 class InteFoodStoreControllerSearchTest {
 
 	private static final Logger log = LoggerFactory.getLogger(InteFoodStoreControllerSearchTest.class);

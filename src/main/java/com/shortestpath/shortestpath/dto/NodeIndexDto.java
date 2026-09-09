@@ -1,24 +1,20 @@
-package com.shortestpath.shortestpath.entity;
+package com.shortestpath.shortestpath.dto;
 
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+import com.shortestpath.shortestpath.core.pathengine.model.NodeIndex;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class NodeIndex {
-    @Id
+public class NodeIndexDto implements NodeIndex {
+
     private int id;
-    @Column(columnDefinition = "POINT SRID 4326")
     private Coordinate coordinate;
     private int offset;
 }

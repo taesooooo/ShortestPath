@@ -18,8 +18,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.locationtech.jts.geom.Envelope;
 
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
@@ -31,25 +31,25 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class Engine {
 	private DataStore store;
-	private NodeProvider dataProvider;
+	private NodeDataPersistence nodeDataPersistence;
 	private static final int SEARCH_BUFFER_INITIAL_CAPACITY = 1024;
 	private final SearchBufferPool searchBufferPool;
 
-	public Engine(DataStore store, NodeProvider dataProvider) throws IOException {
-		this(store, dataProvider, 1);
+	public Engine(DataStore store, NodeDataPersistence nodeDataPersistence) throws IOException {
+		this(store, nodeDataPersistence, 1);
 	}
 
-	public Engine(DataStore store, NodeProvider dataProvider, int searchBufferPoolSize) throws IOException {
+	public Engine(DataStore store, NodeDataPersistence nodeDataPersistence, int searchBufferPoolSize) throws IOException {
 		if (store == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataStore가 null입니다..");
 		}
 
-		if (dataProvider == null) {
+		if (nodeDataPersistence == null) {
 			throw new IllegalArgumentException("경로 탐색 엔진 초기화를 실패했습니다. DataProvider가 null입니다.");
 		}
 
 		this.store = store;
-		this.dataProvider = dataProvider;
+		this.nodeDataPersistence = nodeDataPersistence;
 		this.searchBufferPool = new SearchBufferPool(searchBufferPoolSize, getInitialSearchBufferCapacity());
 
 		log.info("엔진 초기화 완료 - searchBufferPoolSize: {}, searchBufferCapacity: {}",
@@ -1122,7 +1122,7 @@ public class Engine {
 	private Node findNearestNode(Coordinate coordinate) throws IOException {
 		// 주어진 좌표에서 가까운 노드 오프셋을 가져온다. 30미터 이내
 		Envelope envelope = createSearchEnvelope(coordinate, 100);
-		List<Integer> nodeIdList = dataProvider.findNearestNodeId(envelope, coordinate);
+		List<Integer> nodeIdList = nodeDataPersistence.findNearestNodeId(envelope, coordinate);
 		ArrayList<Node> nodeList = new ArrayList<Node>();
 		Node n = null;
 

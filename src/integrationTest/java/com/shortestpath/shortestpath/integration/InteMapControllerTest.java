@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.test.context.ActiveProfiles;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -21,17 +22,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.shortestpath.shortestpath.DBHelper;
 import com.shortestpath.shortestpath.IntegrationTestHelper;
+import com.shortestpath.shortestpath.TestRootContext;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
@@ -39,12 +43,11 @@ import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
 
-import jakarta.transaction.Transactional;
-
 @ActiveProfiles("inte")
 @SpringBootTest
 @Transactional
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Import(TestRootContext.class)
 class InteMapControllerTest {
 	private static final Logger log = LoggerFactory.getLogger(InteMapControllerTest.class);
 
@@ -52,9 +55,8 @@ class InteMapControllerTest {
 	private WebApplicationContext context;
 	@Autowired
 	private Engine engine;
-
 	@Autowired
-	private DBHelper dbHelper;
+	private JdbcTemplate jdbcTemplate;
 
 	private MockMvc mockMvc;
 	private ObjectMapper om = new ObjectMapper();
@@ -66,9 +68,9 @@ class InteMapControllerTest {
 
 	@AfterAll
     public void destroy() throws IOException {
-		engine.getStore().close();
-        IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
-		dbHelper.turncate();
+		// engine.getStore().close();
+        // IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
+		// jdbcTemplate.update("TRUNCATE TABLE node_indx;");
     }
 
 	@Test

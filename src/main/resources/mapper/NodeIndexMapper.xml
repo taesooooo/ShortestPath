@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shortestpath.shortestpath.mapper.NodeIndexMapper">
+
+    <resultMap id="nodeIndexResultMap" type="com.shortestpath.shortestpath.dto.NodeIndexDto">
+        <id column="id" property="id"/>
+        <result column="file_offset" property="offset"/>
+        <result column="coordinate"
+                property="coordinate"
+                javaType="com.shortestpath.shortestpath.core.pathengine.Coordinate"
+                typeHandler="com.shortestpath.shortestpath.common.converter.GeometryCoordinateTypeHandler"/>
+    </resultMap>
+
+    <sql id="nodeIndexColumns">
+        id,
+        coordinate,
+        file_offset
+    </sql>
+
+    <select id="findByCoordinate" resultMap="nodeIndexResultMap">
+        SELECT <include refid="nodeIndexColumns"/>
+        FROM node_index
+        WHERE ST_Equals(
+            coordinate,
+            ST_SetSRID(ST_MakePoint(#{coordinate.longitude}, #{coordinate.latitude}), 4326)
+        )
+        LIMIT 1
+    </select>
+
+    <select id="findOffsetById" resultType="int">
+        SELECT file_offset
+        FROM node_index
+        WHERE id = #{id}
+    </select>
+
+    <select id="findNearestNode" resultMap="nodeIndexResultMap">
+        SELECT <include refid="nodeIndexColumns"/>
+        FROM node_index
+        WHERE ST_Intersects(ST_GeomFromText(#{bbox}, 4326), coordinate)
+        ORDER BY ST_DistanceSphere(
+            coordinate,
+            ST_SetSRID(ST_MakePoint(#{coordinate.longitude}, #{coordinate.latitude}), 4326)
+        )
+        LIMIT 5
+    </select>
+
+    <!-- 배치 insert: IndexInfo의 long 좌표를 LongToGeometryTypeHandler로 geometry로 변환 -->
+    <insert id="insertNodeIndexBatch" parameterType="java.util.List">
+        INSERT INTO node_index (<include refid="nodeIndexColumns"/>)
+        VALUES
+        <foreach collection="indexList" item="item" separator=",">
+            (#{item.nodeId},
+             #{item.coordinate, javaType=java.lang.Long, typeHandler=com.shortestpath.shortestpath.common.converter.LongToGeometryTypeHandler},
+             #{item.offset})
+        </foreach>
+    </insert>
+
+</mapper>

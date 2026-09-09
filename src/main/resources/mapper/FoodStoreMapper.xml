@@ -26,7 +26,7 @@
         <result column="site_whl_addr" property="siteWhlAddr"/>
         <result column="homepage" property="homepage"/>
         <result column="last_mod_tm" property="lastModetm"/>
-        <result column="geometry" property="geometry" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryTypeHandler"/>
+        <result column="geometry" property="geometry" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryCoordinateTypeHandler"/>
         <result column="sido_nm" property="sidoNm"/>
         <result column="sigungu_nm" property="sigunguNm"/>
         <result column="lot_nm_main" property="lotNmMain"/>
@@ -48,7 +48,7 @@
         <result column="homepage" property="homepage"/>
         <result column="building_id" property="buildingId"/>
         <!-- PostgreSQL geometry를 Point로 자동 변환 -->
-        <result column="center_cord" property="centerCord" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryTypeHandler"/>
+        <result column="center_cord" property="centerCord" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryCoordinateTypeHandler"/>
     </resultMap>
     
     <!-- SELECT 컬럼 재사용 (alias 포함) -->

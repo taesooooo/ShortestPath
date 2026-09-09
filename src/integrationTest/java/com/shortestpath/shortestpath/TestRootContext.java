@@ -1,41 +1,87 @@
 package com.shortestpath.shortestpath;
 
 import java.io.File;
+import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
-import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
+import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
+
+import jakarta.annotation.PreDestroy;
 @TestConfiguration
 public class TestRootContext {
+	private static final Logger log = LoggerFactory.getLogger(TestRootContext.class);
 	
 	@Value("${findpath.shp-path}")
 	private String shpFilePath;
 
+	@Value("${findpath.node-db-save}")
+	private boolean isNodeDbSave;
+
 	@Value("${findpath.search-buffer-pool-size:1}")
 	private int searchBufferPoolSize;
 
+
+	// 공유 컨텍스트 사용 후 DB 삭제시 사용
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+	@Autowired
+	private Engine engine;
+
+	// @Override
+    // public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+    //     resolvers.add(new PageInfoArgumentResolver());
+    // }
+
 	@Bean
-	public Engine pathEngine(NodeProvider dataProvider, DataPersistence dataPersistence) throws Exception {
-		HybridDataStore dataStore = new HybridDataStore(new File(shpFilePath).getParent());
+	@Primary
+	public Engine testPathEngine(NodeDataPersistence dataPersistence) throws Exception {
+		String shpFileParent = new File(shpFilePath).getParent();
+		HybridDataStore dataStore = new HybridDataStore(shpFileParent);
 		dataStore.setPersistence(dataPersistence);
-		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, false);
+		dataStore.setEdgeIndex(new FileBasedEdgeIndex(shpFileParent));
+		dataStore.setReverseEdgeIndex(new FileBasedEdgeIndex(new File(shpFileParent, "reverse_edge_index.bin").toPath()));
+		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, isNodeDbSave);
 		Loader loader = new Loader(extractor);
 
-		if(!loader.isDataExtracted()) {
+		log.info("노드/엣지/인덱스 추출 상태를 확인합니다.");
+		loader.extractData(false);
 
-			loader.extractData(true);
-			dataStore = new HybridDataStore(new File(shpFilePath).getParent(), true); // 읽기 전용 모드로 재생성
-			dataStore.setPersistence(dataPersistence);
-		}
+		dataStore.switchToMappingMode();
+		dataStore.switchEdgeIndexToMappingMode();
 		
-		return new Engine(dataStore, dataProvider, searchBufferPoolSize);
+		return new Engine(dataStore, dataPersistence, searchBufferPoolSize);
+	}
+
+	@Bean
+	@Primary
+	public ObjectMapper testObjectMapper() {
+		return new ObjectMapper().registerModule(new JavaTimeModule());
+	}
+
+
+	// 모든 테스트 클래스가 공유 클래스를 사용하고 마지막에 컨텍스트가 종료 될때 DB도 초기화
+	@PreDestroy
+	public void cleanup() throws IOException {
+		jdbcTemplate.update("TRUNCATE TABLE node_index;");
+		engine.getStore().close();
+        IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
+
+		log.info("테스트 공유 컨텍스트 종료 후 DB삭제 완료");
 	}
 }

@@ -10,12 +10,8 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 
 /**
  * 데이터베이스 영속성 및 노드 조회 통합 인터페이스
- * 
- * 역할:
- * 1. 저장: 추출 단계에서 노드 인덱스를 DB에 저장
- * 2. 조회: 경로탐색 단계에서 DB에서 노드 정보를 조회
  */
-public interface DataPersistence {
+public interface NodeDataPersistence {
     /**
      * 노드 인덱스 정보를 데이터베이스에 저장
      * @param indexList 노드 인덱스 정보 목록

@@ -2,28 +2,20 @@ package com.shortestpath.shortestpath.pathengine.intergration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
 
-import org.locationtech.jts.geom.Envelope;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.annotation.DirtiesContext.ClassMode;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
-import com.shortestpath.shortestpath.IntegrationTestHelper;
+import com.shortestpath.shortestpath.TestRootContext;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
@@ -33,17 +25,14 @@ import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
-import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
-@SpringJUnitConfig(InteEngineTest.EngineIntegrationConfig.class)
-@TestPropertySource("classpath:application-inte.properties")
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@DirtiesContext(classMode = ClassMode.AFTER_CLASS)
+
+@SpringBootTest
+@ActiveProfiles("init")
+@Transactional
+@Import(TestRootContext.class)
 public class InteEngineTest {
     @Autowired
     DataStore dataStore;
@@ -53,100 +42,6 @@ public class InteEngineTest {
     Loader loader;
     @Autowired
     Engine engine; 
-
-    @TestConfiguration
-    static class EngineIntegrationConfig {
-        @Bean
-        public DataStore dataStore(@Value("${findpath.shp-path}") String shpFilePath) throws Exception {
-            String parentDir = new File(shpFilePath).getParent();
-
-            HybridDataStore dataStore = new HybridDataStore(parentDir);
-            dataStore.setEdgeIndex(new FileBasedEdgeIndex(parentDir));
-            dataStore.setReverseEdgeIndex(new FileBasedEdgeIndex(new File(parentDir, "reverse_edge_index.bin").toPath()));
-
-            return dataStore;
-        }
-
-        @Bean
-        public Extractor extractor(@Value("${findpath.shp-path}") String shpFilePath, DataStore dataStore) throws IOException {
-            return new NodeEdgeExtractor(shpFilePath, dataStore, false);
-        }
-
-        @Bean
-        public Loader loader(Extractor extractor) throws IOException {
-            return new Loader(extractor);
-        }
-
-        @Bean
-        public NodeProvider fileNodeProvider(DataStore dataStore) {
-            return new NodeProvider() {
-                @Override
-                public void insertNodeIndex(List<IndexInfo> indexList) {
-                }
-
-                @Override
-                public int getNodeIndex(Coordinate coordinate) {
-                    throw new UnsupportedOperationException("Engine integration test uses nearest-node lookup only.");
-                }
-
-                @Override
-                public Coordinate getNearestNode(Envelope envelope, Coordinate coordinate) {
-                    return findNearestNodeId(envelope, coordinate).stream()
-                            .findFirst()
-                            .map(nodeId -> readNodeCoordinate(dataStore, nodeId))
-                            .orElseThrow(() -> new IllegalStateException("가장 가까운 노드를 찾을 수 없습니다."));
-                }
-
-                @Override
-                public List<Integer> findNearestNodeId(Envelope envelope, Coordinate coordinate) {
-                    try {
-                        ArrayList<Node> candidates = new ArrayList<Node>();
-                        ArrayList<Node> fallback = new ArrayList<Node>();
-                        int totalNodes = dataStore.getTotalNodes();
-
-                        for(int nodeId = 0; nodeId < totalNodes; nodeId++) {
-                            Node node = dataStore.readNode(DataStructureSizes.calculateNodeOffset(nodeId));
-                            fallback.add(node);
-                            if(envelope.contains(node.getCoordinate().getLongitude(), node.getCoordinate().getLatitude())) {
-                                candidates.add(node);
-                            }
-                        }
-
-                        ArrayList<Node> searchNodes = candidates.isEmpty() ? fallback : candidates;
-                        searchNodes.sort(Comparator.comparingDouble(node -> node.getCoordinate().calculateDistanceToTarget(coordinate)));
-
-                        return searchNodes.stream()
-                                .limit(5)
-                                .map(Node::getId)
-                                .toList();
-                    }
-                    catch(IOException e) {
-                        throw new IllegalStateException("노드 바이너리에서 가까운 노드를 찾는 중 오류가 발생했습니다.", e);
-                    }
-                }
-
-                private Coordinate readNodeCoordinate(DataStore dataStore, int nodeId) {
-                    try {
-                        return dataStore.readNode(DataStructureSizes.calculateNodeOffset(nodeId)).getCoordinate();
-                    }
-                    catch(IOException e) {
-                        throw new IllegalStateException("노드 좌표를 읽는 중 오류가 발생했습니다.", e);
-                    }
-                }
-            };
-        }
-
-        @Bean
-        public Engine engine(
-                DataStore dataStore,
-                NodeProvider nodeProvider,
-                Loader loader,
-                @Value("${findpath.search-buffer-pool-size:1}") int searchBufferPoolSize) throws IOException {
-            loader.extractData(false);
-            ((HybridDataStore) dataStore).switchToMappingMode();
-            return new Engine(dataStore, nodeProvider, searchBufferPoolSize);
-        }
-    }
     
     @BeforeAll
     public void setUp() throws IOException {
@@ -155,8 +50,8 @@ public class InteEngineTest {
 
     @AfterAll
     public void destroy() throws IOException {
-        dataStore.close();
-        IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
+        // dataStore.close();
+        // IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
     }
 
     // @Test

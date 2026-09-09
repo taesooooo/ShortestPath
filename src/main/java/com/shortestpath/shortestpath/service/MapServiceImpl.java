@@ -19,8 +19,6 @@ import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponseRestaurantsDto;
 import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
-import com.shortestpath.shortestpath.entity.Restaurants;
-import com.shortestpath.shortestpath.repository.RestaurantsRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,7 +26,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MapServiceImpl implements MapService {
 	private final Engine engine;
-	private final RestaurantsRepository restaurantsRepository;
 
 	@Override
 	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> coordinateList) throws IOException, EmptyGeometryListException {
@@ -89,14 +86,4 @@ public class MapServiceImpl implements MapService {
 
 		return searchResult.getRouteTracker().getTrackRoutes();
 	}
-
-
-	@Override
-	public ResponseRestaurantsDto findRestaurantsByBBox(RequestBBox bbox) {
-		// List<Restaurants> restaurantsList = restaurantsRepository.findRestaurantsByBBox(bbox);
-		return null;
-	}
-
-	
-
 }
