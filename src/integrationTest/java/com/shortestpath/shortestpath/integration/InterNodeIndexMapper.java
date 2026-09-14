@@ -37,19 +37,14 @@ public class InterNodeIndexMapper {
     public void setUp() {
         // 임시 테스트 데이터
         List<IndexInfo> tempIndexList = List.of(
-            new IndexInfo(1001, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 1)), 1001),
-            new IndexInfo(1002, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 2)), 1002),
-            new IndexInfo(1003, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 3)), 1003),
-            new IndexInfo(1004, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 4)), 1004),
-            new IndexInfo(1005, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 5)), 1005)
+            new IndexInfo(10000001, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 1)), 1001),
+            new IndexInfo(10000002, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 2)), 1002),
+            new IndexInfo(10000003, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 3)), 1003),
+            new IndexInfo(10000004, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 4)), 1004),
+            new IndexInfo(10000005, GeometryUtil.coordinateToLong(new org.locationtech.jts.geom.Coordinate(0, 5)), 1005)
         );
 
         nodeIndexMapper.insertNodeIndexBatch(tempIndexList);
-    }
-
-    @AfterEach
-    public void finish() {
-        
     }
     
     @Test
@@ -58,15 +53,15 @@ public class InterNodeIndexMapper {
          // 좌표와 인덱스 정보를 저장할 해시맵 생성
         List<IndexInfo> indexList = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            IndexInfo indexInfo = new IndexInfo(100 + i, i, i);
+            IndexInfo indexInfo = new IndexInfo(10000006 + i, i, i);
             indexList.add(indexInfo);
         }
 
         // 테스트 시작
         nodeIndexMapper.insertNodeIndexBatch(indexList);
 
-        int id = nodeIndexMapper.findOffsetById(101);
-        assertThat(id).isEqualTo(1);
+        int id = nodeIndexMapper.findOffsetById(10000006);
+        assertThat(id).isEqualTo(0);
     }
     
     @Test
@@ -76,13 +71,13 @@ public class InterNodeIndexMapper {
 
         NodeIndex nodeIndex = nodeIndexMapper.findByCoordinate(coordinate).get();
 
-        assertThat(nodeIndex.getId()).isEqualTo(1002);
+        assertThat(nodeIndex.getId()).isEqualTo(10000002);
     }
 
     @Test
     @DisplayName("Id로 노드 인덱스 오프셋 가져오기")
     public void findOffsetByIdTest() {
-        int offset = nodeIndexMapper.findOffsetById(1001);
+        int offset = nodeIndexMapper.findOffsetById(10000001);
 
         assertThat(offset).isEqualTo(1001);
     }
@@ -95,7 +90,7 @@ public class InterNodeIndexMapper {
 
         List<NodeIndex> nodeIndex = nodeIndexMapper.findNearestNode(GeometryUtil.toWkt(envelope), coordinate);
 
-        assertThat(nodeIndex).extracting(NodeIndex::getId).containsExactly(1001, 1002);
+        assertThat(nodeIndex).extracting(NodeIndex::getId).containsExactly(10000001, 10000002);
     }
 
     

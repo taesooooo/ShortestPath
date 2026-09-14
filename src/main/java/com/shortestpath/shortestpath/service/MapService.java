@@ -8,7 +8,7 @@ import com.shortestpath.shortestpath.dto.request.RequestBBox;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
-import com.shortestpath.shortestpath.dto.response.ResponseRestaurantsDto;
+import com.shortestpath.shortestpath.dto.response.ResponseRestaurantDto;
 
 public interface MapService {
 	public List<ResponseFindPathDto> findPath(List<RequestFindPathDto> findPathDto) throws IOException, EmptyGeometryListException;

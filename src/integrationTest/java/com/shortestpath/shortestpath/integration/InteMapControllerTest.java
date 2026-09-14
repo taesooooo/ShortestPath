@@ -6,23 +6,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.springframework.test.context.ActiveProfiles;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -34,44 +29,35 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.shortestpath.shortestpath.IntegrationTestHelper;
-import com.shortestpath.shortestpath.TestRootContext;
+import com.shortestpath.TestApplication;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
-import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
 
 @ActiveProfiles("inte")
-@SpringBootTest
+@SpringBootTest(classes=TestApplication.class)
 @Transactional
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Import(TestRootContext.class)
 class InteMapControllerTest {
 	private static final Logger log = LoggerFactory.getLogger(InteMapControllerTest.class);
 
 	@Autowired
 	private WebApplicationContext context;
-	@Autowired
-	private Engine engine;
-	@Autowired
-	private JdbcTemplate jdbcTemplate;
+	// @Autowired
+	// private Engine engine;
+	// @Autowired
+	// private JdbcTemplate jdbcTemplate;
 
 	private MockMvc mockMvc;
-	private ObjectMapper om = new ObjectMapper();
+
+	@Autowired
+	private ObjectMapper om;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
 	}
-
-	@AfterAll
-    public void destroy() throws IOException {
-		// engine.getStore().close();
-        // IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
-		// jdbcTemplate.update("TRUNCATE TABLE node_indx;");
-    }
 
 	@Test
 	@DisplayName("경로 탐색 요청(리스트) - 정상")

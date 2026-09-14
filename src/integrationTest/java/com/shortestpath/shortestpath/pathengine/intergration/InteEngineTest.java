@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.shortestpath.TestApplication;
 import com.shortestpath.shortestpath.TestRootContext;
 import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
@@ -29,10 +30,9 @@ import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
 
-@SpringBootTest
 @ActiveProfiles("init")
+@SpringBootTest(classes=TestApplication.class)
 @Transactional
-@Import(TestRootContext.class)
 public class InteEngineTest {
     @Autowired
     DataStore dataStore;

@@ -2,6 +2,8 @@ package com.shortestpath.shortestpath.dto.response;
 
 import org.locationtech.jts.geom.Point;
 
+import com.shortestpath.shortestpath.core.pathengine.Coordinate;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,16 +15,15 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ResponseFoodStoreSearchDto {
-    private Long id;
-    private String trdStateNm;
+public class ResponseRestaurantSearchDto {
+    private Integer id;
+    private String salsSttsNm;
     private String bplcNm;
-    private String uptaeGbnNm;
-    private String rdnWhlAddr;
-    private String telNo;
+    private String bzstatSeNm;
+    private String roadNmAddr;
+    private String telno;
     private Double x;
     private Double y;
-    private String homepage;
-    private Integer buildingId;
-    private Point centerCord;
+    private String hpg;
+    private Coordinate geometry;
 }

@@ -13,11 +13,9 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.RouteStep;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
-import com.shortestpath.shortestpath.dto.request.RequestBBox;
 import com.shortestpath.shortestpath.dto.request.RequestFindPathDto;
 import com.shortestpath.shortestpath.dto.response.ResponeseRouteSearchTraceDto;
 import com.shortestpath.shortestpath.dto.response.ResponseFindPathDto;
-import com.shortestpath.shortestpath.dto.response.ResponseRestaurantsDto;
 import com.shortestpath.shortestpath.dto.response.ResponseRouteStepDto;
 
 import lombok.RequiredArgsConstructor;

@@ -1,16 +1,13 @@
 package com.shortestpath.shortestpath;
 
 import java.io.File;
-import java.io.IOException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -22,7 +19,6 @@ import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
-import jakarta.annotation.PreDestroy;
 @TestConfiguration
 public class TestRootContext {
 	private static final Logger log = LoggerFactory.getLogger(TestRootContext.class);
@@ -38,10 +34,10 @@ public class TestRootContext {
 
 
 	// 공유 컨텍스트 사용 후 DB 삭제시 사용
-	@Autowired
-	private JdbcTemplate jdbcTemplate;
-	@Autowired
-	private Engine engine;
+	// @Autowired
+	// private JdbcTemplate jdbcTemplate;
+	// @Autowired
+	// private Engine engine;
 
 	// @Override
     // public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
@@ -72,16 +68,5 @@ public class TestRootContext {
 	@Primary
 	public ObjectMapper testObjectMapper() {
 		return new ObjectMapper().registerModule(new JavaTimeModule());
-	}
-
-
-	// 모든 테스트 클래스가 공유 클래스를 사용하고 마지막에 컨텍스트가 종료 될때 DB도 초기화
-	@PreDestroy
-	public void cleanup() throws IOException {
-		jdbcTemplate.update("TRUNCATE TABLE node_index;");
-		engine.getStore().close();
-        IntegrationTestHelper.deleteBinaryFiles(((HybridDataStore) engine.getStore()));
-
-		log.info("테스트 공유 컨텍스트 종료 후 DB삭제 완료");
 	}
 }

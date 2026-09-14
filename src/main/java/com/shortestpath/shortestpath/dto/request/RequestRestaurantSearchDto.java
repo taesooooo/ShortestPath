@@ -11,7 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class RequestFoodStoreSearchDto {
+public class RequestRestaurantSearchDto {
     
     /**
      * 키워드 검색 (음식점명, 주소 등)
