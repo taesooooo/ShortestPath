@@ -7,6 +7,7 @@ import java.util.ArrayList;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,29 +31,24 @@ import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
 
-@ActiveProfiles("init")
+@ActiveProfiles("inte")
 @SpringBootTest(classes=TestApplication.class)
 @Transactional
 public class InteEngineTest {
-    @Autowired
-    DataStore dataStore;
-    @Autowired
-    Extractor extractor;
-    @Autowired
-    Loader loader;
+    // @Autowired
+    // DataStore dataStore;
+    // @Autowired
+    // Extractor extractor;
+    // @Autowired
+    // Loader loader;
     @Autowired
     Engine engine; 
     
-    @BeforeAll
+    @BeforeEach
     public void setUp() throws IOException {
-        assertThat(engine).isNotNull();
+        
     }
 
-    @AfterAll
-    public void destroy() throws IOException {
-        // dataStore.close();
-        // IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
-    }
 
     // @Test
     // @DisplayName("경로 탐색 - 정상 탐색")
@@ -125,7 +121,7 @@ public class InteEngineTest {
     }
 
     private boolean hasForwardEdge(int fromNodeId, int toNodeId) throws IOException {
-        FileBasedEdgeIndex edgeIndex = (FileBasedEdgeIndex) dataStore.getEdgeIndex();
+        FileBasedEdgeIndex edgeIndex = (FileBasedEdgeIndex) engine.getStore().getEdgeIndex();
 
         for(RoadLevel roadLevel : RoadLevel.values()) {
             int edgeCount = edgeIndex.viewEdgeCount(fromNodeId, roadLevel);
@@ -135,7 +131,7 @@ public class InteEngineTest {
 
             long startOffset = edgeIndex.viewStartOffset(fromNodeId, roadLevel);
             for(int i = 0; i < edgeCount; i++) {
-                Edge edge = dataStore.readEdge(startOffset + (i * DataStructureSizes.EDGE_SIZE));
+                Edge edge = engine.getStore().readEdge(startOffset + (i * DataStructureSizes.EDGE_SIZE));
                 if(edge.getTo() == toNodeId) {
                     return true;
                 }

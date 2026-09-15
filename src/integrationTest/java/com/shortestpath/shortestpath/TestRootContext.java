@@ -1,6 +1,7 @@
 package com.shortestpath.shortestpath;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
+import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
@@ -43,17 +45,27 @@ public class TestRootContext {
     // public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
     //     resolvers.add(new PageInfoArgumentResolver());
     // }
-
 	@Bean
-	@Primary
-	public Engine testPathEngine(NodeDataPersistence dataPersistence) throws Exception {
+	public HybridDataStore testDataStore(NodeDataPersistence dataPersistence) throws IOException {
 		String shpFileParent = new File(shpFilePath).getParent();
 		HybridDataStore dataStore = new HybridDataStore(shpFileParent);
 		dataStore.setPersistence(dataPersistence);
 		dataStore.setEdgeIndex(new FileBasedEdgeIndex(shpFileParent));
 		dataStore.setReverseEdgeIndex(new FileBasedEdgeIndex(new File(shpFileParent, "reverse_edge_index.bin").toPath()));
+
+		return dataStore;
+	}
+
+	@Bean
+	public Loader testLoader(DataStore dataStore) throws IOException {
 		Extractor extractor = new NodeEdgeExtractor(shpFilePath, dataStore, isNodeDbSave);
 		Loader loader = new Loader(extractor);
+		return loader;
+	}
+
+	@Bean
+	@Primary
+	public Engine testPathEngine(HybridDataStore dataStore, Loader loader, NodeDataPersistence dataPersistence) throws Exception {
 
 		log.info("노드/엣지/인덱스 추출 상태를 확인합니다.");
 		loader.extractData(false);
