@@ -4,6 +4,9 @@
 
 도로 Shapefile을 탐색용 그래프로 전처리하고, 직접 구현한 양방향 가중 A\* 계열 엔진으로 경로·회전 안내·예상 이동시간을 제공하는 Spring Boot GIS 백엔드입니다.
 
+- 프론트 프로젝트 및 영상
+[https://github.com/taesooooo/ShortestPath-Front]
+
 ## 2. 프로젝트 개요
 
 ShortestPath는 외부 길찾기 API를 호출하는 대신 도로 데이터를 직접 가공하고 경로 탐색 엔진을 구현한 프로젝트입니다. 지도 데이터는 OSM(Open Street Map)을 이용하여 GeoTools로 Shapefile의 선형 도로 데이터를 읽어 노드와 방향성 엣지로 변환하고, 이를 고정 길이 바이너리 파일과 파일 기반 인덱스에 저장합니다. 요청 시에는 출발지와 목적지에서 동시에 탐색해 두 탐색하여 응답합니다.
