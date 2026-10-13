@@ -46,9 +46,10 @@ public class EdgeExtractTest {
     @BeforeEach
     public void setUp() {
         idArrays = new long[]{
-            GeometryUtil.coordinateToLong(new Coordinate(37.0, 127.0)),
-            GeometryUtil.coordinateToLong(new Coordinate(37.1, 127.1)),
-            GeometryUtil.coordinateToLong(new Coordinate(37.2, 127.2))
+            GeometryUtil.coordinateToLong(new Coordinate(127.0, 37.0)),
+            GeometryUtil.coordinateToLong(new Coordinate(127.1, 37.1)),
+            GeometryUtil.coordinateToLong(new Coordinate(127.2, 37.2)),
+            GeometryUtil.coordinateToLong(new Coordinate(127.3, 37.3))
         };
         java.util.Arrays.sort(idArrays);
         

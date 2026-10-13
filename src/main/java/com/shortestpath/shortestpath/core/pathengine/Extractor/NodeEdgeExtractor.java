@@ -21,12 +21,9 @@ import org.geotools.api.data.FileDataStoreFinder;
 import org.geotools.api.data.Query;
 import org.geotools.api.feature.simple.SimpleFeature;
 import org.geotools.api.feature.simple.SimpleFeatureType;
-import org.geotools.api.filter.Filter;
 import org.geotools.feature.FeatureCollection;
 import org.geotools.feature.FeatureIterator;
-import org.geotools.filter.text.cql2.CQL;
 import org.geotools.filter.text.cql2.CQLException;
-import org.geotools.filter.text.ecql.ECQL;
 import org.locationtech.jts.geom.Geometry;
 
 
@@ -35,6 +32,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
@@ -110,111 +108,113 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 
 		long[] idArray = createIdArray(collection);
-		boolean[] nodeCreatedArray = new boolean[idArray.length];
-		int[] lastEdgeOffsetArray = new int[idArray.length];
-		Arrays.fill(lastEdgeOffsetArray, -1);
+		HilbertIndex hilbertIndex = HilbertIndex.build(idArray);
+		log.info("Hilbert 인덱스 생성 완료 - bitsPerAxis: {}, nodeCount: {}, longitude: {}~{}, latitude: {}~{}",
+				hilbertIndex.getBitsPerAxis(), hilbertIndex.size(),
+				hilbertIndex.getMinLongitude(), hilbertIndex.getMaxLongitude(),
+				hilbertIndex.getMinLatitude(), hilbertIndex.getMaxLatitude());
 
-		BlockingQueue<List<TaskItem>> nodeQueue = new LinkedBlockingQueue<List<TaskItem>>(2000);
-		BlockingQueue<List<TaskItem>> edgeQueue = new LinkedBlockingQueue<List<TaskItem>>(2000);
-		AtomicBoolean taskContinue = new AtomicBoolean(true); // 모든 작업 스레드가 공유하는 플래그
-		AtomicBoolean taskError = new AtomicBoolean(false); // 작업 중 예외 발생 여부 플래그
+		boolean rebuildNodes = !nodeTaskCompleted || !isNodeTaskCompleted(hilbertIndex.size());
+		boolean rebuildEdges = rebuildNodes || !edgeTaskCompleted;
+		boolean edgeRebuilt = false;
 
-		int threadCount = 4;
-
-		boolean nodeRebuilt = false;
-		if (!nodeTaskCompleted || !isNodeTaskCompleted(idArray.length)) {
-			log.info("노드 작업을 시작합니다. 기존 파일이 있어도 taskCompleted=false이면 이 단계부터 다시 생성합니다.");
-			store.truncateNodeFile(0);
-			store.writeNodeHeader(new NodeHeader(idArray.length, false, false));
-			store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
-
-			ExecutorService nodeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
-			AtomicInteger totalSavedNodeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 노드 개수 집계
-			
-			Thread shutdownHook = new Thread(() -> {
-				log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
-				nodeExecutorService.shutdownNow();
-			});
-			Runtime.getRuntime().addShutdownHook(shutdownHook);
-			
-			nodeExecutorService.submit(new NodeExtract(idArray, nodeQueue, collection, taskContinue, taskError, progressStatus, threadCount));
-			for(int i=0; i<threadCount; i++) {
-				nodeExecutorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, progressStatus, taskContinue, taskError, totalSavedNodeCount));
-			}
-
-			nodeExecutorService.shutdown();
-			try {
-				while(!nodeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
-				Runtime.getRuntime().removeShutdownHook(shutdownHook);
-
-				taskContinue.set(true);
-				
-				if (taskError.get()) {
-					log.error("노드 추출 중 예외 발생으로 작업 중단");
-					return;
-				}
-
-				store.truncateNodeFile(DataStructureSizes.HEADER_SIZE + ((long) idArray.length * DataStructureSizes.NODE_SIZE));
-				store.writeNodeHeader(new NodeHeader(idArray.length, false, true));
-				nodeRebuilt = true;
-			} catch (InterruptedException e) {
-				log.error("작업 대기 중 인터럽트 발생", e);
-				nodeExecutorService.shutdownNow();
-				Thread.currentThread().interrupt();
-				return;
-			}
-		} else {
+		if (!rebuildNodes) {
 			log.info("노드 작업이 이미 완료되어 건너뜁니다.");
 		}
+		if (!rebuildEdges) {
+			log.info("엣지 작업이 이미 완료되어 건너뜁니다.");
+		}
 
-		boolean edgeRebuilt = false;
-		if (nodeRebuilt || !edgeTaskCompleted) {
-			log.info("엣지 작업을 시작합니다. 기존 파일이 있어도 taskCompleted=false이면 이 단계부터 다시 생성합니다.");
-			store.truncateEdgeFile(0);
-			store.writeEdgeHeader(new EdgeHeader(0, false, false));
-			taskContinue.set(true);
-			taskError.set(false);
-
-			ExecutorService edgeExecutorService = Executors.newFixedThreadPool(threadCount + 1);
-			AtomicInteger totalSavedEdgeCount = new AtomicInteger(0);  // 멀티스레드 환경에서 안전하게 엣지 개수 집계
-			
-			Thread edgeShutdownHook = new Thread(() -> {
-				log.warn("종료 신호 감지됨. ExecutorService를 종료합니다...");
-				edgeExecutorService.shutdownNow();
-			});
-			Runtime.getRuntime().addShutdownHook(edgeShutdownHook);
-
-			edgeExecutorService.submit(new EdgeExtract(idArray, edgeQueue, store, collection, taskContinue, taskError, progressStatus, threadCount));
-			for(int i=0; i<threadCount; i++) {
-				edgeExecutorService.submit(new EdgeSaver(edgeQueue, store, progressStatus, taskContinue, taskError, totalSavedEdgeCount));
+		if (rebuildNodes || rebuildEdges) {
+			if (rebuildNodes) {
+				log.info("노드 파일을 초기화하고 통합 추출을 준비합니다.");
+				store.truncateNodeFile(0);
+				store.writeNodeHeader(new NodeHeader(hilbertIndex.size(), true, false));
+				store.allocateNodeFileSpace((long) hilbertIndex.size() * DataStructureSizes.NODE_SIZE);
+			}
+			if (rebuildEdges) {
+				log.info("엣지 파일을 초기화하고 통합 추출을 준비합니다.");
+				store.truncateEdgeFile(0);
+				store.writeEdgeHeader(new EdgeHeader(0, false, false));
 			}
 
-			edgeExecutorService.shutdown();
+			BlockingQueue<List<TaskItem>> nodeQueue = new LinkedBlockingQueue<>(2000);
+			BlockingQueue<List<TaskItem>> edgeQueue = new LinkedBlockingQueue<>(2000);
+			AtomicBoolean taskContinue = new AtomicBoolean(true);
+			AtomicBoolean taskError = new AtomicBoolean(false);
+			AtomicInteger totalSavedNodeCount = new AtomicInteger(0);
+			AtomicInteger totalSavedEdgeCount = new AtomicInteger(0);
+			AtomicInteger extractedEdgeCount = new AtomicInteger(0);
+			boolean[] nodeCreatedArray = rebuildNodes ? new boolean[hilbertIndex.size()] : null;
+
+			// 동일 파일에 대한 쓰기는 한 스레드가 순차 처리하고, 노드/엣지 파일은 서로 병렬로 저장한다.
+			int nodeSaverCount = rebuildNodes ? 1 : 0;
+			int edgeSaverCount = rebuildEdges ? 1 : 0;
+			ExecutorService executorService = Executors.newFixedThreadPool(1 + nodeSaverCount + edgeSaverCount);
+			Thread shutdownHook = new Thread(() -> {
+				log.warn("종료 신호 감지됨. 통합 추출 ExecutorService를 종료합니다...");
+				executorService.shutdownNow();
+			});
+			Runtime.getRuntime().addShutdownHook(shutdownHook);
+
+			executorService.submit(new NodeEdgeExtract(
+					hilbertIndex,
+					nodeQueue,
+					edgeQueue,
+					collection,
+					taskContinue,
+					taskError,
+					progressStatus,
+					rebuildNodes,
+					rebuildEdges,
+					nodeSaverCount,
+					edgeSaverCount,
+					extractedEdgeCount));
+
+			if (rebuildNodes) {
+				executorService.submit(new NodeSaver(nodeQueue, nodeCreatedArray, store, progressStatus,
+						taskContinue, taskError, totalSavedNodeCount));
+			}
+			if (rebuildEdges) {
+				executorService.submit(new EdgeSaver(edgeQueue, store, progressStatus,
+						taskContinue, taskError, totalSavedEdgeCount));
+			}
+
+			executorService.shutdown();
 			try {
-				while(!edgeExecutorService.awaitTermination(1, TimeUnit.MINUTES)) {}
-				Runtime.getRuntime().removeShutdownHook(edgeShutdownHook);
-
-				store.truncateEdgeFile(DataStructureSizes.HEADER_SIZE + ((long) store.getTotalEdges() * DataStructureSizes.EDGE_SIZE));
-
-				taskContinue.set(true);
-				
-				if (taskError.get()) {
-					log.error("엣지 추출 중 예외 발생으로 작업 중단");
-					return;
+				while (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+					log.info("노드/엣지 통합 추출 및 저장 작업 진행 중...");
 				}
+				Runtime.getRuntime().removeShutdownHook(shutdownHook);
 			} catch (InterruptedException e) {
-				log.error("작업 대기 중 인터럽트 발생", e);
-				edgeExecutorService.shutdownNow();
+				log.error("통합 추출 작업 대기 중 인터럽트 발생", e);
+				executorService.shutdownNow();
 				Thread.currentThread().interrupt();
 				return;
 			}
 
-			log.info("엣지 정렬 시작");
-			EdgeSort edgeSort = new EdgeSort(store);
-			edgeSort.sort();
-			edgeRebuilt = true;
-		} else {
-			log.info("엣지 작업이 이미 완료되어 건너뜁니다.");
+			if (taskError.get()) {
+				log.error("노드/엣지 통합 추출 또는 저장 중 예외가 발생하여 작업을 중단합니다.");
+				return;
+			}
+
+			if (rebuildNodes) {
+				store.truncateNodeFile(DataStructureSizes.HEADER_SIZE
+						+ ((long) hilbertIndex.size() * DataStructureSizes.NODE_SIZE));
+				store.writeNodeHeader(new NodeHeader(hilbertIndex.size(), true, true));
+			}
+
+			if (rebuildEdges) {
+				int edgeCount = extractedEdgeCount.get();
+				store.writeEdgeHeader(new EdgeHeader(edgeCount, false, false));
+				store.truncateEdgeFile(DataStructureSizes.HEADER_SIZE
+						+ ((long) edgeCount * DataStructureSizes.EDGE_SIZE));
+
+				log.info("엣지 정렬 시작");
+				EdgeSort edgeSort = new EdgeSort(store);
+				edgeSort.sort();
+				edgeRebuilt = true;
+			}
 		}
 
 		EdgeIndexCreator edgeIndexCreator = new EdgeIndexCreator(store);
@@ -232,13 +232,13 @@ public class NodeEdgeExtractor implements Extractor {
 			log.info("리버스 엣지 인덱스 작업이 이미 완료되어 건너뜁니다.");
 		}
 		
-		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+		ArrayList<IndexInfo> indexList = createIndexList(hilbertIndex);
 
 		if (saveToDb) {
 			saveIndex(indexList);
 			log.info("노드 인덱스 DB 저장 완료");
 		} else {
-			if(!Files.exists(csvFilePath)) {
+			if(rebuildNodes || !Files.exists(csvFilePath)) {
 				NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath.toString(), indexList);
 				csvWriter.write();
 				log.info("노드 CSV 저장 완료: {}", csvFilePath);
@@ -257,7 +257,8 @@ public class NodeEdgeExtractor implements Extractor {
 		FeatureSource<SimpleFeatureType, SimpleFeature> source = shpStore.getFeatureSource(shpStore.getTypeNames()[0]);
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
 		long[] idArray = createIdArray(collection);
-		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+		HilbertIndex hilbertIndex = HilbertIndex.build(idArray);
+		ArrayList<IndexInfo> indexList = createIndexList(hilbertIndex);
 
 		saveIndex(indexList);
 	}
@@ -265,7 +266,10 @@ public class NodeEdgeExtractor implements Extractor {
 	private boolean isNodeTaskCompleted(int expectedNodeCount) {
 		try {
 			NodeHeader header = store.readNodeHeader();
-			boolean completed = header.isTaskCompleted() && header.getNodeCount() == expectedNodeCount;
+			boolean completed = header.isTaskCompleted()
+					&& header.isIndexed()
+					&& header.getNodeCount() == expectedNodeCount
+					&& hasExpectedNodeFileSize(header);
 			if (!completed) {
 				log.info("노드 헤더 확인 - nodeCount: {}, expected: {}, taskCompleted: {}",
 						header.getNodeCount(), expectedNodeCount, header.isTaskCompleted());
@@ -284,11 +288,29 @@ public class NodeEdgeExtractor implements Extractor {
 				log.info("노드 헤더 확인 - nodeCount: {}, taskCompleted: {}",
 						header.getNodeCount(), header.isTaskCompleted());
 			}
-			return header.isTaskCompleted();
+			return header.isTaskCompleted()
+					&& header.isIndexed()
+					&& hasExpectedNodeFileSize(header);
 		} catch (Exception e) {
 			log.info("노드 헤더를 읽을 수 없어 노드 작업이 필요합니다. reason: {}", e.getMessage());
 			return false;
 		}
+	}
+
+	private boolean hasExpectedNodeFileSize(NodeHeader header) throws IOException {
+		if (!(store instanceof HybridDataStore)) {
+			return true;
+		}
+
+		String fileDirectory = ((HybridDataStore) store).getFileDirectory();
+		if (fileDirectory == null) {
+			return true;
+		}
+
+		Path nodeFilePath = Path.of(fileDirectory, "node.bin");
+		long expectedSize = DataStructureSizes.HEADER_SIZE
+				+ ((long) header.getNodeCount() * DataStructureSizes.NODE_SIZE);
+		return Files.exists(nodeFilePath) && Files.size(nodeFilePath) == expectedSize;
 	}
 
 	private boolean isEdgeTaskCompleted() {
@@ -312,10 +334,10 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 	}
 
-	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
-		ArrayList<IndexInfo> indexList = new ArrayList<>();
-		for (int nodeId = 0; nodeId < idArray.length; nodeId++) {
-			long coordinate = idArray[nodeId];
+	private ArrayList<IndexInfo> createIndexList(HilbertIndex hilbertIndex) {
+		ArrayList<IndexInfo> indexList = new ArrayList<>(hilbertIndex.size());
+		for (int nodeId = 0; nodeId < hilbertIndex.size(); nodeId++) {
+			long coordinate = hilbertIndex.getCoordinateKey(nodeId);
 			int offset = (int) DataStructureSizes.calculateNodeOffset(nodeId);
 			indexList.add(new IndexInfo(nodeId, coordinate, offset));
 		}
@@ -323,40 +345,46 @@ public class NodeEdgeExtractor implements Extractor {
 	}
 
 	private long[] createIdArray(FeatureCollection<SimpleFeatureType, SimpleFeature> collection) throws IOException {
-		log.info("내부 인덱스 배열 생성중 (레이어 포함)");
+		log.info("허용된 도로의 내부 노드 ID 배열 생성 중");
 		long[] nodeIdArray = new long[100000];
 		int count = 0;
 
-		FeatureIterator<SimpleFeature> iterator = collection.features();
-
-		while (iterator.hasNext()) {
-			SimpleFeature feature = iterator.next();
-			Geometry geo = (Geometry) feature.getDefaultGeometry();
-
-			for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
-				// 좌표와 레이어 정보를 조합하여 유니크 ID 생성
-				long uniqueId = GeometryUtil.coordinateToLong(coordinate);
-				
-				if (count == nodeIdArray.length) {
-					nodeIdArray = Arrays.copyOf(nodeIdArray, nodeIdArray.length * 2);
+		try (FeatureIterator<SimpleFeature> iterator = collection.features()) {
+			while (iterator.hasNext()) {
+				SimpleFeature feature = iterator.next();
+				Object roadTypeValue = feature.getAttribute("fclass");
+				String roadType = roadTypeValue == null
+						? "unclassified"
+						: roadTypeValue.toString().toLowerCase().trim();
+				if (!RoadTypeFilter.isAllowedRoadType(roadType)) {
+					continue;
 				}
 
-				nodeIdArray[count++] = uniqueId;
+				Geometry geo = (Geometry) feature.getDefaultGeometry();
+				for (org.locationtech.jts.geom.Coordinate coordinate : geo.getCoordinates()) {
+					long uniqueId = GeometryUtil.coordinateToLong(coordinate);
+
+					if (count == nodeIdArray.length) {
+						nodeIdArray = Arrays.copyOf(nodeIdArray, nodeIdArray.length * 2);
+					}
+
+					nodeIdArray[count++] = uniqueId;
+				}
 			}
 		}
 
-		Arrays.sort(nodeIdArray);
+		Arrays.sort(nodeIdArray, 0, count);
 
 		// 중복 제거
 		int tempIndex = 0;
-		for (int i = 0; i < nodeIdArray.length; i++) {
+		for (int i = 0; i < count; i++) {
 			if (i == 0 || nodeIdArray[i] != nodeIdArray[i - 1]) {
 				nodeIdArray[tempIndex] = nodeIdArray[i];
 				tempIndex++;
 			}
 		}
 
-		log.info("내부 노드 인덱스 배열 총 개수 {}, 중복 제외 총 개수 {}", nodeIdArray.length, tempIndex);
+		log.info("내부 노드 좌표 총 개수 {}, 중복 제외 노드 개수 {}", count, tempIndex);
 		return Arrays.copyOf(nodeIdArray, tempIndex);
 	}
 

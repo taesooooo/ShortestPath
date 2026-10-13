@@ -5,11 +5,11 @@ public class DataStructureSizes {
     public static final int HEADER_SIZE = 6;
     // EdgeIndexHeader entryCount(int, 4바이트), taskCompleted(boolean, 1바이트)
     public static final int EDGE_INDEX_HEADER_SIZE = 5;
-    // Node id(int, 4바이트), startEdgeOffset(int, 4바이트), x(double, 8바이트), y(double, 8바이트)
-    public static final int NODE_SIZE = 24;
+    // Node id(int, 4바이트), startEdgeOffset(int, 4바이트), packedCoordinate(long, 8바이트)
+    public static final int NODE_SIZE = 16;
     public static final int NODE_ID_SIZE = 4;
     public static final int NODE_START_EDGE_OFFSET_SIZE = 4;
-    public static final int NODE_COORDINATE_SIZE = 16; // x와 y 좌표를 합친 크기
+    public static final int NODE_COORDINATE_SIZE = 8;
     // Edge id(int, 4바이트), from(int, 4바이트), to(int, 4바이트), distance(double, 8바이트), nextEdgeOffset(int, 4바이트), speed(int, 4바이트), roadLevel(String, 2바이트)
     public static final int EDGE_SIZE = 30;
     public static final int EDGE_ID_SIZE = 4;
