@@ -1,7 +1,6 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
@@ -35,13 +34,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class NodeEdgeExtract implements Runnable {
     private static final int BATCH_SIZE = 1000;
+    private static final int PROGRESS_UPDATE_INTERVAL = 10_000;
     private static final long QUEUE_OFFER_TIMEOUT_MILLIS = 100;
 
     private static final Set<String> L0_TYPES = Set.of("motorway", "motorway_link", "trunk", "trunk_link");
     private static final Set<String> L1_TYPES = Set.of(
             "primary", "primary_link", "secondary", "secondary_link", "tertiary", "tertiary_link");
 
-    private final long[] idArray;
+    private final HilbertIndex nodeIndex;
     private final BlockingQueue<List<TaskItem>> nodeQueue;
     private final BlockingQueue<List<TaskItem>> edgeQueue;
     private final FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
@@ -67,7 +67,24 @@ public class NodeEdgeExtract implements Runnable {
             int nodeSaverCount,
             int edgeSaverCount,
             AtomicInteger extractedEdgeCount) {
-        this.idArray = idArray;
+        this(HilbertIndex.naturalOrder(idArray), nodeQueue, edgeQueue, collection, taskContinue, taskError,
+                progressStatus, extractNodes, extractEdges, nodeSaverCount, edgeSaverCount, extractedEdgeCount);
+    }
+
+    public NodeEdgeExtract(
+            HilbertIndex nodeIndex,
+            BlockingQueue<List<TaskItem>> nodeQueue,
+            BlockingQueue<List<TaskItem>> edgeQueue,
+            FeatureCollection<SimpleFeatureType, SimpleFeature> collection,
+            AtomicBoolean taskContinue,
+            AtomicBoolean taskError,
+            ProgressStatus progressStatus,
+            boolean extractNodes,
+            boolean extractEdges,
+            int nodeSaverCount,
+            int edgeSaverCount,
+            AtomicInteger extractedEdgeCount) {
+        this.nodeIndex = nodeIndex;
         this.nodeQueue = nodeQueue;
         this.edgeQueue = edgeQueue;
         this.collection = collection;
@@ -87,11 +104,13 @@ public class NodeEdgeExtract implements Runnable {
     }
 
     private void extractNodeAndEdges() {
-        boolean[] nodeQueued = extractNodes ? new boolean[idArray.length] : null;
+        boolean[] nodeQueued = extractNodes ? new boolean[nodeIndex.size()] : null;
         ArrayList<TaskItem> nodeBatch = new ArrayList<>(BATCH_SIZE);
         ArrayList<TaskItem> edgeBatch = new ArrayList<>(BATCH_SIZE);
         int nodeCount = 0;
         int edgeCount = 0;
+        int lastReportedNodeCount = 0;
+        int lastReportedEdgeCount = 0;
 
         try (FeatureIterator<SimpleFeature> iterator = collection.features()) {
             while (iterator.hasNext() && !Thread.currentThread().isInterrupted() && !taskError.get()) {
@@ -125,8 +144,10 @@ public class NodeEdgeExtract implements Runnable {
                             nodeCount++;
                             nodeBatch = offerIfFull(nodeQueue, nodeBatch);
 
-                            if (progressStatus != null) {
-                                progressStatus.progress(TaskType.NODE_EXTRACT, idArray.length, nodeCount);
+                            if (progressStatus != null
+                                    && nodeCount - lastReportedNodeCount >= PROGRESS_UPDATE_INTERVAL) {
+                                progressStatus.progress(TaskType.NODE_EXTRACT, nodeIndex.size(), nodeCount);
+                                lastReportedNodeCount = nodeCount;
                             }
                         }
 
@@ -136,8 +157,10 @@ public class NodeEdgeExtract implements Runnable {
                                     distance, speed, roadLevel, oneWay);
                             edgeBatch = offerIfFull(edgeQueue, edgeBatch);
 
-                            if (progressStatus != null) {
+                            if (progressStatus != null
+                                    && edgeCount - lastReportedEdgeCount >= PROGRESS_UPDATE_INTERVAL) {
                                 progressStatus.progress(TaskType.EDGE_EXTRACT, -1, edgeCount);
+                                lastReportedEdgeCount = edgeCount;
                             }
                         }
 
@@ -155,8 +178,13 @@ public class NodeEdgeExtract implements Runnable {
             }
 
             extractedEdgeCount.set(edgeCount);
-            if (progressStatus != null && extractEdges) {
-                progressStatus.progress(TaskType.EDGE_EXTRACT, edgeCount, edgeCount);
+            if (progressStatus != null) {
+                if (extractNodes) {
+                    progressStatus.progress(TaskType.NODE_EXTRACT, nodeIndex.size(), nodeCount);
+                }
+                if (extractEdges) {
+                    progressStatus.progress(TaskType.EDGE_EXTRACT, edgeCount, edgeCount);
+                }
             }
 
             signalCompletion();
@@ -236,7 +264,7 @@ public class NodeEdgeExtract implements Runnable {
 
     private int findNodeId(org.locationtech.jts.geom.Coordinate coordinate) {
         long coordinateId = GeometryUtil.coordinateToLong(coordinate);
-        int nodeId = Arrays.binarySearch(idArray, coordinateId);
+        int nodeId = nodeIndex.findNodeId(coordinateId);
         if (nodeId < 0) {
             throw new IllegalStateException("사전 생성된 노드 ID를 찾을 수 없습니다: " + coordinate);
         }

@@ -49,7 +49,11 @@ class NodeEdgeExtractorPipelineTest {
             EdgeHeader reverseEdgeHeader = dataStore.readReverseEdgeHeader();
 
             assertThat(nodeHeader.getNodeCount()).isEqualTo(3);
+            assertThat(nodeHeader.isIndexed()).isTrue();
             assertThat(nodeHeader.isTaskCompleted()).isTrue();
+            assertThat(Files.size(outputDirectory.resolve("node.bin")))
+                    .isEqualTo(DataStructureSizes.HEADER_SIZE
+                            + ((long) nodeHeader.getNodeCount() * DataStructureSizes.NODE_SIZE));
             assertThat(edgeHeader.getEdgeCount()).isEqualTo(4);
             assertThat(edgeHeader.isSorted()).isTrue();
             assertThat(edgeHeader.isTaskCompleted()).isTrue();

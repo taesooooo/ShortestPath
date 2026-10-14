@@ -15,6 +15,7 @@ import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -79,8 +80,7 @@ public class HybridDataWriter implements AllocatableDataWriter, HeaderWriter {
         ByteBuffer buffer = ByteBuffer.allocate(DataStructureSizes.NODE_SIZE);
         buffer.putInt(node.getId());
         buffer.putInt(node.getStartEdgeOffset());
-        buffer.putDouble(node.getCoordinate().getLongitude());
-        buffer.putDouble(node.getCoordinate().getLatitude());
+        buffer.putLong(GeometryUtil.coordinateToLong(node.getCoordinate()));
         buffer.flip();
 
         nodeFileChannel.write(buffer, offset);

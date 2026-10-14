@@ -24,6 +24,7 @@ import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.MultiLineString;
 
 import com.shortestpath.shortestpath.core.pathengine.Edge;
+import com.shortestpath.shortestpath.core.pathengine.Extractor.HilbertIndex;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtract;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EdgeItem;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.EndItem;
@@ -72,6 +73,34 @@ class NodeEdgeExtractTest {
     }
 
     @Test
+    @DisplayName("통합 추출에서도 Hilbert 순서의 새 노드 ID를 사용한다")
+    void usesHilbertNodeIds() {
+        Coordinate bottomLeft = new Coordinate(0, 0);
+        Coordinate topLeft = new Coordinate(0, 1);
+        Coordinate topRight = new Coordinate(1, 1);
+        Coordinate bottomRight = new Coordinate(1, 0);
+
+        DefaultFeatureCollection collection = new DefaultFeatureCollection();
+        collection.add(createFeature(lineFeatureType,
+                geometryFactory.createLineString(new Coordinate[] {
+                        bottomLeft, topLeft, topRight, bottomRight
+                }), "primary", 60, "F"));
+
+        long[] coordinateKeys = sortedIds(bottomLeft, topLeft, topRight, bottomRight);
+        HilbertIndex hilbertIndex = HilbertIndex.build(coordinateKeys, 1);
+        ExtractionResult result = extract(collection, hilbertIndex);
+
+        int topRightId = hilbertIndex.findNodeId(GeometryUtil.coordinateToLong(topRight));
+        int bottomRightId = hilbertIndex.findNodeId(GeometryUtil.coordinateToLong(bottomRight));
+
+        assertThat(topRightId).isEqualTo(2);
+        assertThat(bottomRightId).isEqualTo(3);
+        assertThat(result.edgeItems)
+                .extracting(item -> ((EdgeItem) item).getEdge())
+                .anyMatch(edge -> edge.getFrom() == topRightId && edge.getTo() == bottomRightId);
+    }
+
+    @Test
     @DisplayName("MultiLineString의 서로 다른 LineString 경계를 엣지로 연결하지 않는다")
     void doesNotConnectSeparateLineStrings() {
         Coordinate a = new Coordinate(127.0, 37.0);
@@ -99,12 +128,16 @@ class NodeEdgeExtractTest {
     }
 
     private ExtractionResult extract(DefaultFeatureCollection collection, long[] idArray) {
+        return extract(collection, HilbertIndex.naturalOrder(idArray));
+    }
+
+    private ExtractionResult extract(DefaultFeatureCollection collection, HilbertIndex nodeIndex) {
         BlockingQueue<List<TaskItem>> nodeQueue = new LinkedBlockingQueue<>();
         BlockingQueue<List<TaskItem>> edgeQueue = new LinkedBlockingQueue<>();
         AtomicInteger edgeCount = new AtomicInteger();
 
         NodeEdgeExtract extractor = new NodeEdgeExtract(
-                idArray,
+                nodeIndex,
                 nodeQueue,
                 edgeQueue,
                 collection,

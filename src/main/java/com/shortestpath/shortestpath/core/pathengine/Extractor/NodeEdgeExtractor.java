@@ -32,6 +32,7 @@ import com.shortestpath.shortestpath.core.pathengine.Extractor.Sort.EdgeSort;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Task.TaskItem;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
@@ -107,7 +108,13 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 
 		long[] idArray = createIdArray(collection);
-		boolean rebuildNodes = !nodeTaskCompleted || !isNodeTaskCompleted(idArray.length);
+		HilbertIndex hilbertIndex = HilbertIndex.build(idArray);
+		log.info("Hilbert 인덱스 생성 완료 - bitsPerAxis: {}, nodeCount: {}, longitude: {}~{}, latitude: {}~{}",
+				hilbertIndex.getBitsPerAxis(), hilbertIndex.size(),
+				hilbertIndex.getMinLongitude(), hilbertIndex.getMaxLongitude(),
+				hilbertIndex.getMinLatitude(), hilbertIndex.getMaxLatitude());
+
+		boolean rebuildNodes = !nodeTaskCompleted || !isNodeTaskCompleted(hilbertIndex.size());
 		boolean rebuildEdges = rebuildNodes || !edgeTaskCompleted;
 		boolean edgeRebuilt = false;
 
@@ -122,8 +129,8 @@ public class NodeEdgeExtractor implements Extractor {
 			if (rebuildNodes) {
 				log.info("노드 파일을 초기화하고 통합 추출을 준비합니다.");
 				store.truncateNodeFile(0);
-				store.writeNodeHeader(new NodeHeader(idArray.length, false, false));
-				store.allocateNodeFileSpace((long) idArray.length * DataStructureSizes.NODE_SIZE);
+				store.writeNodeHeader(new NodeHeader(hilbertIndex.size(), true, false));
+				store.allocateNodeFileSpace((long) hilbertIndex.size() * DataStructureSizes.NODE_SIZE);
 			}
 			if (rebuildEdges) {
 				log.info("엣지 파일을 초기화하고 통합 추출을 준비합니다.");
@@ -138,7 +145,7 @@ public class NodeEdgeExtractor implements Extractor {
 			AtomicInteger totalSavedNodeCount = new AtomicInteger(0);
 			AtomicInteger totalSavedEdgeCount = new AtomicInteger(0);
 			AtomicInteger extractedEdgeCount = new AtomicInteger(0);
-			boolean[] nodeCreatedArray = rebuildNodes ? new boolean[idArray.length] : null;
+			boolean[] nodeCreatedArray = rebuildNodes ? new boolean[hilbertIndex.size()] : null;
 
 			// 동일 파일에 대한 쓰기는 한 스레드가 순차 처리하고, 노드/엣지 파일은 서로 병렬로 저장한다.
 			int nodeSaverCount = rebuildNodes ? 1 : 0;
@@ -151,7 +158,7 @@ public class NodeEdgeExtractor implements Extractor {
 			Runtime.getRuntime().addShutdownHook(shutdownHook);
 
 			executorService.submit(new NodeEdgeExtract(
-					idArray,
+					hilbertIndex,
 					nodeQueue,
 					edgeQueue,
 					collection,
@@ -193,8 +200,8 @@ public class NodeEdgeExtractor implements Extractor {
 
 			if (rebuildNodes) {
 				store.truncateNodeFile(DataStructureSizes.HEADER_SIZE
-						+ ((long) idArray.length * DataStructureSizes.NODE_SIZE));
-				store.writeNodeHeader(new NodeHeader(idArray.length, false, true));
+						+ ((long) hilbertIndex.size() * DataStructureSizes.NODE_SIZE));
+				store.writeNodeHeader(new NodeHeader(hilbertIndex.size(), true, true));
 			}
 
 			if (rebuildEdges) {
@@ -225,13 +232,13 @@ public class NodeEdgeExtractor implements Extractor {
 			log.info("리버스 엣지 인덱스 작업이 이미 완료되어 건너뜁니다.");
 		}
 		
-		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+		ArrayList<IndexInfo> indexList = createIndexList(hilbertIndex);
 
 		if (saveToDb) {
 			saveIndex(indexList);
 			log.info("노드 인덱스 DB 저장 완료");
 		} else {
-			if(!Files.exists(csvFilePath)) {
+			if(rebuildNodes || !Files.exists(csvFilePath)) {
 				NodeCSVWriter csvWriter = new NodeCSVWriter(csvFilePath.toString(), indexList);
 				csvWriter.write();
 				log.info("노드 CSV 저장 완료: {}", csvFilePath);
@@ -250,7 +257,8 @@ public class NodeEdgeExtractor implements Extractor {
 		FeatureSource<SimpleFeatureType, SimpleFeature> source = shpStore.getFeatureSource(shpStore.getTypeNames()[0]);
 		FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
 		long[] idArray = createIdArray(collection);
-		ArrayList<IndexInfo> indexList = createIndexList(idArray);
+		HilbertIndex hilbertIndex = HilbertIndex.build(idArray);
+		ArrayList<IndexInfo> indexList = createIndexList(hilbertIndex);
 
 		saveIndex(indexList);
 	}
@@ -258,7 +266,10 @@ public class NodeEdgeExtractor implements Extractor {
 	private boolean isNodeTaskCompleted(int expectedNodeCount) {
 		try {
 			NodeHeader header = store.readNodeHeader();
-			boolean completed = header.isTaskCompleted() && header.getNodeCount() == expectedNodeCount;
+			boolean completed = header.isTaskCompleted()
+					&& header.isIndexed()
+					&& header.getNodeCount() == expectedNodeCount
+					&& hasExpectedNodeFileSize(header);
 			if (!completed) {
 				log.info("노드 헤더 확인 - nodeCount: {}, expected: {}, taskCompleted: {}",
 						header.getNodeCount(), expectedNodeCount, header.isTaskCompleted());
@@ -277,11 +288,29 @@ public class NodeEdgeExtractor implements Extractor {
 				log.info("노드 헤더 확인 - nodeCount: {}, taskCompleted: {}",
 						header.getNodeCount(), header.isTaskCompleted());
 			}
-			return header.isTaskCompleted();
+			return header.isTaskCompleted()
+					&& header.isIndexed()
+					&& hasExpectedNodeFileSize(header);
 		} catch (Exception e) {
 			log.info("노드 헤더를 읽을 수 없어 노드 작업이 필요합니다. reason: {}", e.getMessage());
 			return false;
 		}
+	}
+
+	private boolean hasExpectedNodeFileSize(NodeHeader header) throws IOException {
+		if (!(store instanceof HybridDataStore)) {
+			return true;
+		}
+
+		String fileDirectory = ((HybridDataStore) store).getFileDirectory();
+		if (fileDirectory == null) {
+			return true;
+		}
+
+		Path nodeFilePath = Path.of(fileDirectory, "node.bin");
+		long expectedSize = DataStructureSizes.HEADER_SIZE
+				+ ((long) header.getNodeCount() * DataStructureSizes.NODE_SIZE);
+		return Files.exists(nodeFilePath) && Files.size(nodeFilePath) == expectedSize;
 	}
 
 	private boolean isEdgeTaskCompleted() {
@@ -305,10 +334,10 @@ public class NodeEdgeExtractor implements Extractor {
 		}
 	}
 
-	private ArrayList<IndexInfo> createIndexList(long[] idArray) {
-		ArrayList<IndexInfo> indexList = new ArrayList<>();
-		for (int nodeId = 0; nodeId < idArray.length; nodeId++) {
-			long coordinate = idArray[nodeId];
+	private ArrayList<IndexInfo> createIndexList(HilbertIndex hilbertIndex) {
+		ArrayList<IndexInfo> indexList = new ArrayList<>(hilbertIndex.size());
+		for (int nodeId = 0; nodeId < hilbertIndex.size(); nodeId++) {
+			long coordinate = hilbertIndex.getCoordinateKey(nodeId);
 			int offset = (int) DataStructureSizes.calculateNodeOffset(nodeId);
 			indexList.add(new IndexInfo(nodeId, coordinate, offset));
 		}
