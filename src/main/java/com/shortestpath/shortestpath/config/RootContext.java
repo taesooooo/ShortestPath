@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +37,9 @@ public class RootContext implements WebMvcConfigurer {
 	@Value("${findpath.search-buffer-pool-size:1}")
 	private int searchBufferPoolSize;
 
+	@Value("${findpath.cors-allow-origin}")
+	private String corsAllowOrigin;
+
 	@Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(new PageInfoArgumentResolver());
@@ -63,5 +67,13 @@ public class RootContext implements WebMvcConfigurer {
 	@Bean
 	public ObjectMapper objectMapper() {
 		return new ObjectMapper().registerModule(new JavaTimeModule());
+	}
+
+	@Override
+	public void addCorsMappings(CorsRegistry registry) {
+		registry.addMapping("/api/**")
+				.allowedOrigins(corsAllowOrigin)
+				.allowedMethods("GET", "POST", "OPTIONS")
+				.maxAge(3600);
 	}
 }
