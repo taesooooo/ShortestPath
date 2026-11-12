@@ -3,6 +3,7 @@ package com.shortestpath.shortestpath.core.pathengine.Extractor;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,7 +28,6 @@ public class NodeSaver implements Runnable {
     private boolean[] nodeCreated;
     private DataStore dataStore;
     private ProgressStatus progressStatus;
-    private boolean[] taskArray;
     private AtomicBoolean taskContinue;
     private AtomicBoolean taskError;
     private AtomicInteger totalSavedNodeCount;  // 멀티스레드 안전한 총 저장 개수
@@ -50,12 +50,22 @@ public class NodeSaver implements Runnable {
     public void run() {
         int localNodeCount = 0;  // 스레드 로컬 카운트
         try {
-            while (!Thread.currentThread().isInterrupted() && !taskError.get()) {
-                List<TaskItem> taskList = nodeQueue.take();
+            while (!Thread.currentThread().isInterrupted()) {
+                List<TaskItem> taskList = nodeQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (taskList == null) {
+                    if (!taskContinue.get() || taskError.get()) {
+                        break;
+                    }
+                    continue;
+                }
                 
                 // EndItem 확인 - 종료 신호 수신
                 if (taskList != null && taskList.size() > 0 && taskList.get(0) instanceof EndItem) {
                     logger.debug("스레드 {} - 종료 신호 수신", Thread.currentThread().getName());
+                    break;
+                }
+
+                if (taskError.get()) {
                     break;
                 }
 

@@ -3,6 +3,7 @@ package com.shortestpath.shortestpath.core.pathengine.Store.Reader;
 import java.nio.MappedByteBuffer;
 
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
+import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 public class NodeViewer {
     private final MappedByteBuffer mappedByteBuffer;
@@ -26,12 +27,12 @@ public class NodeViewer {
     
     public double readXCoordinate(int nodeId) throws IndexOutOfBoundsException {
         int offset = calculateOffset(nodeId) + DataStructureSizes.NODE_ID_SIZE + DataStructureSizes.NODE_START_EDGE_OFFSET_SIZE;
-        return mappedByteBuffer.getDouble(offset);
+        return GeometryUtil.longitudeFromLong(mappedByteBuffer.getLong(offset));
     }
     
     public double readYCoordinate(int nodeId) throws IndexOutOfBoundsException {
-        int offset = calculateOffset(nodeId) + DataStructureSizes.NODE_ID_SIZE + DataStructureSizes.NODE_START_EDGE_OFFSET_SIZE + (DataStructureSizes.NODE_COORDINATE_SIZE / 2);
-        return mappedByteBuffer.getDouble(offset);
+        int offset = calculateOffset(nodeId) + DataStructureSizes.NODE_ID_SIZE + DataStructureSizes.NODE_START_EDGE_OFFSET_SIZE;
+        return GeometryUtil.latitudeFromLong(mappedByteBuffer.getLong(offset));
     }
 
     private int calculateOffset(int nodeId) throws IndexOutOfBoundsException {

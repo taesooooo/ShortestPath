@@ -2,6 +2,8 @@ package com.shortestpath.shortestpath.core.pathengine;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.TimeUnit;
 
 import org.geotools.filter.text.cql2.CQLException;
 
@@ -12,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Loader {
+	private static final long PROGRESS_PRINT_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(250);
+
 	private Extractor extractor;
 	// @Getter
 	// private Graph mapGraph = new Graph();
@@ -19,6 +23,8 @@ public class Loader {
 	private AtomicInteger nodeSaveCount = new AtomicInteger(0);
 	private AtomicInteger edgeExtractCount = new AtomicInteger(0);
 	private AtomicInteger edgeSaveCount = new AtomicInteger(0);
+	private AtomicLong lastProgressPrintNanos = new AtomicLong(0);
+	private final Object progressPrintLock = new Object();
 	private boolean nodeExtractCompleted = false;
 	private boolean nodeSaveCompleted = false;
 	private boolean edgeExtractCompleted = false;
@@ -64,18 +70,21 @@ public class Loader {
 	}
 
 	private void onPrgress(TaskType type, int total, int current) {
+		boolean forcePrint = false;
 		switch(type) {
 			case NODE_EXTRACT:
 				nodeExtractCount.set(current);
 				totalNodes = total;
 				if(current >= total) {
 					nodeExtractCompleted = true;
+					forcePrint = true;
 				}
 				break;
 			case NODE_SAVE:
 				nodeSaveCount.set(current);
 				if(current >= total) {
 					nodeSaveCompleted = true;
+					forcePrint = true;
 				}
 				break;
 			case EDGE_EXTRACT:
@@ -83,12 +92,14 @@ public class Loader {
 				totalEdges = total;
 				if(total > 0 && current >= total) {
 					edgeExtractCompleted = true;
+					forcePrint = true;
 				}
 				break;
 			case EDGE_SAVE:
 				edgeSaveCount.set(current);
 				if(current >= totalEdges && totalEdges > 0) {
 					edgeSaveCompleted = true;
+					forcePrint = true;
 				}
 				break;
 			default:
@@ -96,10 +107,21 @@ public class Loader {
 		}
 
 		// 진행 상황 표시
-		printProgress();
+		printProgress(forcePrint);
 	}
 
-	private void printProgress() {
+	private void printProgress(boolean forcePrint) {
+		long now = System.nanoTime();
+		if (!forcePrint) {
+			long lastPrint = lastProgressPrintNanos.get();
+			if (now - lastPrint < PROGRESS_PRINT_INTERVAL_NANOS
+					|| !lastProgressPrintNanos.compareAndSet(lastPrint, now)) {
+				return;
+			}
+		} else {
+			lastProgressPrintNanos.set(now);
+		}
+
 		// 노드 추출 개수
 		int nodeExtracted = nodeExtractCount.get();
 		
@@ -113,11 +135,13 @@ public class Loader {
 		int edgeSaved = edgeSaveCount.get();
 
 		// 모든 진행 상황을 한 줄에 표시 (개수 기준)
-		System.out.printf("[노드 추출] %10d개 | [노드 저장] %10d개 | [엣지 추출] %10d개 | [엣지 저장] %10d개        \r",
-				nodeExtracted,
-				nodeSaved,
-				edgeExtracted,
-				edgeSaved);
+		synchronized (progressPrintLock) {
+			System.out.printf("[노드 추출] %10d개 | [노드 저장] %10d개 | [엣지 추출] %10d개 | [엣지 저장] %10d개        \r",
+					nodeExtracted,
+					nodeSaved,
+					edgeExtracted,
+					edgeSaved);
+		}
 
 	}
 

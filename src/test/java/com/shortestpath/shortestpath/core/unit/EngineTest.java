@@ -27,8 +27,8 @@ import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.RouteSearchResult;
 import com.shortestpath.shortestpath.core.pathengine.SearchSide;
 import com.shortestpath.shortestpath.core.pathengine.TraceRoute;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
@@ -40,7 +40,7 @@ class EngineTest {
 	private DataStore store;
 
 	@Mock
-	private NodeProvider dataProvider;
+	private NodeDataPersistence nodeDataPersistence;
 	
 	private EdgeIndex edgeIndex;
 	private EdgeIndex reverseEdgeIndex;
@@ -379,9 +379,9 @@ class EngineTest {
 	public void findPathByNodeTest() throws IOException {
 		setupMockDataL0Only();
 		setupMockReverseDataL0Only();
-		Engine engine = new Engine(store, dataProvider);
+		Engine engine = new Engine(store, nodeDataPersistence);
 
-		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+		when(nodeDataPersistence.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
 		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
@@ -398,9 +398,9 @@ class EngineTest {
 	public void findPathDisconnectNode() throws IOException {
 		setupMockDisconnectedEdgeData();
 		setupMockReverseDisconnectedEdgeData();
-		Engine engine = new Engine(store, dataProvider);
+		Engine engine = new Engine(store, nodeDataPersistence);
 
-		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+		when(nodeDataPersistence.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
 		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
@@ -416,9 +416,9 @@ class EngineTest {
 	public void findBidirectionalPathByCoordinateTest() throws IOException {
 		setupMockDataL0Only();
 		setupMockReverseDataL0Only();
-		Engine engine = new Engine(store, dataProvider);
+		Engine engine = new Engine(store, nodeDataPersistence);
 
-		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+		when(nodeDataPersistence.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
 		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
@@ -437,9 +437,9 @@ class EngineTest {
 	public void findBidirectionalPathWithUpperLevelTest() throws IOException {
 		setupMockDataWithUpperLevel();
 		setupMockReverseDataWithUpperLevel();
-		Engine engine = new Engine(store, dataProvider);
+		Engine engine = new Engine(store, nodeDataPersistence);
 
-		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+		when(nodeDataPersistence.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
 		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
@@ -456,9 +456,9 @@ class EngineTest {
 	public void findBidirectionalPathDisconnectedEdgeTest() throws IOException {
 		setupMockDisconnectedEdgeData();
 		setupMockReverseDisconnectedEdgeData();
-		Engine engine = new Engine(store, dataProvider);
+		Engine engine = new Engine(store, nodeDataPersistence);
 
-		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+		when(nodeDataPersistence.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
 		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));
@@ -475,9 +475,9 @@ class EngineTest {
 	public void findPathWithTrackingTest() throws IOException {
 		setupMockDataL0Only();
 		setupMockReverseDataL0Only();
-		Engine engine = new Engine(store, dataProvider);
+		Engine engine = new Engine(store, nodeDataPersistence);
 
-		when(dataProvider.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
+		when(nodeDataPersistence.findNearestNodeId(any(Envelope.class), any(Coordinate.class)))
 				.thenReturn(List.of(1))
 				.thenReturn(List.of(4));
 		Node startNode = store.readNode(DataStructureSizes.calculateNodeOffset(1));

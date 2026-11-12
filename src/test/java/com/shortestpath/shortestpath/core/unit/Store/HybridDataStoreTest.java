@@ -20,9 +20,9 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.IndexInfo;
-import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
+import com.shortestpath.shortestpath.persistance.MyBatisNodePersistance;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
-import com.shortestpath.shortestpath.provider.JpaDataPersistence;
 
 /**
  * HybridDataStore를 테스트하는 JUnit 테스트 클래스
@@ -150,7 +150,7 @@ public class HybridDataStoreTest {
             HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
             
             // DataPersistence 설정
-            DataPersistence persistence = mock(JpaDataPersistence.class);
+            NodeDataPersistence persistence = mock(MyBatisNodePersistance.class);
             store.setPersistence(persistence);
 
             store.saveNodeIndex(new ArrayList<IndexInfo>());
@@ -172,7 +172,7 @@ public class HybridDataStoreTest {
             HybridDataStore store = new HybridDataStore(tempDir.toAbsolutePath().toString());
             
             // DataPersistence 설정
-            DataPersistence persistence = mock(JpaDataPersistence.class);
+            NodeDataPersistence persistence = mock(MyBatisNodePersistance.class);
             store.setPersistence(persistence);
 
             store.getNodeOffset(new Coordinate(33.1, 126.1));

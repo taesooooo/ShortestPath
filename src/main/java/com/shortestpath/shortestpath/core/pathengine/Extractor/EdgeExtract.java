@@ -1,7 +1,6 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,7 +31,7 @@ import com.shortestpath.shortestpath.core.pathengine.Util.PathUtil;
 public class EdgeExtract implements Runnable {
     private static Logger logger = LoggerFactory.getLogger(EdgeExtract.class);
     
-    private long[] idArrays;
+    private HilbertIndex nodeIndex;
     private BlockingQueue<List<TaskItem>> edgeQueue;
     private DataStore dataStore;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
@@ -51,7 +50,12 @@ public class EdgeExtract implements Runnable {
     
     public EdgeExtract(long[] idArrays, BlockingQueue<List<TaskItem>> edgeQueue, 
                       DataStore dataStore, FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue, AtomicBoolean taskError, ProgressStatus progressStatus, int threadCount) {
-        this.idArrays = idArrays;
+        this(HilbertIndex.naturalOrder(idArrays), edgeQueue, dataStore, collection, taskContinue, taskError, progressStatus, threadCount);
+    }
+
+    public EdgeExtract(HilbertIndex nodeIndex, BlockingQueue<List<TaskItem>> edgeQueue,
+                      DataStore dataStore, FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue, AtomicBoolean taskError, ProgressStatus progressStatus, int threadCount) {
+        this.nodeIndex = nodeIndex;
         this.edgeQueue = edgeQueue;
         this.dataStore = dataStore;
         this.collection = collection;
@@ -116,9 +120,11 @@ public class EdgeExtract implements Runnable {
                     long coordIdFrom = GeometryUtil.coordinateToLong(geometry.getCoordinates()[i]);
                     long coordIdTo = GeometryUtil.coordinateToLong(geometry.getCoordinates()[i + 1]);
                     
-                    // idArray에서 이진 탐색으로 노드 ID 획득
-                    int fromNodeId = Arrays.binarySearch(idArrays, coordIdFrom);
-                    int toNodeId = Arrays.binarySearch(idArrays, coordIdTo);
+                    int fromNodeId = nodeIndex.findNodeId(coordIdFrom);
+                    int toNodeId = nodeIndex.findNodeId(coordIdTo);
+                    if (fromNodeId < 0 || toNodeId < 0) {
+                        throw new IllegalStateException("Hilbert 인덱스에서 엣지 좌표 키를 찾을 수 없습니다.");
+                    }
                     
                     // 엣지 거리 계산
                     double distance = PathUtil.haversineDistance(coordinateFrom, coordinateTo);

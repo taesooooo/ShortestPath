@@ -2,33 +2,26 @@ package com.shortestpath.shortestpath.pathengine.intergration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.annotation.DirtiesContext.ClassMode;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
-import com.shortestpath.shortestpath.IntegrationTestHelper;
+import com.shortestpath.TestApplication;
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
+import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Node;
-import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
 import com.shortestpath.shortestpath.core.pathengine.Store.DataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
@@ -36,13 +29,11 @@ import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.EdgeIndexEntry;
-import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.LevelEdgeIndex;
 
-@SpringJUnitConfig(InteLoaderTest.LoaderIntegrationConfig.class)
-@TestPropertySource("classpath:application-inte.properties")
-@TestInstance(Lifecycle.PER_CLASS)
-@DirtiesContext(classMode = ClassMode.AFTER_CLASS)
+@ActiveProfiles("inte")
+@SpringBootTest(classes=TestApplication.class)
+@Transactional
 public class InteLoaderTest {
     private static final List<String> REQUIRED_OUTPUT_FILES = List.of(
             "node.bin",
@@ -53,60 +44,18 @@ public class InteLoaderTest {
             "reverse_edge_index.bin");
 
     @Autowired
-    DataStore dataStore;
-
+    private Engine engine;
     @Autowired
-    Loader loader;
+    private DataStore dataStore;
+    @Autowired
+    private Loader loader;
 
     @Value("${findpath.shp-path}")
-    String shpFilePath;
+    private String shpFilePath;
+    
+    @BeforeEach
+    public void setup() {
 
-    @TestConfiguration
-    static class LoaderIntegrationConfig {
-        @Bean
-        public DataStore dataStore(@Value("${findpath.shp-path}") String shpFilePath) throws Exception {
-            String parentDir = new File(shpFilePath).getParent();
-
-            HybridDataStore dataStore = new HybridDataStore(parentDir);
-            dataStore.setEdgeIndex(new FileBasedEdgeIndex(parentDir));
-            dataStore.setReverseEdgeIndex(new FileBasedEdgeIndex(new File(parentDir, "reverse_edge_index.bin").toPath()));
-
-            return dataStore;
-        }
-
-        @Bean
-        public Extractor extractor(@Value("${findpath.shp-path}") String shpFilePath, DataStore dataStore) throws IOException {
-            return new NodeEdgeExtractor(shpFilePath, dataStore, false);
-        }
-
-        @Bean
-        public Loader loader(Extractor extractor) throws IOException {
-            return new Loader(extractor);
-        }
-    }
-
-    @BeforeAll
-    public void init() throws IOException {
-        loader.extractData(false);
-    }
-
-    @AfterAll
-    public void destroy() throws IOException {
-        dataStore.close();
-        IntegrationTestHelper.deleteBinaryFiles((HybridDataStore) dataStore);
-    }
-
-    @Test
-    @DisplayName("Loader는 SHP 데이터를 추출해 경로탐색용 파일을 생성한다")
-    public void extractDataCreatesRequiredFiles() {
-        Path outputDirectory = outputDirectory();
-
-        for (String fileName : REQUIRED_OUTPUT_FILES) {
-            assertThat(outputDirectory.resolve(fileName))
-                    .as("%s 파일이 생성되어야 합니다.", fileName)
-                    .exists()
-                    .isRegularFile();
-        }
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -24,7 +23,7 @@ import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 public class NodeExtract implements Runnable {
     private static Logger logger = LoggerFactory.getLogger(NodeExtract.class);
     
-    private long[] idArrays;
+    private HilbertIndex nodeIndex;
     private BlockingQueue<List<TaskItem>> nodeQueue;
     private FeatureCollection<SimpleFeatureType, SimpleFeature> collection;
     private AtomicBoolean taskContinue;
@@ -34,7 +33,12 @@ public class NodeExtract implements Runnable {
 
     public NodeExtract(long[] idArrays, BlockingQueue<List<TaskItem>> nodeQueue,
             FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue, AtomicBoolean taskError, ProgressStatus progressStatus, int threadCount) {
-        this.idArrays = idArrays;
+        this(HilbertIndex.naturalOrder(idArrays), nodeQueue, collection, taskContinue, taskError, progressStatus, threadCount);
+    }
+
+    public NodeExtract(HilbertIndex nodeIndex, BlockingQueue<List<TaskItem>> nodeQueue,
+            FeatureCollection<SimpleFeatureType, SimpleFeature> collection, AtomicBoolean taskContinue, AtomicBoolean taskError, ProgressStatus progressStatus, int threadCount) {
+        this.nodeIndex = nodeIndex;
         this.nodeQueue = nodeQueue;
         this.collection = collection;
         this.taskContinue = taskContinue;
@@ -91,8 +95,10 @@ public class NodeExtract implements Runnable {
 
                     long coordId = GeometryUtil.coordinateToLong(geometry.getCoordinates()[i]);
 
-                    // idArray에서 이진 탐색 후 나오는 인덱스가 노드 ID
-                    int index = Arrays.binarySearch(idArrays, coordId);
+                    int index = nodeIndex.findNodeId(coordId);
+                    if (index < 0) {
+                        throw new IllegalStateException("Hilbert 인덱스에서 좌표 키를 찾을 수 없습니다: " + coordId);
+                    }
 
                     Node node = createNode(coordinate, index, isGate);
                     
@@ -103,7 +109,7 @@ public class NodeExtract implements Runnable {
                 
                 // 진행률 업데이트
                 if(progressStatus != null) {
-                    progressStatus.progress(TaskType.NODE_EXTRACT, idArrays.length, extractedNodeCount);
+                    progressStatus.progress(TaskType.NODE_EXTRACT, nodeIndex.size(), extractedNodeCount);
                 }
             }
 

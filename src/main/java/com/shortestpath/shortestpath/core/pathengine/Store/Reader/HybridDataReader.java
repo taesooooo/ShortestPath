@@ -12,13 +12,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 
-import com.shortestpath.shortestpath.core.pathengine.Coordinate;
 import com.shortestpath.shortestpath.core.pathengine.DataStructureSizes;
 import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Store.EdgeHeader;
 import com.shortestpath.shortestpath.core.pathengine.Store.NodeHeader;
+import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -143,10 +143,9 @@ public class HybridDataReader implements MappableDataReader {
 
         int id = buffer.getInt();
         int startEdgeOffset = buffer.getInt();
-        double longitude = buffer.getDouble();
-        double latitude = buffer.getDouble();
+        long packedCoordinate = buffer.getLong();
 
-        Node node = new Node(id, new Coordinate(latitude, longitude), startEdgeOffset, Double.MAX_VALUE, 0, 0);
+        Node node = new Node(id, GeometryUtil.longToPathCoordinate(packedCoordinate), startEdgeOffset, Double.MAX_VALUE, 0, 0);
         return node;
     }
 
@@ -199,7 +198,7 @@ public class HybridDataReader implements MappableDataReader {
             boolean hasData = nodeHeader.isTaskCompleted()
                     && edgeHeader.isTaskCompleted()
                     && reverseEdgeHeader.isTaskCompleted()
-                    && nodeSize >= DataStructureSizes.HEADER_SIZE + ((long) nodeHeader.getNodeCount() * DataStructureSizes.NODE_SIZE)
+                    && nodeSize == DataStructureSizes.HEADER_SIZE + ((long) nodeHeader.getNodeCount() * DataStructureSizes.NODE_SIZE)
                     && edgeSize >= DataStructureSizes.HEADER_SIZE + ((long) edgeHeader.getEdgeCount() * DataStructureSizes.EDGE_SIZE)
                     && reverseEdgeSize >= DataStructureSizes.HEADER_SIZE + ((long) reverseEdgeHeader.getEdgeCount() * DataStructureSizes.EDGE_SIZE);
             log.debug("데이터 추출 여부 확인 - nodeSize: {}, edgeSize: {}, reverseEdgeSize: {}, nodeTask: {}, edgeTask: {}, reverseEdgeTask: {}, hasData: {}",
@@ -254,10 +253,9 @@ public class HybridDataReader implements MappableDataReader {
 
         int id = nodeMappedBuffer.getInt();
         int startEdgeOffset = nodeMappedBuffer.getInt();
-        double longitude = nodeMappedBuffer.getDouble();
-        double latitude = nodeMappedBuffer.getDouble();
+        long packedCoordinate = nodeMappedBuffer.getLong();
 
-        Node node = new Node(id, new Coordinate(latitude, longitude), startEdgeOffset, Double.MAX_VALUE, 0, 0);
+        Node node = new Node(id, GeometryUtil.longToPathCoordinate(packedCoordinate), startEdgeOffset, Double.MAX_VALUE, 0, 0);
         return node;
     }
 

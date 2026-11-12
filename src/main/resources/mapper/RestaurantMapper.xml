@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shortestpath.shortestpath.mapper.RestaurantMapper">
+
+    <resultMap id="restaurantResultMap" type="com.shortestpath.shortestpath.dto.response.ResponseRestaurantDto">
+        <id column="id" property="id"/>
+        <result column="opn_atmy_grp_cd" property="opnAtmyGrpCd"/>
+        <result column="mng_no" property="mngNo"/>
+        <result column="sals_stts_nm" property="salsSttsNm"/>
+        <result column="lctn_zip" property="lctnZip"/>
+        <result column="road_nm_zip" property="roadNmZip"/>
+        <result column="bplc_nm" property="bplcNm"/>
+        <result column="bzstat_se_nm" property="bzstatSeNm"/>
+        <result column="dat_updt_se" property="datUpdtSe"/>
+        <result column="mlt_utztn_bsnssp_yn" property="mltUtztnBsnsspYn"/>
+        <result column="dat_updt_pnt" property="datUpdtPnt"/>
+        <result column="road_nm_addr" property="roadNmAddr"/>
+        <result column="dtl_sals_stts_nm" property="dtlSalsSttsNm"/>
+        <result column="dtl_sals_stts_cd" property="dtlSalsSttsCd"/>
+        <result column="sals_stts_cd" property="salsSttsCd"/>
+        <result column="bizplc_surrnd_se_nm" property="bizplcSurrndSeNm"/>
+        <result column="snttn_bzstat_nm" property="snttnBzstatNm"/>
+        <result column="telno" property="telno"/>
+        <result column="crd_info_x" property="x"/>
+        <result column="crd_info_y" property="y"/>
+        <result column="lotno_addr" property="lotnoAddr"/>
+        <result column="hpg" property="hpg"/>
+        <result column="last_mdfcn_pnt" property="lastMdfcnPnt"/>
+        <result
+            column="geometry"
+            property="geometry"
+            typeHandler="com.shortestpath.shortestpath.common.converter.GeometryCoordinateTypeHandler"
+        />
+    </resultMap>
+
+    <!-- searchByKeyword용 별도 ResultMap -->
+    <resultMap id="restaurantSearchResultMap" type="com.shortestpath.shortestpath.dto.response.ResponseRestaurantSearchDto">
+        <id column="id" property="id"/>
+        <result column="sals_stts_nm" property="salsSttsNm"/>
+        <result column="bplc_nm" property="bplcNm"/>
+        <result column="bzstat_se_nm" property="bzstatSeNm"/>
+        <result column="road_nm_addr" property="roadNmAddr"/>
+        <result column="telno" property="telno"/>
+        <result column="crd_info_x" property="x"/>
+        <result column="crd_info_y" property="y"/>
+        <result column="hpg" property="hpg"/>
+        <!-- PostgreSQL geometry를 Point로 자동 변환 -->
+        <result column="geometry" property="geometry" typeHandler="com.shortestpath.shortestpath.common.converter.GeometryCoordinateTypeHandler"/>
+    </resultMap>
+    
+    <!-- SELECT 컬럼 재사용 (alias 포함) -->
+    <sql id="restaurantColumns">
+        A.id,
+        A.opn_atmy_grp_cd,
+        A.mng_no,
+        A.sals_stts_nm,
+        A.lctn_zip,
+        A.road_nm_zip,
+        A.bplc_nm,
+        A.bzstat_se_nm,
+        A.dat_updt_se,
+        A.mlt_utztn_bsnssp_yn,
+        A.dat_updt_pnt,
+        A.road_nm_addr,
+        A.dtl_sals_stts_nm,
+        A.dtl_sals_stts_cd,
+        A.sals_stts_cd,
+        A.bizplc_surrnd_se_nm,
+        A.snttn_bzstat_nm,
+        A.telno,
+        A.crd_info_x,
+        A.crd_info_y,
+        A.lotno_addr,
+        A.hpg,
+        A.last_mdfcn_pnt,
+        A.geometry
+        FROM restaurant AS A
+    </sql>
+    
+    <!-- 재사용 컬럼 -->
+    <sql id="restaurantSearchColumns">
+        A.id,
+        A.sals_stts_nm,
+        A.bplc_nm,
+        A.bzstat_se_nm,
+        A.road_nm_addr,
+        A.telno,
+        A.crd_info_x,
+        A.crd_info_y,
+        A.hpg,
+        A.geometry
+        FROM restaurant AS A
+    </sql>
+
+    
+    <!-- FROM 절 재사용 - INNER JOIN 포함 -->
+    <sql id="foodStoreFrom">
+        FROM restaurant AS A
+        INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
+    </sql>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*)
+        FROM restaurant
+    </select>
+    
+    <!-- SELECT 쿼리 -->
+    <select id="selectById" resultMap="restaurantResultMap">
+        SELECT <include refid="restaurantColumns"/>
+        <!-- <include refid="foodStoreFrom"/> -->
+        WHERE A.id = #{id}
+    </select>
+    
+    <select id="selectAll" resultMap="restaurantSearchResultMap">
+        SELECT <include refid="restaurantColumns"/>
+        <!-- <include refid="foodStoreFrom"/> -->
+        ORDER BY id ASC
+        LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
+    </select>
+    
+    <!-- 조인이 있는 쿼리는 resultMap 사용 -->
+    <select id="searchByKeyword" parameterType="java.lang.String" resultMap="restaurantSearchResultMap">
+        SELECT 
+           <include refid="restaurantSearchColumns" />
+        INNER JOIN building_info AS B ON A.building_id = B.ogc_fid
+        WHERE 
+            A.bplc_nm LIKE '%' || #{keyword} || '%'
+        ORDER BY id ASC
+        LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
+    </select>
+    
+    <!-- 키워드/카테고리/BBox 통합 검색 -->
+    <select id="search" resultMap="restaurantSearchResultMap" parameterType="com.shortestpath.shortestpath.dto.request.RequestRestaurantSearchDto">
+        SELECT 
+            <include refid="restaurantSearchColumns" />
+        <!-- INNER JOIN building_info AS B ON A.building_id = B.ogc_fid -->
+        <where>
+            <!-- 키워드/카테고리 검색 -->
+            <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                A.bplc_nm LIKE '%' || #{searchDto.keyword} || '%'
+            </if>
+            <if test="searchDto.category != null and searchDto.category != ''">
+                <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                    AND
+                </if>
+                A.bzstat_se_nm = #{searchDto.category}
+            </if>
+            
+            <!-- BBox 검색 -->
+            <if test="searchDto.minLat != null and searchDto.minLon != null and searchDto.maxLat != null and searchDto.maxLon != null">
+                <if test="(searchDto.keyword != null and searchDto.keyword != '') or (searchDto.category != null and searchDto.category != '')">
+                    AND
+                </if>
+                ST_Intersects(A.geometry, ST_MakeEnvelope(
+                        #{searchDto.minLon}, #{searchDto.minLat}, -- 좌측하단 (MinX, MinY)
+                        #{searchDto.maxLon}, #{searchDto.maxLat}, -- 우측상단 (MaxX, MaxY)
+                        4326
+                    ))
+            </if>
+        </where>
+        ORDER BY id ASC
+        LIMIT #{pageInfo.size} OFFSET #{pageInfo.offset}
+    </select>
+    
+    <!-- 검색 결과 총 개수 조회 -->
+    <select id="countBySearch" parameterType="com.shortestpath.shortestpath.dto.request.RequestRestaurantSearchDto" resultType="int">
+        SELECT COUNT(*)
+        FROM restaurant AS A
+        <!-- INNER JOIN building_info AS B ON A.building_id = B.ogc_fid -->
+        <where>
+            <!-- 키워드/카테고리 검색 -->
+            <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                A.bplc_nm LIKE '%' || #{searchDto.keyword} || '%'
+            </if>
+            <if test="searchDto.category != null and searchDto.category != ''">
+                <if test="searchDto.keyword != null and searchDto.keyword != ''">
+                    AND
+                </if>
+                A.bzstat_se_nm = #{searchDto.category}
+            </if>
+            
+            <!-- BBox 검색 -->
+            <if test="searchDto.minLat != null and searchDto.minLon != null and searchDto.maxLat != null and searchDto.maxLon != null">
+                <if test="(searchDto.keyword != null and searchDto.keyword != '') or (searchDto.category != null and searchDto.category != '')">
+                    AND
+                </if>
+                ST_Intersects(A.geometry, ST_MakeEnvelope(
+                        #{searchDto.minLon}, #{searchDto.minLat}, -- 좌측하단 (MinX, MinY)
+                        #{searchDto.maxLon}, #{searchDto.maxLat}, -- 우측상단 (MaxX, MaxY)
+                        4326
+                    ))
+            </if>
+        </where>
+    </select>
+
+</mapper>

@@ -20,6 +20,7 @@ import com.shortestpath.shortestpath.core.pathengine.Edge;
 import com.shortestpath.shortestpath.core.pathengine.Node;
 import com.shortestpath.shortestpath.core.pathengine.RoadLevel;
 import com.shortestpath.shortestpath.core.pathengine.Store.Writer.HybridDataWriter;
+import com.shortestpath.shortestpath.core.pathengine.Util.GeometryUtil;
 
 /**
  * HybridDataWriter를 테스트하는 JUnit 테스트 클래스
@@ -66,14 +67,15 @@ public class HybridDataWriterTest {
             // 파일에서 읽어서 검증
             Path nodeFile = tempDir.resolve("node.bin");
             FileChannel fc = FileChannel.open(nodeFile, StandardOpenOption.READ);
-            ByteBuffer buf = ByteBuffer.allocate(24);
+            ByteBuffer buf = ByteBuffer.allocate(DataStructureSizes.NODE_SIZE);
             fc.read(buf);
 
             buf.flip();
             int id = buf.getInt();
             int startEdgeOffset = buf.getInt();
-            double lon = buf.getDouble();
-            double lat = buf.getDouble();
+            long packedCoordinate = buf.getLong();
+            double lon = GeometryUtil.longitudeFromLong(packedCoordinate);
+            double lat = GeometryUtil.latitudeFromLong(packedCoordinate);
 
             assertThat(id).isEqualTo(testId);
             assertThat(startEdgeOffset).isEqualTo(testStartEdgeOffset);
@@ -250,7 +252,7 @@ public class HybridDataWriterTest {
         try {
             HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
             
-            long allocateSize = 24 * 100; // 100개 노드 공간
+            long allocateSize = (long) DataStructureSizes.NODE_SIZE * 100; // 100개 노드 공간
             writer.allocateNodeFileSpace(allocateSize);
 
             Path nodeFile = tempDir.resolve("node.bin");
@@ -272,7 +274,7 @@ public class HybridDataWriterTest {
         try {
             HybridDataWriter writer = new HybridDataWriter(tempDir.toAbsolutePath().toString());
             
-            long allocateSize = 24 * 100; // 100개 엣지 공간
+            long allocateSize = (long) DataStructureSizes.EDGE_SIZE * 100; // 100개 엣지 공간
             writer.allocateEdgeFileSpace(allocateSize);
 
             Path edgeFile = tempDir.resolve("edge.bin");
@@ -303,7 +305,7 @@ public class HybridDataWriterTest {
             Path nodeFile = tempDir.resolve("node.bin");
             long fileSize = Files.size(nodeFile);
 
-            // 헤더 + 3개 노드 = 6 + (24 * 3) = 78 바이트
+            // 헤더 + 3개 노드 레코드
             assertThat(fileSize).isEqualTo(DataStructureSizes.HEADER_SIZE + (DataStructureSizes.NODE_SIZE * 3));
             
             writer.close();

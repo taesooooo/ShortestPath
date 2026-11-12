@@ -1,11 +1,10 @@
 package com.shortestpath.shortestpath.core.pathengine.Extractor;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,12 +46,22 @@ public class EdgeSaver implements Runnable {
         int localEdgeCount = 0;  // 스레드 로컬 카운트
 
         try {
-            while (!Thread.currentThread().isInterrupted() && !taskError.get()) {
-                List<TaskItem> taskList = edgeQueue.take();
+            while (!Thread.currentThread().isInterrupted()) {
+                List<TaskItem> taskList = edgeQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (taskList == null) {
+                    if (!taskContinue.get() || taskError.get()) {
+                        break;
+                    }
+                    continue;
+                }
                 
                 // EndItem 확인 - 종료 신호 수신
                 if (taskList != null && taskList.size() > 0 && taskList.get(0) instanceof EndItem) {
                     logger.debug("스레드 {} - 종료 신호 수신", Thread.currentThread().getName());
+                    break;
+                }
+
+                if (taskError.get()) {
                     break;
                 }
 

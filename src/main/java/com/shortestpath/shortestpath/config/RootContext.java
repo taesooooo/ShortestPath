@@ -6,7 +6,9 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,10 +18,8 @@ import com.shortestpath.shortestpath.core.pathengine.Engine;
 import com.shortestpath.shortestpath.core.pathengine.Loader;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.Extractor;
 import com.shortestpath.shortestpath.core.pathengine.Extractor.NodeEdgeExtractor;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
-import com.shortestpath.shortestpath.core.pathengine.Provider.NodeProvider;
-import com.shortestpath.shortestpath.core.pathengine.Store.DataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.HybridDataStore;
+import com.shortestpath.shortestpath.core.pathengine.Store.NodeDataPersistence;
 import com.shortestpath.shortestpath.core.pathengine.Store.Index.FileBasedEdgeIndex;
 
 import lombok.extern.slf4j.Slf4j;
@@ -37,8 +37,8 @@ public class RootContext implements WebMvcConfigurer {
 	@Value("${findpath.search-buffer-pool-size:1}")
 	private int searchBufferPoolSize;
 
-	@Value("${findpath.hot-road-cache-mode:index-only}")
-	private String hotRoadCacheMode;
+	@Value("${findpath.cors-allow-origin}")
+	private String corsAllowOrigin;
 
 	@Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
@@ -46,7 +46,7 @@ public class RootContext implements WebMvcConfigurer {
     }
 
 	@Bean
-	public Engine pathEngine(NodeProvider dataProvider, DataPersistence dataPersistence, NodeProvider nodeIndexProvider) throws Exception {
+	public Engine pathEngine(NodeDataPersistence dataPersistence) throws Exception {
 		String shpFileParent = new File(shpFilePath).getParent();
 		HybridDataStore dataStore = new HybridDataStore(shpFileParent);
 		dataStore.setPersistence(dataPersistence);
@@ -61,11 +61,19 @@ public class RootContext implements WebMvcConfigurer {
 		dataStore.switchToMappingMode();
 		dataStore.switchEdgeIndexToMappingMode();
 		
-		return new Engine(dataStore, dataProvider, searchBufferPoolSize, hotRoadCacheMode);
+		return new Engine(dataStore, dataPersistence, searchBufferPoolSize);
 	}
 
 	@Bean
 	public ObjectMapper objectMapper() {
 		return new ObjectMapper().registerModule(new JavaTimeModule());
+	}
+
+	@Override
+	public void addCorsMappings(CorsRegistry registry) {
+		registry.addMapping("/api/**")
+				.allowedOrigins(corsAllowOrigin)
+				.allowedMethods("GET", "POST", "OPTIONS")
+				.maxAge(3600);
 	}
 }
